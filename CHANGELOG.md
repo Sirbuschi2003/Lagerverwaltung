@@ -1,13 +1,7 @@
-# Changelog – KFZ Lagerverwaltung
+# Changelog – Lagerverwaltung
 
 Alle Änderungen werden hier dokumentiert.
 
-**Versionsschema:**
-- `X.Y.Z` – X = Major, Y = Minor (neue Funktionen), Z = Patch (Bugfixes)
-- Patch +1 bei Bugfixes
-- Minor +1 bei neuen Funktionen (bei 9 → Major +1, Minor → 0)
-
----
 
 ## [2.1.1] – 2026-03-30
 
