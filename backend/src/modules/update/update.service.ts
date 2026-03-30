@@ -34,10 +34,6 @@ export class UpdateService {
   }
 
   async getStatus(forceRefresh = false): Promise<UpdateStatus> {
-    if (this.cachedStatus.currentVersion === "dev") {
-      return { ...this.cachedStatus, error: "Entwicklungsversion – kein Update-Check" };
-    }
-
     const now = Date.now();
     if (!forceRefresh && now - this.lastCheckTime < this.CACHE_TTL) {
       return this.cachedStatus;
@@ -47,11 +43,13 @@ export class UpdateService {
     try {
       const latestSha = await this.fetchLatestCommitSha();
       const latest7 = latestSha.substring(0, 7);
-      const current7 = this.cachedStatus.currentVersion.substring(0, 7);
+      const current = this.cachedStatus.currentVersion;
+      // "dev" gilt als veraltet – es gibt immer eine neuere Version auf GitHub
+      const updateAvailable = current === "dev" || latest7 !== current.substring(0, 7);
       this.cachedStatus = {
         ...this.cachedStatus,
         latestVersion: latest7,
-        updateAvailable: latest7 !== current7,
+        updateAvailable,
         lastChecked: new Date(),
         checking: false,
         error: null,

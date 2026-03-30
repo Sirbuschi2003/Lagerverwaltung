@@ -60,7 +60,7 @@ const AppHeader: React.FC<AppHeaderProps> = ({ onMenuToggle, menuOpen }) => {
 
   // Update-Check alle 10 Minuten (nur fuer Admins)
   React.useEffect(() => {
-    if (user?.role !== "ADMIN") return;
+    if (user?.role !== "MANAGER") return;
     const check = () => {
       fetchUpdateStatus()
         .then((s) => setUpdateAvailable(s.updateAvailable))
@@ -231,7 +231,7 @@ const AppHeader: React.FC<AppHeaderProps> = ({ onMenuToggle, menuOpen }) => {
 
               <Tooltip title="Benutzermenue">
                 <IconButton onClick={handleUserMenuOpen} sx={{ p: 0.25 }} aria-label="user menu">
-                  <Badge color="info" variant="dot" invisible={!updateAvailable || user?.role !== "ADMIN"}>
+                  <Badge color="info" variant="dot" invisible={!updateAvailable || user?.role !== "MANAGER"}>
                     <Avatar sx={headerStyles.userAvatar}>{userInitials}</Avatar>
                   </Badge>
                 </IconButton>

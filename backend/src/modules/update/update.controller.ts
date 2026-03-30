@@ -27,7 +27,7 @@ export class UpdateController {
     @Request() req: any,
   ): Promise<{ message: string }> {
     const user = req.user;
-    if (!user || user.role !== "ADMIN") {
+    if (!user || user.role !== "MANAGER") {
       throw new ForbiddenException("Nur Administratoren können Updates einspielen.");
     }
     return this.updateService.applyUpdate();
