@@ -1800,6 +1800,7 @@ export interface UpdateStatus {
   updatePhase: UpdatePhase;
   updateStartedAt: string | null;
   updateLog: string[];
+  instanceId: string;
 }
 
 export const fetchUpdateStatus = async (refresh = false): Promise<UpdateStatus> => {

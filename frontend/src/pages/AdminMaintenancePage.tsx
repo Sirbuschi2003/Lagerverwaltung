@@ -75,6 +75,7 @@ const AdminMaintenancePage = () => {
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const backendWentOfflineRef = useRef(false); // Ref statt State – vermeidet Stale-Closure in setInterval
   const forceReloadTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const knownInstanceIdRef = useRef<string | null>(null); // Erkennt Backend-Neustart hinter Reverse Proxy
 
   // Changelog
   const [changelog, setChangelog] = useState<string | null>(null);
@@ -118,6 +119,16 @@ const AdminMaintenancePage = () => {
         const status = await fetchUpdateStatus();
         setUpdateStatus(status);
 
+        // instanceId-Erkennung: Wenn sich die ID ändert → Backend hat neu gestartet
+        if (knownInstanceIdRef.current && status.instanceId && status.instanceId !== knownInstanceIdRef.current) {
+          stopPolling();
+          window.location.reload();
+          return;
+        }
+        if (status.instanceId) {
+          knownInstanceIdRef.current = status.instanceId;
+        }
+
         if (status.updateRunning && status.updatePhase === 'pulling') {
           // Noch am Downloaden – weiter warten
           return;
@@ -154,9 +165,22 @@ const AdminMaintenancePage = () => {
     try {
       const status = await fetchUpdateStatus(refresh);
       setUpdateStatus(status);
-      // Falls ein Update lief und wir neu geladen haben
+
+      // instanceId beim ersten Laden merken (Referenzpunkt für Neustart-Erkennung)
+      if (status.instanceId && !knownInstanceIdRef.current) {
+        knownInstanceIdRef.current = status.instanceId;
+      }
+
+      // Falls ein Update lief: nur pollen wenn es innerhalb der letzten 6 Minuten gestartet wurde
       if (status.updateRunning) {
-        startPolling();
+        const startedAt = status.updateStartedAt ? new Date(status.updateStartedAt).getTime() : 0;
+        const ageMs = Date.now() - startedAt;
+        if (ageMs < 6 * 60 * 1000) {
+          startPolling();
+        } else {
+          // Veralteter updateRunning-Status → ignorieren, nicht pollen
+          // Backend-Timeout setzt ihn nach 5 Min zurück
+        }
       }
     } catch {
       // ignore
@@ -363,7 +387,7 @@ const AdminMaintenancePage = () => {
                   <Box>
                     <Typography variant="caption" color="text.secondary">Installierte Version</Typography>
                     <Typography variant="body1" sx={{ fontWeight: 700 }}>
-                      {updateStatus.currentVersion === 'dev' ? 'dev (lokal)' : `v${updateStatus.currentVersion}`}
+                      {updateStatus.currentVersion === 'dev' ? 'dev' : `v${updateStatus.currentVersion}`}
                     </Typography>
                   </Box>
                   {updateStatus.latestVersion && (

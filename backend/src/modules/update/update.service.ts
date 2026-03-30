@@ -21,6 +21,7 @@ export interface UpdateStatus {
   updatePhase: UpdatePhase;
   updateStartedAt: Date | null;
   updateLog: string[];
+  instanceId: string; // Ändert sich bei jedem Neustart des Backends → Frontend erkennt Neustart
 }
 
 @Injectable()
@@ -34,6 +35,7 @@ export class UpdateService {
 
   constructor() {
     const currentVersion = process.env.APP_VERSION || "dev";
+    const instanceId = Math.random().toString(36).substring(2, 9);
     this.cachedStatus = {
       currentVersion,
       latestVersion: null,
@@ -45,6 +47,7 @@ export class UpdateService {
       updatePhase: "idle",
       updateStartedAt: null,
       updateLog: [],
+      instanceId,
     };
   }
 
@@ -128,6 +131,19 @@ export class UpdateService {
       updateLog: ["Update gestartet…"],
       error: null,
     };
+
+    // Sicherheits-Timeout: nach 5 Minuten Status zurücksetzen falls Update hängt
+    setTimeout(() => {
+      if (this.cachedStatus.updateRunning) {
+        this.logger.warn("Update-Timeout: Status wird zurückgesetzt");
+        this.cachedStatus = {
+          ...this.cachedStatus,
+          updateRunning: false,
+          updatePhase: "error",
+          error: "Update-Timeout: Kein Abschluss nach 5 Minuten",
+        };
+      }
+    }, 5 * 60 * 1000);
 
     // Phase 1: Pull – mit Live-Ausgabe
     setTimeout(() => {
