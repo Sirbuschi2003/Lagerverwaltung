@@ -1,0 +1,124 @@
+@import url("https://fonts.googleapis.com/css2?family=Lexend:wght@600;700&family=Manrope:wght@500;600;700;800&family=Outfit:wght@600;700&family=Sora:wght@600;700;800&display=swap");
+
+:root {
+  --transition-fast: 150ms cubic-bezier(0.2, 0.8, 0.2, 1);
+  --transition-normal: 260ms cubic-bezier(0.2, 0.8, 0.2, 1);
+  --surface-scroll-track: rgba(51, 83, 119, 0.12);
+  --surface-scroll-thumb: rgba(40, 76, 116, 0.38);
+  --surface-scroll-thumb-hover: rgba(40, 76, 116, 0.55);
+  --focus-color: #2d77c6;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: "Manrope", "Segoe UI", sans-serif;
+  overflow-x: hidden;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  -webkit-text-size-adjust: 100%;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+:focus-visible {
+  outline: 2px solid var(--focus-color);
+  outline-offset: 2px;
+}
+
+input,
+textarea,
+select {
+  font-size: 16px;
+  transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
+}
+
+@keyframes riseIn {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.MuiPaper-root,
+.MuiCard-root {
+  animation: riseIn var(--transition-normal);
+}
+
+@media (max-width: 600px) {
+  .MuiButton-root {
+    min-height: 44px;
+  }
+
+  .MuiTableCell-root {
+    padding: 10px 8px;
+    font-size: 0.82rem;
+  }
+
+  .MuiTableContainer-root {
+    -webkit-overflow-scrolling: touch;
+  }
+}
+
+@media (min-width: 601px) {
+  .MuiButton-root {
+    transition: transform var(--transition-fast), box-shadow var(--transition-fast);
+  }
+
+  .MuiButton-root:hover {
+    transform: translateY(-1px);
+  }
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--surface-scroll-track);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--surface-scroll-thumb);
+  border-radius: 999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--surface-scroll-thumb-hover);
+}
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--surface-scroll-thumb) var(--surface-scroll-track);
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border-width: 0;
+}
+
+@media print {
+  .no-print {
+    display: none !important;
+  }
+}

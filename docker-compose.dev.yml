@@ -1,0 +1,104 @@
+services:
+  mysql:
+    image: mysql:8.3
+    restart: unless-stopped
+    command: --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci --authentication-policy=caching_sha2_password
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      MYSQL_DATABASE: ${MYSQL_DATABASE}
+      MYSQL_USER: ${MYSQL_USER}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+    volumes:
+      - mysql_data:/var/lib/mysql
+    ports:
+      - "${MYSQL_PORT:-3306}:3306"
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -uroot -p$MYSQL_ROOT_PASSWORD || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+  phpmyadmin:
+    image: phpmyadmin:latest
+    restart: unless-stopped
+    depends_on:
+      mysql:
+        condition: service_healthy
+    environment:
+      PMA_HOST: mysql
+      PMA_PORT: 3306
+      PMA_USER: ${MYSQL_USER}
+      PMA_PASSWORD: ${MYSQL_PASSWORD}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      UPLOAD_LIMIT: 50M
+    ports:
+      - "${PHPMYADMIN_PORT:-8081}:80"
+
+  backend:
+    build:
+      context: ./backend
+      target: runner
+    restart: unless-stopped
+    depends_on:
+      mysql:
+        condition: service_healthy
+    environment:
+      NODE_ENV: development
+      PORT: 3000
+      DB_HOST: mysql
+      DB_PORT: 3306
+      DB_USER: ${MYSQL_USER}
+      DB_PASSWORD: ${MYSQL_PASSWORD}
+      DB_NAME: ${MYSQL_DATABASE}
+      DB_SYNCHRONIZE: false
+      DB_MIGRATIONS_RUN: true
+      JWT_SECRET: ${BACKEND_JWT_SECRET}
+      JWT_EXPIRES_IN: ${BACKEND_JWT_EXPIRES_IN:-1d}
+      JWT_REFRESH_EXPIRES_IN: ${BACKEND_JWT_REFRESH_EXPIRES_IN:-30d}
+    ports:
+      - "${BACKEND_PORT:-3000}:3000"
+    volumes:
+      - ./backups:/app/backups
+      - ${PURCHASE_ORDER_STORAGE_HOST_PATH:-./purchase-orders}:/app/purchase-orders
+    healthcheck:
+      test: ["CMD-SHELL", "wget --spider --quiet http://127.0.0.1:3000/api/health || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 40s
+
+  frontend:
+    build:
+      context: ./frontend
+    restart: unless-stopped
+    depends_on:
+      backend:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget --spider --quiet http://127.0.0.1 || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+  caddy:
+    image: caddy:latest
+    restart: unless-stopped
+    ports:
+      - "0.0.0.0:${CADDY_HTTPS_PORT:-8443}:443"
+      - "0.0.0.0:${CADDY_HTTP_PORT:-8080}:80"
+    volumes:
+      - ./deploy/caddy/Caddyfile.dev:/etc/caddy/Caddyfile:ro
+      - ./deploy/caddy/dev.pem:/etc/caddy/dev.pem:ro
+      - ./deploy/caddy/dev.key:/etc/caddy/dev.key:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - frontend
+      - backend
+
+volumes:
+  mysql_data:
+  caddy_data:
+  caddy_config:

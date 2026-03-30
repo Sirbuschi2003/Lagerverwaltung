@@ -1,0 +1,112 @@
+services:
+  mysql:
+    image: mysql:8.3
+    restart: unless-stopped
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+      - --authentication-policy=caching_sha2_password
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      MYSQL_DATABASE: ${MYSQL_DATABASE}
+      MYSQL_USER: ${MYSQL_USER}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+    volumes:
+      - mysql_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "--silent"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    networks:
+      - lagerverwaltung
+
+  backend:
+    build:
+      context: ./backend
+      target: runner
+    restart: unless-stopped
+    depends_on:
+      mysql:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      DB_HOST: mysql
+      DB_PORT: 3306
+      DB_USER: ${MYSQL_USER}
+      DB_PASSWORD: ${MYSQL_PASSWORD}
+      DB_NAME: ${MYSQL_DATABASE}
+      DB_SYNCHRONIZE: false
+      DB_MIGRATIONS_RUN: true
+      JWT_SECRET: ${BACKEND_JWT_SECRET}
+      JWT_EXPIRES_IN: ${BACKEND_JWT_EXPIRES_IN:-1d}
+      JWT_REFRESH_EXPIRES_IN: ${BACKEND_JWT_REFRESH_EXPIRES_IN:-30d}
+      INVENTORY_HMAC_SECRET: ${INVENTORY_HMAC_SECRET}
+      ALLOWED_ORIGINS: "http://${APP_HOST:-localhost},https://${APP_HOST:-localhost}"
+    volumes:
+      - ${BACKUP_STORAGE_HOST_PATH:-backups_data}:/app/backups
+      - ${PURCHASE_ORDER_STORAGE_HOST_PATH:-purchase_orders_data}:/app/purchase-orders
+    healthcheck:
+      test: ["CMD-SHELL", "wget --spider --quiet http://127.0.0.1:3000/api/health || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 40s
+    networks:
+      lagerverwaltung:
+        aliases:
+          - lager-backend
+
+  frontend:
+    build:
+      context: ./frontend
+    restart: unless-stopped
+    depends_on:
+      backend:
+        condition: service_started
+    healthcheck:
+      test: ["CMD-SHELL", "wget --spider --quiet http://127.0.0.1 || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    networks:
+      lagerverwaltung:
+        aliases:
+          - lager-frontend
+
+  caddy:
+    image: caddy:2.7
+    restart: unless-stopped
+    depends_on:
+      frontend:
+        condition: service_started
+      backend:
+        condition: service_started
+    environment:
+      APP_HOST: ${APP_HOST:-localhost}
+    volumes:
+      - ./deploy/caddy/Caddyfile.main:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+      - ./caddy-pki:/data/caddy/pki/authorities/local:rw
+    networks:
+      lagerverwaltung:
+      lan02:
+        ipv4_address: ${APP_HOST:-192.168.3.15}
+
+networks:
+  lagerverwaltung:
+    driver: bridge
+  lan02:
+    external: true
+    name: LAN02
+
+volumes:
+  mysql_data:
+  backups_data:
+  purchase_orders_data:
+  caddy_data:
+  caddy_config:

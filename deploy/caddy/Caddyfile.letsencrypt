@@ -1,0 +1,35 @@
+# HTTPS mit Let's Encrypt Zertifikat (öffentliche Domain erforderlich)
+# Beispiel: kfz-hannover.example.com (ersetze mit deiner eigenen Domain)
+
+# HTTP → HTTPS Redirect
+kfz-hannover.example.com:80 {
+  redir https://kfz-hannover.example.com{uri}
+}
+
+# HTTPS Site mit Let's Encrypt
+kfz-hannover.example.com:443 {
+  # Automatisches Let's Encrypt Zertifikat
+  # email wird automatisch von Caddy verwendet
+  encode zstd gzip
+  
+  header {
+    Strict-Transport-Security "max-age=31536000; includeSubDomains"
+  }
+  
+  handle /api/* {
+    reverse_proxy 192.168.3.21:3000
+  }
+  
+  handle /socket.io/* {
+    reverse_proxy 192.168.3.21:3000
+  }
+  
+  handle {
+    reverse_proxy 192.168.3.22:80
+  }
+}
+
+# Globale Einstellungen für Let's Encrypt
+{
+  email thomas.busche@rr-hannover.de
+}

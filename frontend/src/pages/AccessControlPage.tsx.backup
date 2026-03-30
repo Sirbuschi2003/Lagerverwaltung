@@ -1,0 +1,332 @@
+import React, { useEffect, useMemo, useState } from "react";
+import {
+  Alert,
+  Box,
+  Button,
+  Card,
+  CardContent,
+  Checkbox,
+  Chip,
+  Divider,
+  FormControl,
+  Grid,
+  InputLabel,
+  MenuItem,
+  Select,
+  Stack,
+  Typography,
+} from "@mui/material";
+import DashboardIcon from "@mui/icons-material/Dashboard";
+import DirectionsCarIcon from "@mui/icons-material/DirectionsCar";
+import InventoryIcon from "@mui/icons-material/Inventory";
+import BuildIcon from "@mui/icons-material/Build";
+import QrCodeScannerIcon from "@mui/icons-material/QrCodeScanner";
+import SyncIcon from "@mui/icons-material/Sync";
+import VisibilityIcon from "@mui/icons-material/Visibility";
+import EditNoteIcon from "@mui/icons-material/EditNote";
+import BackupIcon from "@mui/icons-material/Backup";
+import AssignmentIcon from "@mui/icons-material/Assignment";
+import ShieldIcon from "@mui/icons-material/Shield";
+import SettingsIcon from "@mui/icons-material/Settings";
+import EmailIcon from "@mui/icons-material/MarkEmailRead";
+import HistoryIcon from "@mui/icons-material/History";
+import GroupIcon from "@mui/icons-material/Group";
+import DeleteSweepIcon from "@mui/icons-material/DeleteSweep";
+import TableChartIcon from "@mui/icons-material/TableChart";
+import NoteAddIcon from "@mui/icons-material/NoteAdd";
+
+import { fetchPermissions, fetchRolePermissions, updateRolePermissions, type PermissionDto, type RolePermissionsDto } from "../utils/api";
+
+const permissionMeta: Record<
+  string,
+  {
+    label: string;
+    features?: string[];
+    category?: string;
+  }
+> = {
+  "stock.read": {
+    label: "Bestand lesen",
+    features: ["Artikel-Details", "Eigener Bestand"],
+    category: "Kernfunktionen",
+  },
+  "stock.write": {
+    label: "Buchen",
+    features: ["Buchen (Ein/Aus)", "Bereitstellen"],
+    category: "Kernfunktionen",
+  },
+  "dashboard.view": { label: "Dashboard", features: ["Dashboard"], category: "Kernfunktionen" },
+  "fleet.view": { label: "Fahrzeugbestände", features: ["Fahrzeugbestände"], category: "Kernfunktionen" },
+  "items.view": { label: "Artikel-Übersicht", features: ["Artikel-Liste"], category: "Kernfunktionen" },
+  "myvehicle.view": { label: "Mein Fahrzeug", features: ["Mein Fahrzeug"], category: "Kernfunktionen" },
+  "scanner.use": { label: "Scanner", features: ["Scanner"], category: "Kernfunktionen" },
+  "sync.use": { label: "Synchronisierung", features: ["Synchronisierung"], category: "Kernfunktionen" },
+  "movements.view": {
+    label: "Historie",
+    features: ["Bewegungen (Historie)"],
+    category: "Reporting",
+  },
+  "restock.manage": {
+    label: "Restocks",
+    features: ["Dashboard: Restock verwalten"],
+    category: "Lagerprozesse",
+  },
+  "vehicles.manage": {
+    label: "Fahrzeuge",
+    features: ["Fahrzeuge verwalten"],
+    category: "Stammdaten",
+  },
+  "users.manage": {
+    label: "Benutzer",
+    features: ["Benutzerverwaltung"],
+    category: "Stammdaten",
+  },
+  "inventory.manage": {
+    label: "Inventur",
+    features: ["Inventur"],
+    category: "Inventur",
+  },
+  "inventory.template": {
+    label: "Inventur-Vorlage",
+    features: ["Inventur-Vorlage"],
+    category: "Inventur",
+  },
+  "settings.company": {
+    label: "Firmendaten",
+    features: ["Firmendaten"],
+    category: "Einstellungen",
+  },
+  "settings.email": {
+    label: "E-Mail",
+    features: ["E-Mail Einstellungen"],
+    category: "Einstellungen",
+  },
+  "backup.access": {
+    label: "Backups",
+    features: ["Datensicherung"],
+    category: "Einstellungen",
+  },
+  "logs.view": {
+    label: "Logs",
+    features: ["Systemprotokolle", "Live-Logs"],
+    category: "Reporting",
+  },
+  "movements.cleanup": {
+    label: "Bereinigung",
+    features: ["Bewegungen bereinigen"],
+    category: "Reporting",
+  },
+  "access.manage": {
+    label: "Rechte",
+    features: ["Rechteverwaltung"],
+    category: "Einstellungen",
+  },
+};
+
+const iconForPermission = (key: string) => {
+  switch (key) {
+    case "dashboard.view":
+      return <DashboardIcon fontSize="small" />;
+    case "fleet.view":
+      return <DirectionsCarIcon fontSize="small" />;
+    case "items.view":
+      return <InventoryIcon fontSize="small" />;
+    case "myvehicle.view":
+      return <BuildIcon fontSize="small" />;
+    case "scanner.use":
+      return <QrCodeScannerIcon fontSize="small" />;
+    case "sync.use":
+      return <SyncIcon fontSize="small" />;
+    case "stock.read":
+      return <VisibilityIcon fontSize="small" />;
+    case "stock.write":
+      return <EditNoteIcon fontSize="small" />;
+    case "movements.view":
+      return <HistoryIcon fontSize="small" />;
+    case "restock.manage":
+      return <AssignmentIcon fontSize="small" />;
+    case "vehicles.manage":
+      return <DirectionsCarIcon fontSize="small" />;
+    case "users.manage":
+      return <GroupIcon fontSize="small" />;
+    case "inventory.manage":
+      return <TableChartIcon fontSize="small" />;
+    case "inventory.template":
+      return <NoteAddIcon fontSize="small" />;
+    case "settings.company":
+      return <SettingsIcon fontSize="small" />;
+    case "settings.email":
+      return <EmailIcon fontSize="small" />;
+    case "backup.access":
+      return <BackupIcon fontSize="small" />;
+    case "logs.view":
+      return <AssignmentIcon fontSize="small" />;
+    case "movements.cleanup":
+      return <DeleteSweepIcon fontSize="small" />;
+    case "access.manage":
+      return <ShieldIcon fontSize="small" />;
+    default:
+      return <ShieldIcon fontSize="small" />;
+  }
+};
+
+const AccessControlPage: React.FC = () => {
+  const [permissions, setPermissions] = useState<PermissionDto[]>([]);
+  const [roles, setRoles] = useState<RolePermissionsDto[]>([]);
+  const [selectedRole, setSelectedRole] = useState<string>("MANAGER");
+  const [roleWorking, setRoleWorking] = useState(false);
+  const [status, setStatus] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    void refreshAcl();
+  }, []);
+
+  const refreshAcl = async () => {
+    try {
+      const [perms, rolesData] = await Promise.all([fetchPermissions(), fetchRolePermissions()]);
+      setPermissions(perms);
+      setRoles(rolesData);
+    } catch (err) {
+      console.error(err);
+      setError("Konnte Berechtigungen nicht laden.");
+    }
+  };
+
+  const currentRolePermissions = useMemo(
+    () => roles.find((r) => r.name === selectedRole)?.permissions ?? [],
+    [roles, selectedRole],
+  );
+
+  const toggleRolePermission = (key: string) => {
+    const updated = currentRolePermissions.includes(key)
+      ? currentRolePermissions.filter((p) => p !== key)
+      : [...currentRolePermissions, key];
+    setRoles((prev) =>
+      prev.map((role) => (role.name === selectedRole ? { ...role, permissions: updated } : role)),
+    );
+  };
+
+  const saveRolePermissions = async () => {
+    setRoleWorking(true);
+    setStatus(null);
+    setError(null);
+    try {
+      await updateRolePermissions(selectedRole, currentRolePermissions);
+      setStatus("Rollenrechte gespeichert.");
+      await refreshAcl();
+    } catch (err) {
+      console.error(err);
+      setError("Speichern der Rollenrechte fehlgeschlagen.");
+    } finally {
+      setRoleWorking(false);
+    }
+  };
+
+  return (
+    <Box>
+      <Typography variant="h5" sx={{ mb: 2 }}>
+        Rechteverwaltung
+      </Typography>
+      {status && (
+        <Alert severity="success" sx={{ mb: 2 }}>
+          {status}
+        </Alert>
+      )}
+      {error && (
+        <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError(null)}>
+          {error}
+        </Alert>
+      )}
+      <Card>
+        <CardContent>
+          <Stack direction={{ xs: "column", sm: "row" }} justifyContent="space-between" alignItems={{ xs: "flex-start", sm: "center" }} sx={{ mb: 2, gap: 1 }}>
+            <Box>
+              <Typography variant="h6">Rollenrechte</Typography>
+              <Typography variant="caption" color="text.secondary">
+                Setze die Berechtigungen pro Rolle. Benutzerbezogene Overrides sind deaktiviert.
+              </Typography>
+            </Box>
+            <FormControl size="small" sx={{ minWidth: 180 }}>
+              <InputLabel>Rolle</InputLabel>
+              <Select value={selectedRole} label="Rolle" onChange={(e) => setSelectedRole(e.target.value)}>
+                {roles.map((role) => (
+                  <MenuItem key={role.name} value={role.name}>
+                    {role.name}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+          </Stack>
+          <Divider sx={{ mb: 2 }} />
+          <Stack spacing={1.25} sx={{ maxHeight: 540, overflow: "auto" }}>
+            {permissions
+              .slice()
+              .sort((a, b) => {
+                const ca = permissionMeta[a.key]?.category || "Sonstiges";
+                const cb = permissionMeta[b.key]?.category || "Sonstiges";
+                if (ca !== cb) return ca.localeCompare(cb, "de");
+                return (permissionMeta[a.key]?.label || a.key).localeCompare(permissionMeta[b.key]?.label || b.key, "de");
+              })
+              .map((perm, idx, arr) => {
+                const category = permissionMeta[perm.key]?.category || "Sonstiges";
+                const prevCategory = idx > 0 ? permissionMeta[arr[idx - 1].key]?.category || "Sonstiges" : null;
+                return (
+                  <Box key={perm.key}>
+                    {category !== prevCategory && (
+                      <Typography variant="overline" color="text.secondary" sx={{ pl: 0.5 }}>
+                        {category}
+                      </Typography>
+                    )}
+                  <Box
+                    sx={{
+                      border: "1px solid",
+                      borderColor: currentRolePermissions.includes(perm.key) ? "primary.main" : "divider",
+                      borderRadius: 2,
+                      p: 1.1,
+                  display: "flex",
+                  alignItems: "flex-start",
+                  gap: 1,
+                  backgroundColor: "background.paper",
+                }}
+              >
+                <Checkbox
+                  size="small"
+                  checked={currentRolePermissions.includes(perm.key)}
+                  onChange={() => toggleRolePermission(perm.key)}
+                />
+                    <Box sx={{ flex: 1 }}>
+                      <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 0.3 }}>
+                        {iconForPermission(perm.key)}
+                        <Typography variant="body2" sx={{ fontWeight: 700 }}>
+                          {permissionMeta[perm.key]?.label ?? perm.key}
+                    </Typography>
+                  </Stack>
+                  <Typography variant="caption" color="text.secondary">
+                    {perm.description}
+                  </Typography>
+                  {permissionMeta[perm.key]?.features && (
+                    <Stack direction="row" spacing={0.5} sx={{ mt: 0.5, flexWrap: "wrap" }}>
+                      {permissionMeta[perm.key].features!.map((feature) => (
+                        <Chip key={feature} label={feature} size="small" variant="outlined" />
+                      ))}
+                    </Stack>
+                  )}
+                    </Box>
+                  </Box>
+                  </Box>
+                );
+              })}
+          </Stack>
+          <Box sx={{ mt: 2, display: "flex", gap: 1, justifyContent: "flex-end" }}>
+            <Button variant="contained" onClick={saveRolePermissions} disabled={roleWorking}>
+              Speichern
+            </Button>
+          </Box>
+        </CardContent>
+      </Card>
+    </Box>
+  );
+};
+
+export default AccessControlPage;

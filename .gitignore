@@ -1,0 +1,39 @@
+# Umgebungsvariablen & Secrets
+.env
+.env.local
+.env.*.local
+
+# Zertifikate & Schlüssel
+*.crt
+*.cer
+*.key
+*.pem
+caddy-pki/
+
+# Datenbankdaten & Backups
+backups/
+*.csv
+*.sql
+schema.sql
+
+# Node
+node_modules/
+frontend/node_modules/
+backend/node_modules/
+
+# Build-Ausgaben
+frontend/dist/
+backend/dist/
+
+# Logs
+*.log
+logs/
+
+# Claude / IDE
+.claude/settings.local.json
+
+# Docker Volumes (lokal)
+mysql_data/
+caddy_data/
+caddy_config/
+purchase_orders/

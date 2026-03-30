@@ -1,0 +1,84 @@
+# Lagerverwaltung Docker Compose - Production Setup
+# Modernes Design System Frontend + Secure NestJS Backend
+
+services:
+  # MySQL Database
+  mysql:
+    image: mysql:8.3
+    container_name: lagerverwaltung-db
+    restart: unless-stopped
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+      - --authentication-policy=caching_sha2_password
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-changeMeRoot}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-kfz_parts}
+      MYSQL_USER: ${MYSQL_USER:-kfzparts}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-kfzparts}
+    volumes:
+      - mysql_data:/var/lib/mysql
+    ports:
+      - "${MYSQL_PORT:-3306}:3306"
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h localhost || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - lagerverwaltung
+
+  # NestJS Backend API
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+      target: runner
+    container_name: lagerverwaltung-api
+    restart: unless-stopped
+    depends_on:
+      mysql:
+        condition: service_healthy
+    ports:
+      - "${BACKEND_PORT:-3000}:3000"
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      DB_HOST: mysql
+      DB_PORT: 3306
+      DB_USER: ${MYSQL_USER:-kfzparts}
+      DB_PASSWORD: ${MYSQL_PASSWORD:-kfzparts}
+      DB_NAME: ${MYSQL_DATABASE:-kfz_parts}
+      DB_SYNCHRONIZE: false
+      DB_MIGRATIONS_RUN: true
+      JWT_SECRET: ${BACKEND_JWT_SECRET:-super-secret}
+      JWT_EXPIRES_IN: ${BACKEND_JWT_EXPIRES_IN:-30d}
+    volumes:
+      - ./backups:/app/backups
+      - ${PURCHASE_ORDER_STORAGE_HOST_PATH:-./purchase-orders}:/app/purchase-orders
+    networks:
+      - lagerverwaltung
+
+  # React + Nginx Frontend
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: lagerverwaltung-ui
+    restart: unless-stopped
+    depends_on:
+      - backend
+    ports:
+      - "80:80"
+    environment:
+      VITE_API_URL: http://backend:3000
+    networks:
+      - lagerverwaltung
+
+networks:
+  lagerverwaltung:
+    driver: bridge
+
+volumes:
+  mysql_data:
+    driver: local

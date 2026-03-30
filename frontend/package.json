@@ -1,0 +1,53 @@
+{
+  "name": "kfz-parts-frontend",
+  "version": "2.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview",
+    "lint": "eslint \"src/**/*.{ts,tsx}\""
+  },
+  "dependencies": {
+    "@emotion/react": "^11.11.3",
+    "@emotion/styled": "^11.11.0",
+    "@mui/icons-material": "^5.15.18",
+    "@mui/material": "^5.15.18",
+    "@zxing/browser": "^0.1.5",
+    "@zxing/library": "^0.21.3",
+    "axios": "^1.13.5",
+    "date-fns": "^3.6.0",
+    "dayjs": "^1.11.19",
+    "idb": "^7.1.1",
+    "papaparse": "^5.4.1",
+    "qrcode.react": "^4.1.0",
+    "react": "^18.2.0",
+    "react-color": "^2.19.3",
+    "react-dom": "^18.2.0",
+    "react-rnd": "^10.5.2",
+    "react-router-dom": "^6.30.3",
+    "socket.io-client": "^4.8.3",
+    "workbox-background-sync": "^7.4.0",
+    "zustand": "^4.5.7"
+  },
+  "devDependencies": {
+    "@types/node": "^24.10.13",
+    "@types/papaparse": "^5.5.2",
+    "@types/react": "^18.3.28",
+    "@types/react-color": "^3.0.3",
+    "@types/react-dom": "^18.2.22",
+    "@types/socket.io-client": "^1.4.7",
+    "@typescript-eslint/eslint-plugin": "^7.3.1",
+    "@typescript-eslint/parser": "^7.3.1",
+    "@vitejs/plugin-react": "^4.2.1",
+    "eslint": "^8.57.0",
+    "eslint-config-prettier": "^9.1.0",
+    "eslint-plugin-react": "^7.33.2",
+    "typescript": "^5.9.3",
+    "vite": "^5.1.6",
+    "vite-plugin-pwa": "^0.20.0",
+    "workbox-precaching": "^7.0.0",
+    "workbox-window": "^7.4.0"
+  }
+}

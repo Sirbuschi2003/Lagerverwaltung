@@ -1,0 +1,45 @@
+# HTTPS Site für direkten IP-Zugriff
+192.168.3.13:443 {
+	tls internal
+	encode zstd gzip
+	
+	handle /api/* {
+		reverse_proxy 192.168.3.21:3000
+	}
+	
+	handle /socket.io/* {
+		reverse_proxy 192.168.3.21:3000
+	}
+	
+	handle {
+		reverse_proxy 192.168.3.22:80
+	}
+}
+
+# HTTP → HTTPS Redirect für Domain
+kfz-app.rr-hannover.local:80 {
+	redir https://kfz-app.rr-hannover.local{uri}
+}
+
+# HTTPS Site für Domain
+kfz-app.rr-hannover.local:443 {
+	# internes Zertifikat von Caddy (Root-CA einmalig auf Clients vertrauen)
+	tls internal
+	encode zstd gzip
+	
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+	}
+	
+	handle /api/* {
+		reverse_proxy 192.168.3.21:3000
+	}
+	
+	handle /socket.io/* {
+		reverse_proxy 192.168.3.21:3000
+	}
+	
+	handle {
+		reverse_proxy 192.168.3.22:80
+	}
+}

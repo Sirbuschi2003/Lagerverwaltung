@@ -1,0 +1,40 @@
+{
+    # Local dev CA (Caddy creates the root cert in /data)
+    # No public ACME/Let's Encrypt
+    auto_https disable_redirects
+}
+
+# HTTPS entrypoints fuer lokale Dev und optional LAN-Zugriff (LAN-IP ggf. anpassen)
+https://localhost, https://kfz-dev.local, https://host.docker.internal, https://192.168.3.113 {
+    # Statisches Dev-Zertifikat (SAN: localhost, kfz-dev.local, host.docker.internal, 192.168.3.113)
+    tls /etc/caddy/dev.pem /etc/caddy/dev.key
+    encode gzip
+
+    @api path /api/* /socket.io/*
+    handle @api {
+        reverse_proxy backend:3000
+    }
+
+    handle {
+        reverse_proxy frontend:80
+    }
+}
+
+# HTTP -> HTTPS redirect for the dev hosts
+http://localhost, http://kfz-dev.local, http://host.docker.internal {
+    redir https://{host}:8443{uri}
+}
+
+# HTTP-Fallback fuer die LAN-IP (nur Dev/Test; kein TLS)
+http://192.168.3.113 {
+    encode gzip
+
+    @api path /api/* /socket.io/*
+    handle @api {
+        reverse_proxy backend:3000
+    }
+
+    handle {
+        reverse_proxy frontend:80
+    }
+}

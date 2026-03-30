@@ -1,0 +1,60 @@
+{
+    default_sni {$APP_HOST}
+}
+
+# Proxy-Snippet: Root-CA-Download + API + Frontend
+(app_proxy) {
+    encode zstd gzip
+
+    # Root-CA-Zertifikat herunterladen (fuer Handy-Installation, PWA-Trust)
+    @rootcert path /rootCA-local.crt /rootCA-local.cer
+    handle @rootcert {
+        header {
+            Content-Type "application/x-x509-ca-cert"
+            Content-Disposition "attachment; filename=\"rootCA-local.cer\""
+            X-Content-Type-Options "nosniff"
+            Cache-Control "no-store"
+        }
+        root * /data/caddy/pki/authorities/local
+        rewrite * /root.crt
+        file_server
+    }
+
+    @api path /api/* /socket.io/*
+    handle @api {
+        reverse_proxy lager-backend:3000
+    }
+
+    handle {
+        reverse_proxy lager-frontend:80
+    }
+}
+
+# HTTP: Root-CA-Download erlauben, alles andere auf HTTPS weiterleiten
+http://{$APP_HOST} {
+    @rootcert path /rootCA-local.crt /rootCA-local.cer
+    handle @rootcert {
+        header {
+            Content-Type "application/x-x509-ca-cert"
+            Content-Disposition "attachment; filename=\"rootCA-local.cer\""
+            X-Content-Type-Options "nosniff"
+            Cache-Control "no-store"
+        }
+        root * /data/caddy/pki/authorities/local
+        rewrite * /root.crt
+        file_server
+    }
+    redir https://{$APP_HOST}{uri} permanent
+}
+
+# HTTPS: Caddy interne CA (selbst signiert, lokal vertrauenswuerdig nach CA-Installation)
+https://{$APP_HOST} {
+    tls internal
+
+    header {
+        Strict-Transport-Security "max-age=31536000; includeSubDomains"
+        Content-Security-Policy "upgrade-insecure-requests"
+    }
+
+    import app_proxy
+}

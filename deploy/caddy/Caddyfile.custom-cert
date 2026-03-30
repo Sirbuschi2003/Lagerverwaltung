@@ -1,0 +1,27 @@
+# HTTPS mit eigenem Zertifikat (z.B. von Firma/CA)
+kfz-app.rr-hannover.local:80 {
+  redir https://kfz-app.rr-hannover.local{uri}
+}
+
+kfz-app.rr-hannover.local:443 {
+  # Eigenes Zertifikat verwenden
+  tls /path/to/cert.pem /path/to/key.pem
+  
+  encode zstd gzip
+  
+  header {
+    Strict-Transport-Security "max-age=31536000; includeSubDomains"
+  }
+  
+  handle /api/* {
+    reverse_proxy 192.168.3.21:3000
+  }
+  
+  handle /socket.io/* {
+    reverse_proxy 192.168.3.21:3000
+  }
+  
+  handle {
+    reverse_proxy 192.168.3.22:80
+  }
+}
