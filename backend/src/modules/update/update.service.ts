@@ -108,7 +108,7 @@ export class UpdateService {
       const req = https.get(
         {
           hostname: "api.github.com",
-          path: `/repos/${this.GITHUB_REPO}/commits/main`,
+          path: `/repos/${this.GITHUB_REPO}/commits/master`,
           headers: {
             "User-Agent": "Lagerverwaltung-Update-Check/1.0",
             Accept: "application/vnd.github.v3+json",
