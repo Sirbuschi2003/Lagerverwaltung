@@ -40,13 +40,14 @@ RUN npm install --omit=dev
 # Copy built application
 COPY --from=builder /app/dist ./dist
 
-# Create non-root user for security; add to docker group so update-Skript docker CLI nutzen kann
+# Create non-root user for security
 RUN addgroup -g 1001 -S nodejs && \
     adduser -S nestjs -u 1001 && \
-    addgroup nestjs docker && \
     chown -R nestjs:nodejs /app
 
-USER nestjs
+# Update-Funktion: Backend laeuft als root damit docker-socket zugaenglich ist
+# (nur fuer in-app Update noetig, akzeptabel fuer self-hosted NAS-Betrieb)
+USER root
 
 # Health check
 HEALTHCHECK --interval=15s --timeout=5s --retries=5 \
