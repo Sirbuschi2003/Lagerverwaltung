@@ -83,6 +83,7 @@ const SETTINGS_ITEMS: MenuItem[] = [
   { id: "settings-backup", label: "Datensicherung", path: "/backup", icon: <CloudDownload />, roles: ["MANAGER"], permissions: ["backup.access"] },
   { id: "settings-logs", label: "Systemprotokolle", path: "/logs", icon: <Analytics />, roles: ["MANAGER"], permissions: ["logs.view"] },
   { id: "settings-access", label: "Benutzer & Fahrzeuge", path: "/access-control", icon: <AdminPanelSettings />, roles: ["MANAGER"], permissions: ["access.manage"] },
+  { id: "settings-maintenance", label: "Wartung & Update", path: "/settings/maintenance", icon: <Build />, roles: ["MANAGER"], permissions: ["settings.company"] },
 ];
 
 const NavigationDrawer: React.FC<NavigationDrawerProps> = ({ open, onClose, width = 280 }) => {
