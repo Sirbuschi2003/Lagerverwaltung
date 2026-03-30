@@ -2,6 +2,7 @@
 import {
   AppBar,
   Avatar,
+  Badge,
   Box,
   Chip,
   Divider,
@@ -22,7 +23,9 @@ import Brightness7Icon from "@mui/icons-material/Brightness7";
 import SettingsIcon from "@mui/icons-material/Settings";
 import PaletteIcon from "@mui/icons-material/Palette";
 import CheckIcon from "@mui/icons-material/Check";
+import SystemUpdateAltIcon from "@mui/icons-material/SystemUpdateAlt";
 import { useNavigate } from "react-router-dom";
+import { fetchUpdateStatus } from "../utils/api";
 
 import useAuthStore from "../store/useAuthStore";
 import { useNetworkStatus } from "../hooks/useNetworkStatus";
@@ -53,6 +56,20 @@ const AppHeader: React.FC<AppHeaderProps> = ({ onMenuToggle, menuOpen }) => {
 
   const [userMenuAnchor, setUserMenuAnchor] = React.useState<null | HTMLElement>(null);
   const [themeMenuAnchor, setThemeMenuAnchor] = React.useState<null | HTMLElement>(null);
+  const [updateAvailable, setUpdateAvailable] = React.useState(false);
+
+  // Update-Check alle 10 Minuten (nur fuer Admins)
+  React.useEffect(() => {
+    if (user?.role !== "ADMIN") return;
+    const check = () => {
+      fetchUpdateStatus()
+        .then((s) => setUpdateAvailable(s.updateAvailable))
+        .catch(() => {});
+    };
+    check();
+    const interval = setInterval(check, 10 * 60 * 1000);
+    return () => clearInterval(interval);
+  }, [user?.role]);
 
   const handleUserMenuOpen = (event: React.MouseEvent<HTMLElement>) => {
     setUserMenuAnchor(event.currentTarget);
@@ -125,6 +142,19 @@ const AppHeader: React.FC<AppHeaderProps> = ({ onMenuToggle, menuOpen }) => {
               size="small"
               variant="outlined"
             />
+          )}
+
+          {updateAvailable && user?.role === "ADMIN" && (
+            <Tooltip title="Neue Version verfügbar – jetzt updaten">
+              <Chip
+                icon={<SystemUpdateAltIcon />}
+                label={isMobileSmall ? "" : "Update verfügbar"}
+                color="info"
+                size="small"
+                onClick={() => navigate("/settings/maintenance")}
+                sx={{ cursor: "pointer", fontWeight: 600 }}
+              />
+            </Tooltip>
           )}
 
           <Tooltip title={activePreset ? `Theme: ${activePreset.label}` : "Theme-Vorlage"}>
@@ -201,7 +231,9 @@ const AppHeader: React.FC<AppHeaderProps> = ({ onMenuToggle, menuOpen }) => {
 
               <Tooltip title="Benutzermenue">
                 <IconButton onClick={handleUserMenuOpen} sx={{ p: 0.25 }} aria-label="user menu">
-                  <Avatar sx={headerStyles.userAvatar}>{userInitials}</Avatar>
+                  <Badge color="info" variant="dot" invisible={!updateAvailable || user?.role !== "ADMIN"}>
+                    <Avatar sx={headerStyles.userAvatar}>{userInitials}</Avatar>
+                  </Badge>
                 </IconButton>
               </Tooltip>
 

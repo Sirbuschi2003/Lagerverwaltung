@@ -6,10 +6,12 @@
       "Read(//c/Users/Thomas.Busche/.claude/projects/c--Users-Thomas-Busche-Desktop-Code-Lagerverwaltung/916e6153-2416-4b9a-9def-9fdda237c08d/tool-results/**)",
       "Bash(ls c:/Users/Thomas.Busche/Desktop/Code/Lagerverwaltung/*.yml c:/Users/Thomas.Busche/Desktop/Code/Lagerverwaltung/*.sh)",
       "Bash(ls c:/Users/Thomas.Busche/Desktop/Code/Lagerverwaltung/*.crt c:/Users/Thomas.Busche/Desktop/Code/Lagerverwaltung/*.cer)",
-      "Bash(gh --version)"
+      "Bash(gh --version)",
+      "Bash(find c:UsersThomas.BuscheDesktopCodeLagerverwaltung -name *system-config* -type f)"
     ],
     "additionalDirectories": [
-      "c:\\Users\\Thomas.Busche\\.claude\\projects\\c--Users-Thomas-Busche-Desktop-Code-Lagerverwaltung\\memory"
+      "c:\\Users\\Thomas.Busche\\.claude\\projects\\c--Users-Thomas-Busche-Desktop-Code-Lagerverwaltung\\memory",
+      "c:\\Users\\Thomas.Busche\\Desktop\\Code\\Lagerverwaltung\\.github"
     ]
   }
 }

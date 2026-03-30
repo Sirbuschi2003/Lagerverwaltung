@@ -23,6 +23,7 @@ import { DatabaseModule } from "./modules/database/database.module";
 import { LocationsModule } from "./modules/locations/locations.module";
 import { SuppliersModule } from "./modules/suppliers/suppliers.module";
 import { PurchasingModule } from "./modules/purchasing/purchasing.module";
+import { UpdateModule } from "./modules/update/update.module";
 
 @Module({
   imports: [
@@ -53,6 +54,7 @@ import { PurchasingModule } from "./modules/purchasing/purchasing.module";
     LocationsModule,
     SuppliersModule,
     PurchasingModule,
+    UpdateModule,
   ],
   controllers: [AppController],
   providers: [

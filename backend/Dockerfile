@@ -24,10 +24,14 @@ ENV PUPPETEER_SKIP_DOWNLOAD=true
 ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium-browser
 ENV NODE_ENV=production
 
+# Git-Commit-SHA wird bei GitHub-Actions-Build injiziert (fuer Update-Check)
+ARG APP_VERSION=dev
+ENV APP_VERSION=${APP_VERSION}
+
 WORKDIR /app
 
-# Install runtime dependencies
-RUN apk add --no-cache chromium nss freetype ttf-freefont curl
+# Install runtime dependencies + docker CLI fuer automatisches Update
+RUN apk add --no-cache chromium nss freetype ttf-freefont curl docker-cli docker-compose
 
 # Copy dependencies
 COPY package*.json ./
@@ -36,9 +40,10 @@ RUN npm install --omit=dev
 # Copy built application
 COPY --from=builder /app/dist ./dist
 
-# Create non-root user for security
+# Create non-root user for security; add to docker group so update-Skript docker CLI nutzen kann
 RUN addgroup -g 1001 -S nodejs && \
     adduser -S nestjs -u 1001 && \
+    addgroup nestjs docker && \
     chown -R nestjs:nodejs /app
 
 USER nestjs

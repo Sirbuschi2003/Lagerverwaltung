@@ -1782,3 +1782,26 @@ export const fetchUserSettings = async (): Promise<Record<string, unknown>> => {
 export const saveUserSettings = async (settings: Record<string, unknown>): Promise<void> => {
   await api.put("/users/me/settings", settings);
 };
+
+// ============================================================
+// Update-Funktion (In-App Docker-Update)
+// ============================================================
+
+export interface UpdateStatus {
+  currentVersion: string;
+  latestVersion: string | null;
+  updateAvailable: boolean;
+  lastChecked: string | null;
+  checking: boolean;
+  error: string | null;
+}
+
+export const fetchUpdateStatus = async (refresh = false): Promise<UpdateStatus> => {
+  const response = await api.get<UpdateStatus>(`/update/status${refresh ? "?refresh=true" : ""}`);
+  return response.data;
+};
+
+export const applyUpdate = async (): Promise<{ message: string }> => {
+  const response = await api.post<{ message: string }>("/update/apply");
+  return response.data;
+};

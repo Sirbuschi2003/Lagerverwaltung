@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Box,
   Button,
@@ -14,13 +14,16 @@ import {
   TableRow,
   Chip,
   Divider,
+  LinearProgress,
 } from '@mui/material';
 import BuildIcon from '@mui/icons-material/Build';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import ErrorIcon from '@mui/icons-material/Error';
 import DeleteSweepIcon from '@mui/icons-material/DeleteSweep';
 import SearchIcon from '@mui/icons-material/Search';
-import { checkDatabaseMaintenance, fixDatabaseIssues, previewPurgeOldOrders, purgeOldOrders, type MaintenanceIssue } from '../utils/api';
+import SystemUpdateAltIcon from '@mui/icons-material/SystemUpdateAlt';
+import RefreshIcon from '@mui/icons-material/Refresh';
+import { checkDatabaseMaintenance, fixDatabaseIssues, previewPurgeOldOrders, purgeOldOrders, fetchUpdateStatus, applyUpdate, type MaintenanceIssue, type UpdateStatus } from '../utils/api';
 
 const RETENTION_YEARS = 10;
 
@@ -31,10 +34,69 @@ const AdminMaintenancePage = () => {
   const [fixing, setFixing] = useState(false);
   const [fixResult, setFixResult] = useState<string | null>(null);
 
+  // Update-Status
+  const [updateStatus, setUpdateStatus] = useState<UpdateStatus | null>(null);
+  const [updateLoading, setUpdateLoading] = useState(false);
+  const [updateChecking, setUpdateChecking] = useState(false);
+  const [updateMessage, setUpdateMessage] = useState<string | null>(null);
+  const [updateRestarting, setUpdateRestarting] = useState(false);
+
   // Bestellarchiv-Bereinigung
   const [purgePreview, setPurgePreview] = useState<{ count: number; oldestDate: string | null; cutoffDate: string } | null>(null);
   const [purgeLoading, setPurgeLoading] = useState(false);
   const [purgeResult, setPurgeResult] = useState<string | null>(null);
+
+  useEffect(() => {
+    handleCheckUpdate();
+  }, []);
+
+  const handleCheckUpdate = async (refresh = false) => {
+    setUpdateChecking(true);
+    try {
+      const status = await fetchUpdateStatus(refresh);
+      setUpdateStatus(status);
+    } catch {
+      // ignore
+    } finally {
+      setUpdateChecking(false);
+    }
+  };
+
+  const handleApplyUpdate = async () => {
+    if (!window.confirm('Update jetzt einspielen?\n\nDie Anwendung wird für ca. 30–60 Sekunden nicht erreichbar sein.')) return;
+    setUpdateLoading(true);
+    setUpdateMessage(null);
+    try {
+      const result = await applyUpdate();
+      setUpdateMessage(result.message);
+      setUpdateRestarting(true);
+      // Warte bis Backend wieder erreichbar ist, dann Seite neu laden
+      const pollRestart = async () => {
+        await new Promise((r) => setTimeout(r, 5000));
+        let attempts = 0;
+        const poll = setInterval(async () => {
+          attempts++;
+          try {
+            const s = await fetchUpdateStatus();
+            if (s) {
+              clearInterval(poll);
+              window.location.reload();
+            }
+          } catch {
+            if (attempts > 24) {
+              clearInterval(poll);
+              setUpdateRestarting(false);
+              setUpdateMessage('Neustart dauert länger als erwartet. Bitte Seite manuell neu laden.');
+            }
+          }
+        }, 5000);
+      };
+      pollRestart();
+    } catch (err: any) {
+      setUpdateMessage('Fehler: ' + (err.response?.data?.message || err.message));
+      setUpdateLoading(false);
+    }
+  };
 
   const checkForIssues = async () => {
     setLoading(true);
@@ -110,6 +172,99 @@ const AdminMaintenancePage = () => {
 
   return (
     <Box sx={{ p: 3 }}>
+      {/* ===== Update-Sektion ===== */}
+      <Paper sx={{ p: 3, mb: 3, border: updateStatus?.updateAvailable ? '2px solid' : undefined, borderColor: 'info.main' }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 2 }}>
+          <SystemUpdateAltIcon sx={{ fontSize: 40, color: updateStatus?.updateAvailable ? 'info.main' : 'text.secondary' }} />
+          <Box sx={{ flex: 1 }}>
+            <Typography variant="h5" sx={{ fontWeight: 600 }}>
+              Software-Update
+            </Typography>
+            <Typography variant="body2" color="text.secondary">
+              Automatisches Update aus GitHub – alle Container werden neu gestartet
+            </Typography>
+          </Box>
+          <Button
+            variant="outlined"
+            size="small"
+            onClick={() => handleCheckUpdate(true)}
+            disabled={updateChecking}
+            startIcon={updateChecking ? <CircularProgress size={16} /> : <RefreshIcon />}
+          >
+            Prüfen
+          </Button>
+        </Box>
+
+        <Divider sx={{ my: 2 }} />
+
+        {updateRestarting ? (
+          <Box>
+            <Alert severity="info" sx={{ mb: 2 }}>
+              <strong>Update wird eingespielt…</strong> Die Anwendung startet neu. Bitte warten.
+            </Alert>
+            <LinearProgress />
+          </Box>
+        ) : updateStatus ? (
+          <Box>
+            <Box sx={{ display: 'flex', gap: 3, mb: 2, flexWrap: 'wrap' }}>
+              <Box>
+                <Typography variant="caption" color="text.secondary">Installierte Version</Typography>
+                <Typography variant="body2" sx={{ fontFamily: 'monospace', fontWeight: 600 }}>
+                  {updateStatus.currentVersion}
+                </Typography>
+              </Box>
+              {updateStatus.latestVersion && (
+                <Box>
+                  <Typography variant="caption" color="text.secondary">Neueste Version (GitHub)</Typography>
+                  <Typography variant="body2" sx={{ fontFamily: 'monospace', fontWeight: 600, color: updateStatus.updateAvailable ? 'info.main' : 'success.main' }}>
+                    {updateStatus.latestVersion}
+                  </Typography>
+                </Box>
+              )}
+              {updateStatus.lastChecked && (
+                <Box>
+                  <Typography variant="caption" color="text.secondary">Zuletzt geprüft</Typography>
+                  <Typography variant="body2">{new Date(updateStatus.lastChecked).toLocaleString('de-DE')}</Typography>
+                </Box>
+              )}
+            </Box>
+
+            {updateStatus.error ? (
+              <Alert severity="warning" sx={{ mb: 2 }}>{updateStatus.error}</Alert>
+            ) : updateStatus.updateAvailable ? (
+              <Alert severity="info" sx={{ mb: 2 }}>
+                <strong>Neue Version verfügbar!</strong> Version <code>{updateStatus.latestVersion}</code> ist auf GitHub bereit.
+              </Alert>
+            ) : (
+              <Alert severity="success" icon={<CheckCircleIcon />} sx={{ mb: 2 }}>
+                Die Anwendung ist aktuell.
+              </Alert>
+            )}
+
+            {updateStatus.updateAvailable && !updateStatus.error && (
+              <Button
+                variant="contained"
+                color="info"
+                onClick={handleApplyUpdate}
+                disabled={updateLoading}
+                startIcon={updateLoading ? <CircularProgress size={20} /> : <SystemUpdateAltIcon />}
+                size="large"
+              >
+                {updateLoading ? 'Update wird gestartet…' : 'Jetzt updaten'}
+              </Button>
+            )}
+
+            {updateMessage && !updateRestarting && (
+              <Alert severity={updateMessage.startsWith('Fehler') ? 'error' : 'info'} sx={{ mt: 2 }}>
+                {updateMessage}
+              </Alert>
+            )}
+          </Box>
+        ) : (
+          <Alert severity="info">Update-Status wird geladen…</Alert>
+        )}
+      </Paper>
+
       <Paper sx={{ p: 3 }}>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 3 }}>
           <BuildIcon sx={{ fontSize: 40, color: 'primary.main' }} />
