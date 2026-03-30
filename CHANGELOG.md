@@ -9,6 +9,28 @@ Alle Änderungen werden hier dokumentiert.
 
 ---
 
+## [2.1.1] – 2026-03-30
+
+### Bugfixes
+- **Update startet Container nicht** — `docker compose up -d` tötete den laufenden Backend-Container bevor der neue starten konnte; neuer Container blieb in „Created"-Zustand hängen. Gelöst durch unabhängigen Helper-Container der den Neustart übernimmt nachdem unser Prozess gestorben ist.
+- **`docker compose` vs `docker-compose`** — Im Alpine-Image ist `docker-compose` (v1, Bindestrich) installiert; Skripte verwendeten `docker compose` (v2, Leerzeichen). Alle Skripte auf `docker-compose` umgestellt.
+
+---
+
+## [2.1.0] – 2026-03-30
+
+### Neue Funktionen
+- **Versionsnummer statt Git-SHA** — Anzeige zeigt nun `v2.1.0` statt `b3c305d`; GitHub Actions setzt Git-Tag mit package.json-Version
+- **Changelog-Anzeige vor dem Update** — Button „Was hat sich geändert?" lädt CHANGELOG.md von GitHub und zeigt ihn direkt in der Oberfläche an
+- **Update-Fortschrittsanzeige** — Stepper mit Phasen (Gestartet → Images herunterladen → Container neu starten), Live-Log-Ausgabe und automatischer Seiten-Reload nach Neustart
+- **Backend: Datenbank-Wartungs-Endpunkte** — `GET /maintenance/check` und `POST /maintenance/fix` waren nicht implementiert; vollständiges `MaintenanceModule` erstellt
+- **Changelog-Endpunkt** — `GET /update/changelog` liefert CHANGELOG.md direkt aus GitHub
+
+### Bugfixes
+- **Update lief nicht durch** — Frontend-Polling startete zu früh und lud Seite neu bevor Docker-Pull abgeschlossen war; komplette Update-Flow-Logik überarbeitet
+
+---
+
 ## [2.0.2] – 2026-03-30
 
 ### Bugfixes

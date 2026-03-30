@@ -9,7 +9,7 @@ jobs:
   build-and-push:
     runs-on: ubuntu-latest
     permissions:
-      contents: read
+      contents: write
       packages: write
 
     steps:
@@ -18,6 +18,17 @@ jobs:
 
       - name: Lowercase owner name
         run: echo "OWNER=$(echo '${{ github.repository_owner }}' | tr '[:upper:]' '[:lower:]')" >> $GITHUB_ENV
+
+      - name: Read version from package.json
+        run: echo "APP_VERSION=$(node -p \"require('./frontend/package.json').version\")" >> $GITHUB_ENV
+
+      - name: Create or update git tag for this version
+        run: |
+          git config user.name "github-actions"
+          git config user.email "github-actions@github.com"
+          git tag -f "v${{ env.APP_VERSION }}"
+          git push origin "v${{ env.APP_VERSION }}" --force
+        continue-on-error: true
 
       - name: Log in to GitHub Container Registry
         uses: docker/login-action@v3
@@ -36,10 +47,10 @@ jobs:
           target: runner
           push: true
           build-args: |
-            APP_VERSION=${{ github.sha }}
+            APP_VERSION=${{ env.APP_VERSION }}
           tags: |
             ghcr.io/${{ env.OWNER }}/lagerverwaltung-backend:latest
-            ghcr.io/${{ env.OWNER }}/lagerverwaltung-backend:${{ github.sha }}
+            ghcr.io/${{ env.OWNER }}/lagerverwaltung-backend:${{ env.APP_VERSION }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
@@ -50,6 +61,6 @@ jobs:
           push: true
           tags: |
             ghcr.io/${{ env.OWNER }}/lagerverwaltung-frontend:latest
-            ghcr.io/${{ env.OWNER }}/lagerverwaltung-frontend:${{ github.sha }}
+            ghcr.io/${{ env.OWNER }}/lagerverwaltung-frontend:${{ env.APP_VERSION }}
           cache-from: type=gha
           cache-to: type=gha,mode=max

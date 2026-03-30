@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   Box,
   Button,
@@ -15,6 +15,11 @@ import {
   Chip,
   Divider,
   LinearProgress,
+  Stepper,
+  Step,
+  StepLabel,
+  Collapse,
+  IconButton,
 } from '@mui/material';
 import BuildIcon from '@mui/icons-material/Build';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
@@ -23,38 +28,116 @@ import DeleteSweepIcon from '@mui/icons-material/DeleteSweep';
 import SearchIcon from '@mui/icons-material/Search';
 import SystemUpdateAltIcon from '@mui/icons-material/SystemUpdateAlt';
 import RefreshIcon from '@mui/icons-material/Refresh';
-import { checkDatabaseMaintenance, fixDatabaseIssues, previewPurgeOldOrders, purgeOldOrders, fetchUpdateStatus, applyUpdate, type MaintenanceIssue, type UpdateStatus } from '../utils/api';
+import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
+import ExpandLessIcon from '@mui/icons-material/ExpandLess';
+import ArticleIcon from '@mui/icons-material/Article';
+import {
+  checkDatabaseMaintenance,
+  fixDatabaseIssues,
+  previewPurgeOldOrders,
+  purgeOldOrders,
+  fetchUpdateStatus,
+  applyUpdate,
+  fetchChangelog,
+  type MaintenanceIssue,
+  type UpdateStatus,
+  type UpdatePhase,
+} from '../utils/api';
 
 const RETENTION_YEARS = 10;
 
+const UPDATE_STEPS = [
+  { phase: 'starting' as UpdatePhase, label: 'Gestartet' },
+  { phase: 'pulling' as UpdatePhase, label: 'Images herunterladen' },
+  { phase: 'restarting' as UpdatePhase, label: 'Container neu starten' },
+  { phase: 'done' as UpdatePhase, label: 'Fertig' },
+];
+
+const phaseToStep = (phase: UpdatePhase): number => {
+  const idx = UPDATE_STEPS.findIndex((s) => s.phase === phase);
+  return idx >= 0 ? idx : 0;
+};
+
 const AdminMaintenancePage = () => {
+  // DB-Wartung
   const [loading, setLoading] = useState(false);
   const [issues, setIssues] = useState<MaintenanceIssue[]>([]);
   const [lastCheck, setLastCheck] = useState<Date | null>(null);
   const [fixing, setFixing] = useState(false);
   const [fixResult, setFixResult] = useState<string | null>(null);
 
-  // Update-Status
+  // Update
   const [updateStatus, setUpdateStatus] = useState<UpdateStatus | null>(null);
-  const [updateLoading, setUpdateLoading] = useState(false);
   const [updateChecking, setUpdateChecking] = useState(false);
-  const [updateMessage, setUpdateMessage] = useState<string | null>(null);
-  const [updateRestarting, setUpdateRestarting] = useState(false);
+  const [updateStarting, setUpdateStarting] = useState(false);
+  const [waitingForRestart, setWaitingForRestart] = useState(false);
+  const [updateError, setUpdateError] = useState<string | null>(null);
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  // Bestellarchiv-Bereinigung
+  // Changelog
+  const [changelog, setChangelog] = useState<string | null>(null);
+  const [changelogOpen, setChangelogOpen] = useState(false);
+  const [changelogLoading, setChangelogLoading] = useState(false);
+
+  // Bestellarchiv
   const [purgePreview, setPurgePreview] = useState<{ count: number; oldestDate: string | null; cutoffDate: string } | null>(null);
   const [purgeLoading, setPurgeLoading] = useState(false);
   const [purgeResult, setPurgeResult] = useState<string | null>(null);
 
+  // Initialer Update-Check
   useEffect(() => {
     handleCheckUpdate();
+    return () => stopPolling();
   }, []);
+
+  const stopPolling = () => {
+    if (pollRef.current) {
+      clearInterval(pollRef.current);
+      pollRef.current = null;
+    }
+  };
+
+  const startPolling = () => {
+    stopPolling();
+    pollRef.current = setInterval(async () => {
+      try {
+        const status = await fetchUpdateStatus();
+        setUpdateStatus(status);
+
+        if (status.updateRunning) {
+          // Update läuft noch – weiter pollen
+          return;
+        }
+
+        if (waitingForRestart || status.updatePhase === 'restarting') {
+          // Backend ist wieder erreichbar nach Neustart
+          stopPolling();
+          setWaitingForRestart(false);
+          window.location.reload();
+          return;
+        }
+
+        // Update fertig oder Fehler
+        stopPolling();
+        setUpdateStarting(false);
+      } catch {
+        // Backend nicht erreichbar = Neustart läuft
+        if (!waitingForRestart) {
+          setWaitingForRestart(true);
+        }
+      }
+    }, 2000);
+  };
 
   const handleCheckUpdate = async (refresh = false) => {
     setUpdateChecking(true);
     try {
       const status = await fetchUpdateStatus(refresh);
       setUpdateStatus(status);
+      // Falls ein Update lief und wir neu geladen haben
+      if (status.updateRunning) {
+        startPolling();
+      }
     } catch {
       // ignore
     } finally {
@@ -62,42 +145,42 @@ const AdminMaintenancePage = () => {
     }
   };
 
-  const handleApplyUpdate = async () => {
-    if (!window.confirm('Update jetzt einspielen?\n\nDie Anwendung wird für ca. 30–60 Sekunden nicht erreichbar sein.')) return;
-    setUpdateLoading(true);
-    setUpdateMessage(null);
+  const handleLoadChangelog = async () => {
+    if (changelog) {
+      setChangelogOpen((o) => !o);
+      return;
+    }
+    setChangelogLoading(true);
     try {
-      const result = await applyUpdate();
-      setUpdateMessage(result.message);
-      setUpdateRestarting(true);
-      // Warte bis Backend wieder erreichbar ist, dann Seite neu laden
-      const pollRestart = async () => {
-        await new Promise((r) => setTimeout(r, 5000));
-        let attempts = 0;
-        const poll = setInterval(async () => {
-          attempts++;
-          try {
-            const s = await fetchUpdateStatus();
-            if (s) {
-              clearInterval(poll);
-              window.location.reload();
-            }
-          } catch {
-            if (attempts > 24) {
-              clearInterval(poll);
-              setUpdateRestarting(false);
-              setUpdateMessage('Neustart dauert länger als erwartet. Bitte Seite manuell neu laden.');
-            }
-          }
-        }, 5000);
-      };
-      pollRestart();
-    } catch (err: any) {
-      setUpdateMessage('Fehler: ' + (err.response?.data?.message || err.message));
-      setUpdateLoading(false);
+      const text = await fetchChangelog();
+      setChangelog(text);
+      setChangelogOpen(true);
+    } catch {
+      setChangelog('Changelog konnte nicht geladen werden.');
+      setChangelogOpen(true);
+    } finally {
+      setChangelogLoading(false);
     }
   };
 
+  const handleApplyUpdate = async () => {
+    if (!window.confirm(
+      'Update jetzt einspielen?\n\nDie Anwendung wird für ca. 30–60 Sekunden nicht erreichbar sein.'
+    )) return;
+
+    setUpdateError(null);
+    setUpdateStarting(true);
+    try {
+      await applyUpdate();
+      // Sofort pollen starten
+      startPolling();
+    } catch (err: any) {
+      setUpdateError('Fehler beim Starten: ' + (err.response?.data?.message || err.message));
+      setUpdateStarting(false);
+    }
+  };
+
+  // DB-Wartung
   const checkForIssues = async () => {
     setLoading(true);
     setFixResult(null);
@@ -106,7 +189,6 @@ const AdminMaintenancePage = () => {
       setIssues(response.issues || []);
       setLastCheck(new Date());
     } catch (error: any) {
-      console.error('Fehler beim Überprüfen:', error);
       alert('Fehler beim Überprüfen der Datenbank: ' + (error.response?.data?.message || error.message));
     } finally {
       setLoading(false);
@@ -114,23 +196,15 @@ const AdminMaintenancePage = () => {
   };
 
   const fixIssues = async () => {
-    if (!window.confirm('Möchten Sie alle gefundenen Probleme automatisch beheben?')) {
-      return;
-    }
-
+    if (!window.confirm('Möchten Sie alle gefundenen Probleme automatisch beheben?')) return;
     setFixing(true);
     setFixResult(null);
     try {
       const result = await fixDatabaseIssues();
       setFixResult(`Erfolgreich ${result.fixed} Probleme behoben. ${result.message}`);
       setIssues([]);
-      
-      // Nach dem Fix erneut prüfen
-      setTimeout(() => {
-        checkForIssues();
-      }, 1000);
+      setTimeout(() => checkForIssues(), 1000);
     } catch (error: any) {
-      console.error('Fehler beim Beheben:', error);
       alert('Fehler beim Beheben der Probleme: ' + (error.response?.data?.message || error.message));
     } finally {
       setFixing(false);
@@ -155,7 +229,6 @@ const AdminMaintenancePage = () => {
     if (!window.confirm(
       `Möchten Sie wirklich ${purgePreview.count} Bestellung(en) älter als ${RETENTION_YEARS} Jahre unwiderruflich löschen?\n\nDies löscht auch die zugehörigen PDF-Dateien.`
     )) return;
-
     setPurgeLoading(true);
     try {
       const result = await purgeOldOrders(RETENTION_YEARS);
@@ -168,110 +241,203 @@ const AdminMaintenancePage = () => {
     }
   };
 
+  const isUpdating = updateStarting || (updateStatus?.updateRunning ?? false) || waitingForRestart;
+  const currentPhase = updateStatus?.updatePhase ?? 'idle';
   const totalIssues = issues.reduce((sum, issue) => sum + issue.count, 0);
 
   return (
     <Box sx={{ p: 3 }}>
+
       {/* ===== Update-Sektion ===== */}
-      <Paper sx={{ p: 3, mb: 3, border: updateStatus?.updateAvailable ? '2px solid' : undefined, borderColor: 'info.main' }}>
+      <Paper sx={{
+        p: 3, mb: 3,
+        border: updateStatus?.updateAvailable && !isUpdating ? '2px solid' : '1px solid',
+        borderColor: updateStatus?.updateAvailable && !isUpdating ? 'info.main' : 'divider',
+      }}>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 2 }}>
           <SystemUpdateAltIcon sx={{ fontSize: 40, color: updateStatus?.updateAvailable ? 'info.main' : 'text.secondary' }} />
           <Box sx={{ flex: 1 }}>
-            <Typography variant="h5" sx={{ fontWeight: 600 }}>
-              Software-Update
-            </Typography>
+            <Typography variant="h5" sx={{ fontWeight: 600 }}>Software-Update</Typography>
             <Typography variant="body2" color="text.secondary">
               Automatisches Update aus GitHub – alle Container werden neu gestartet
             </Typography>
           </Box>
-          <Button
-            variant="outlined"
-            size="small"
-            onClick={() => handleCheckUpdate(true)}
-            disabled={updateChecking}
-            startIcon={updateChecking ? <CircularProgress size={16} /> : <RefreshIcon />}
-          >
-            Prüfen
-          </Button>
+          {!isUpdating && (
+            <Button
+              variant="outlined"
+              size="small"
+              onClick={() => handleCheckUpdate(true)}
+              disabled={updateChecking}
+              startIcon={updateChecking ? <CircularProgress size={16} /> : <RefreshIcon />}
+            >
+              Prüfen
+            </Button>
+          )}
         </Box>
 
         <Divider sx={{ my: 2 }} />
 
-        {updateRestarting ? (
-          <Box>
-            <Alert severity="info" sx={{ mb: 2 }}>
-              <strong>Update wird eingespielt…</strong> Die Anwendung startet neu. Bitte warten.
-            </Alert>
-            <LinearProgress />
-          </Box>
-        ) : updateStatus ? (
-          <Box>
-            <Box sx={{ display: 'flex', gap: 3, mb: 2, flexWrap: 'wrap' }}>
-              <Box>
-                <Typography variant="caption" color="text.secondary">Installierte Version</Typography>
-                <Typography variant="body2" sx={{ fontFamily: 'monospace', fontWeight: 600 }}>
-                  {updateStatus.currentVersion}
-                </Typography>
-              </Box>
-              {updateStatus.latestVersion && (
-                <Box>
-                  <Typography variant="caption" color="text.secondary">Neueste Version (GitHub)</Typography>
-                  <Typography variant="body2" sx={{ fontFamily: 'monospace', fontWeight: 600, color: updateStatus.updateAvailable ? 'info.main' : 'success.main' }}>
-                    {updateStatus.latestVersion}
-                  </Typography>
-                </Box>
-              )}
-              {updateStatus.lastChecked && (
-                <Box>
-                  <Typography variant="caption" color="text.secondary">Zuletzt geprüft</Typography>
-                  <Typography variant="body2">{new Date(updateStatus.lastChecked).toLocaleString('de-DE')}</Typography>
-                </Box>
-              )}
-            </Box>
-
-            {updateStatus.error ? (
-              <Alert severity="warning" sx={{ mb: 2 }}>{updateStatus.error}</Alert>
-            ) : updateStatus.updateAvailable ? (
+        {/* Fortschrittsanzeige während Update */}
+        {isUpdating && (
+          <Box sx={{ mb: 2 }}>
+            {waitingForRestart ? (
               <Alert severity="info" sx={{ mb: 2 }}>
-                <strong>Neue Version verfügbar!</strong> Version <code>{updateStatus.latestVersion}</code> ist auf GitHub bereit.
+                <strong>Backend startet neu…</strong> Verbindung wird wiederhergestellt, bitte warten.
               </Alert>
             ) : (
-              <Alert severity="success" icon={<CheckCircleIcon />} sx={{ mb: 2 }}>
-                Die Anwendung ist aktuell.
+              <Alert severity="info" sx={{ mb: 2 }}>
+                <strong>
+                  {currentPhase === 'starting' && 'Update wird gestartet…'}
+                  {currentPhase === 'pulling' && 'Neue Images werden heruntergeladen…'}
+                  {currentPhase === 'restarting' && 'Container werden neu gestartet…'}
+                </strong>
               </Alert>
             )}
 
-            {updateStatus.updateAvailable && !updateStatus.error && (
-              <Button
-                variant="contained"
-                color="info"
-                onClick={handleApplyUpdate}
-                disabled={updateLoading}
-                startIcon={updateLoading ? <CircularProgress size={20} /> : <SystemUpdateAltIcon />}
-                size="large"
-              >
-                {updateLoading ? 'Update wird gestartet…' : 'Jetzt updaten'}
-              </Button>
-            )}
+            <Stepper activeStep={waitingForRestart ? 2 : phaseToStep(currentPhase)} sx={{ mb: 2 }}>
+              {UPDATE_STEPS.filter(s => s.phase !== 'done').map((step) => (
+                <Step key={step.phase}>
+                  <StepLabel>{step.label}</StepLabel>
+                </Step>
+              ))}
+            </Stepper>
 
-            {updateMessage && !updateRestarting && (
-              <Alert severity={updateMessage.startsWith('Fehler') ? 'error' : 'info'} sx={{ mt: 2 }}>
-                {updateMessage}
-              </Alert>
+            <LinearProgress sx={{ mb: 2, borderRadius: 1 }} />
+
+            {/* Live-Log */}
+            {updateStatus?.updateLog && updateStatus.updateLog.length > 0 && (
+              <Box sx={{
+                bgcolor: 'background.default',
+                border: '1px solid',
+                borderColor: 'divider',
+                borderRadius: 1,
+                p: 1.5,
+                maxHeight: 160,
+                overflowY: 'auto',
+                fontFamily: 'monospace',
+                fontSize: '0.75rem',
+              }}>
+                {updateStatus.updateLog.map((line, i) => (
+                  <Typography key={i} variant="caption" display="block" sx={{ fontFamily: 'monospace', lineHeight: 1.6 }}>
+                    {line}
+                  </Typography>
+                ))}
+              </Box>
             )}
           </Box>
-        ) : (
-          <Alert severity="info">Update-Status wird geladen…</Alert>
+        )}
+
+        {/* Fehler-Anzeige */}
+        {(updateError || (updateStatus?.updatePhase === 'error' && !isUpdating)) && (
+          <Alert severity="error" sx={{ mb: 2 }}>
+            {updateError || updateStatus?.error || 'Update fehlgeschlagen'}
+          </Alert>
+        )}
+
+        {/* Normal-Ansicht (kein Update aktiv) */}
+        {!isUpdating && (
+          <>
+            {updateStatus ? (
+              <>
+                <Box sx={{ display: 'flex', gap: 4, mb: 2, flexWrap: 'wrap' }}>
+                  <Box>
+                    <Typography variant="caption" color="text.secondary">Installierte Version</Typography>
+                    <Typography variant="body1" sx={{ fontWeight: 700 }}>
+                      {updateStatus.currentVersion === 'dev' ? 'dev (lokal)' : `v${updateStatus.currentVersion}`}
+                    </Typography>
+                  </Box>
+                  {updateStatus.latestVersion && (
+                    <Box>
+                      <Typography variant="caption" color="text.secondary">Neueste Version (GitHub)</Typography>
+                      <Typography variant="body1" sx={{
+                        fontWeight: 700,
+                        color: updateStatus.updateAvailable ? 'info.main' : 'success.main',
+                      }}>
+                        v{updateStatus.latestVersion}
+                      </Typography>
+                    </Box>
+                  )}
+                  {updateStatus.lastChecked && (
+                    <Box>
+                      <Typography variant="caption" color="text.secondary">Zuletzt geprüft</Typography>
+                      <Typography variant="body2">
+                        {new Date(updateStatus.lastChecked).toLocaleString('de-DE')}
+                      </Typography>
+                    </Box>
+                  )}
+                </Box>
+
+                {updateStatus.error ? (
+                  <Alert severity="warning" sx={{ mb: 2 }}>{updateStatus.error}</Alert>
+                ) : updateStatus.updateAvailable ? (
+                  <Alert severity="info" sx={{ mb: 2 }}>
+                    <strong>Neue Version v{updateStatus.latestVersion} verfügbar!</strong>
+                  </Alert>
+                ) : (
+                  <Alert severity="success" icon={<CheckCircleIcon />} sx={{ mb: 2 }}>
+                    Die Anwendung ist aktuell (v{updateStatus.currentVersion}).
+                  </Alert>
+                )}
+
+                {/* Changelog-Anzeige */}
+                {updateStatus.updateAvailable && (
+                  <Box sx={{ mb: 2 }}>
+                    <Button
+                      size="small"
+                      variant="outlined"
+                      startIcon={changelogLoading ? <CircularProgress size={14} /> : <ArticleIcon />}
+                      endIcon={changelogOpen ? <ExpandLessIcon /> : <ExpandMoreIcon />}
+                      onClick={handleLoadChangelog}
+                      disabled={changelogLoading}
+                    >
+                      Was hat sich geändert?
+                    </Button>
+                    <Collapse in={changelogOpen}>
+                      <Box sx={{
+                        mt: 1,
+                        p: 2,
+                        bgcolor: 'background.default',
+                        border: '1px solid',
+                        borderColor: 'divider',
+                        borderRadius: 1,
+                        maxHeight: 300,
+                        overflowY: 'auto',
+                        whiteSpace: 'pre-wrap',
+                        fontFamily: 'monospace',
+                        fontSize: '0.78rem',
+                        lineHeight: 1.6,
+                      }}>
+                        {changelog}
+                      </Box>
+                    </Collapse>
+                  </Box>
+                )}
+
+                {updateStatus.updateAvailable && !updateStatus.error && (
+                  <Button
+                    variant="contained"
+                    color="info"
+                    onClick={handleApplyUpdate}
+                    startIcon={<SystemUpdateAltIcon />}
+                    size="large"
+                  >
+                    Jetzt updaten auf v{updateStatus.latestVersion}
+                  </Button>
+                )}
+              </>
+            ) : (
+              <Alert severity="info">Update-Status wird geladen…</Alert>
+            )}
+          </>
         )}
       </Paper>
 
+      {/* ===== Datenbank-Wartung ===== */}
       <Paper sx={{ p: 3 }}>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 3 }}>
           <BuildIcon sx={{ fontSize: 40, color: 'primary.main' }} />
           <Box>
-            <Typography variant="h5" sx={{ fontWeight: 600 }}>
-              Datenbank-Wartung
-            </Typography>
+            <Typography variant="h5" sx={{ fontWeight: 600 }}>Datenbank-Wartung</Typography>
             <Typography variant="body2" color="text.secondary">
               Überprüfung und Bereinigung von Dateninkonsistenzen
             </Typography>
@@ -310,9 +476,7 @@ const AdminMaintenancePage = () => {
         )}
 
         {fixResult && (
-          <Alert severity="success" sx={{ mb: 3 }}>
-            {fixResult}
-          </Alert>
+          <Alert severity="success" sx={{ mb: 3 }}>{fixResult}</Alert>
         )}
 
         {issues.length > 0 ? (
@@ -360,29 +524,19 @@ const AdminMaintenancePage = () => {
           <Typography variant="subtitle2" gutterBottom sx={{ fontWeight: 600 }}>
             Automatische Prüfungen:
           </Typography>
-          <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
-            • RestockRequests mit quantityNeeded = 0 (sollten FULFILLED sein)
-          </Typography>
-          <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
-            • Duplikate RestockRequests für denselben StockLevel
-          </Typography>
-          <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
-            • Verwaiste RestockRequests ohne StockLevel
-          </Typography>
-          <Typography variant="body2" color="text.secondary">
-            • Inkonsistente Status-Kombinationen
-          </Typography>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>• RestockRequests mit quantityNeeded = 0 (sollten FULFILLED sein)</Typography>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>• Duplikate RestockRequests für denselben StockLevel</Typography>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>• Verwaiste RestockRequests ohne StockLevel</Typography>
+          <Typography variant="body2" color="text.secondary">• Inkonsistente Status-Kombinationen</Typography>
         </Box>
       </Paper>
 
-      {/* Bestellarchiv bereinigen */}
+      {/* ===== Bestellarchiv bereinigen ===== */}
       <Paper sx={{ p: 3, mt: 3 }}>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 2 }}>
           <DeleteSweepIcon sx={{ fontSize: 40, color: 'warning.main' }} />
           <Box>
-            <Typography variant="h5" sx={{ fontWeight: 600 }}>
-              Bestellarchiv bereinigen
-            </Typography>
+            <Typography variant="h5" sx={{ fontWeight: 600 }}>Bestellarchiv bereinigen</Typography>
             <Typography variant="body2" color="text.secondary">
               Abgeschlossene und stornierte Bestellungen nach Ablauf der gesetzlichen Aufbewahrungsfrist löschen
             </Typography>
@@ -435,9 +589,7 @@ const AdminMaintenancePage = () => {
         )}
 
         {purgeResult && (
-          <Alert severity="success" sx={{ mt: 2 }}>
-            {purgeResult}
-          </Alert>
+          <Alert severity="success" sx={{ mt: 2 }}>{purgeResult}</Alert>
         )}
       </Paper>
     </Box>

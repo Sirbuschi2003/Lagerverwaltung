@@ -1787,6 +1787,8 @@ export const saveUserSettings = async (settings: Record<string, unknown>): Promi
 // Update-Funktion (In-App Docker-Update)
 // ============================================================
 
+export type UpdatePhase = "idle" | "starting" | "pulling" | "restarting" | "done" | "error";
+
 export interface UpdateStatus {
   currentVersion: string;
   latestVersion: string | null;
@@ -1794,6 +1796,10 @@ export interface UpdateStatus {
   lastChecked: string | null;
   checking: boolean;
   error: string | null;
+  updateRunning: boolean;
+  updatePhase: UpdatePhase;
+  updateStartedAt: string | null;
+  updateLog: string[];
 }
 
 export const fetchUpdateStatus = async (refresh = false): Promise<UpdateStatus> => {
@@ -1804,4 +1810,9 @@ export const fetchUpdateStatus = async (refresh = false): Promise<UpdateStatus> 
 export const applyUpdate = async (): Promise<{ message: string }> => {
   const response = await api.post<{ message: string }>("/update/apply");
   return response.data;
+};
+
+export const fetchChangelog = async (): Promise<string> => {
+  const response = await api.get<{ content: string }>("/update/changelog");
+  return response.data.content;
 };

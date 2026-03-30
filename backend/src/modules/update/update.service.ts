@@ -2,6 +2,14 @@ import { Injectable, Logger } from "@nestjs/common";
 import { spawn } from "child_process";
 import * as https from "https";
 
+export type UpdatePhase =
+  | "idle"
+  | "starting"
+  | "pulling"
+  | "restarting"
+  | "done"
+  | "error";
+
 export interface UpdateStatus {
   currentVersion: string;
   latestVersion: string | null;
@@ -9,17 +17,20 @@ export interface UpdateStatus {
   lastChecked: Date | null;
   checking: boolean;
   error: string | null;
+  updateRunning: boolean;
+  updatePhase: UpdatePhase;
+  updateStartedAt: Date | null;
+  updateLog: string[];
 }
 
 @Injectable()
 export class UpdateService {
   private readonly logger = new Logger(UpdateService.name);
   private readonly GITHUB_REPO = "Sirbuschi2003/Lagerverwaltung";
-  private readonly CACHE_TTL = 5 * 60 * 1000; // 5 Minuten
+  private readonly CACHE_TTL = 5 * 60 * 1000;
 
   private cachedStatus: UpdateStatus;
   private lastCheckTime = 0;
-  private updateRunning = false;
 
   constructor() {
     const currentVersion = process.env.APP_VERSION || "dev";
@@ -30,6 +41,10 @@ export class UpdateService {
       lastChecked: null,
       checking: false,
       error: null,
+      updateRunning: false,
+      updatePhase: "idle",
+      updateStartedAt: null,
+      updateLog: [],
     };
   }
 
@@ -41,14 +56,12 @@ export class UpdateService {
 
     this.cachedStatus = { ...this.cachedStatus, checking: true, error: null };
     try {
-      const latestSha = await this.fetchLatestCommitSha();
-      const latest7 = latestSha.substring(0, 7);
+      const latestVersion = await this.fetchLatestTag();
       const current = this.cachedStatus.currentVersion;
-      // "dev" gilt als veraltet – es gibt immer eine neuere Version auf GitHub
-      const updateAvailable = current === "dev" || latest7 !== current.substring(0, 7);
+      const updateAvailable = current === "dev" || latestVersion !== current;
       this.cachedStatus = {
         ...this.cachedStatus,
-        latestVersion: latest7,
+        latestVersion,
         updateAvailable,
         lastChecked: new Date(),
         checking: false,
@@ -65,50 +78,133 @@ export class UpdateService {
     return this.cachedStatus;
   }
 
+  async getChangelog(): Promise<string> {
+    return new Promise((resolve, reject) => {
+      const req = https.get(
+        {
+          hostname: "raw.githubusercontent.com",
+          path: `/${this.GITHUB_REPO}/master/CHANGELOG.md`,
+          headers: { "User-Agent": "Lagerverwaltung-Update-Check/1.0" },
+        },
+        (res) => {
+          if (res.statusCode === 404) {
+            resolve("Kein Changelog verfügbar.");
+            return;
+          }
+          let data = "";
+          res.on("data", (chunk) => (data += chunk));
+          res.on("end", () => resolve(data));
+        },
+      );
+      req.on("error", reject);
+      req.setTimeout(8000, () => {
+        req.destroy();
+        reject(new Error("Changelog-Abruf Timeout"));
+      });
+    });
+  }
+
   async applyUpdate(): Promise<{ message: string }> {
-    if (this.updateRunning) {
+    if (this.cachedStatus.updateRunning) {
       return { message: "Update läuft bereits." };
     }
 
     const composeFile =
       process.env.COMPOSE_FILE_PATH || "/workspace/docker-compose.main.yml";
     const projectName = process.env.COMPOSE_PROJECT_NAME || "lagerverwaltung";
+    // Backslash am Ende des Pfads entfernen für das Volume-Argument
+    const workspaceDir = composeFile.replace(/\/[^/]+$/, "");
+    const backendImage =
+      process.env.BACKEND_IMAGE ||
+      "ghcr.io/sirbuschi2003/lagerverwaltung-backend:latest";
 
-    this.logger.log(
-      `Starte Update: compose-Datei=${composeFile}, Projekt=${projectName}`,
-    );
+    this.logger.log(`Starte Update: Projekt=${projectName}, Datei=${composeFile}`);
 
-    this.updateRunning = true;
+    this.cachedStatus = {
+      ...this.cachedStatus,
+      updateRunning: true,
+      updatePhase: "starting",
+      updateStartedAt: new Date(),
+      updateLog: ["Update gestartet…"],
+      error: null,
+    };
 
-    const script = [
-      "sleep 3",
-      `docker compose -p ${projectName} -f ${composeFile} pull`,
-      `docker compose -p ${projectName} -f ${composeFile} up -d`,
-    ].join(" && ");
-
-    const child = spawn("sh", ["-c", script], {
-      detached: true,
-      stdio: "ignore",
-    });
-    child.unref();
-
-    // Flag wird beim Neustart automatisch zurückgesetzt
+    // Phase 1: Pull – mit Live-Ausgabe
     setTimeout(() => {
-      this.updateRunning = false;
-    }, 120_000);
+      this.addLog("Neue Images werden von GHCR heruntergeladen…");
+      this.cachedStatus = { ...this.cachedStatus, updatePhase: "pulling" };
+
+      const pullCmd = `docker-compose -p ${projectName} -f ${composeFile} pull 2>&1`;
+      const pullChild = spawn("sh", ["-c", pullCmd], {
+        stdio: ["ignore", "pipe", "pipe"],
+      });
+
+      pullChild.stdout?.on("data", (data: Buffer) => {
+        const lines = data.toString().split("\n").filter((l) => l.trim());
+        lines.forEach((line) => this.addLog(line));
+      });
+
+      pullChild.on("close", (code) => {
+        if (code !== 0) {
+          this.cachedStatus = {
+            ...this.cachedStatus,
+            updateRunning: false,
+            updatePhase: "error",
+            error: `docker-compose pull fehlgeschlagen (Exit-Code ${code})`,
+          };
+          this.addLog(`Fehler: Pull fehlgeschlagen (Code ${code})`);
+          return;
+        }
+
+        // Phase 2: Helper-Container starten der UNABHÄNGIG docker-compose up -d ausführt.
+        // Wenn unser Backend-Container sich selbst neustartet, stirbt unser Prozess –
+        // der Helper läuft in einem eigenen Container weiter und startet alle Container.
+        this.addLog("Images bereit. Starte Helper-Container für Neustart…");
+        this.cachedStatus = { ...this.cachedStatus, updatePhase: "restarting" };
+
+        const helperCmd = [
+          "docker run --rm -d",
+          "-v /var/run/docker.sock:/var/run/docker.sock",
+          `-v ${workspaceDir}:/workspace:ro`,
+          "--name lager-update-helper",
+          backendImage,
+          `sh -c "sleep 8 && docker-compose -p ${projectName} -f /workspace/docker-compose.main.yml up -d 2>&1"`,
+        ].join(" ");
+
+        const helperChild = spawn("sh", ["-c", helperCmd], { stdio: "ignore" });
+        helperChild.on("close", (helperCode) => {
+          if (helperCode === 0) {
+            this.addLog("Helper-Container läuft. Container werden in ~8 Sekunden neu gestartet…");
+          } else {
+            // Fallback: direkt up -d versuchen
+            this.addLog("Helper konnte nicht gestartet werden – versuche direkten Neustart…");
+            const upCmd = `docker-compose -p ${projectName} -f ${composeFile} up -d 2>&1`;
+            const upChild = spawn("sh", ["-c", upCmd], { detached: true, stdio: "ignore" });
+            upChild.unref();
+          }
+        });
+      });
+    }, 500);
 
     return {
-      message:
-        "Update wird eingespielt. Die Container werden neu gestartet – das dauert ca. 30–60 Sekunden.",
+      message: "Update wird eingespielt. Die Container werden in Kürze neu gestartet.",
     };
   }
 
-  private fetchLatestCommitSha(): Promise<string> {
+  private addLog(line: string): void {
+    this.cachedStatus = {
+      ...this.cachedStatus,
+      updateLog: [...this.cachedStatus.updateLog.slice(-29), line],
+    };
+  }
+
+  /** Neuesten Git-Tag = Versionsnummer */
+  private fetchLatestTag(): Promise<string> {
     return new Promise((resolve, reject) => {
       const req = https.get(
         {
           hostname: "api.github.com",
-          path: `/repos/${this.GITHUB_REPO}/commits/master`,
+          path: `/repos/${this.GITHUB_REPO}/tags`,
           headers: {
             "User-Agent": "Lagerverwaltung-Update-Check/1.0",
             Accept: "application/vnd.github.v3+json",
@@ -119,16 +215,12 @@ export class UpdateService {
           res.on("data", (chunk) => (data += chunk));
           res.on("end", () => {
             try {
-              const json = JSON.parse(data);
-              if (json.sha) {
-                resolve(json.sha as string);
-              } else {
-                reject(
-                  new Error(
-                    (json.message as string) || "Keine SHA in GitHub-Antwort",
-                  ),
-                );
+              const tags = JSON.parse(data) as Array<{ name: string }>;
+              if (!Array.isArray(tags) || tags.length === 0) {
+                reject(new Error("Keine Tags im Repository gefunden"));
+                return;
               }
+              resolve(tags[0].name.replace(/^v/, ""));
             } catch {
               reject(new Error("Ungültige GitHub-Antwort"));
             }

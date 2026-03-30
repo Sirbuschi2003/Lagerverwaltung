@@ -51,6 +51,7 @@ services:
       # Update-Funktion: Projekt- und Compose-Datei-Pfad fuer docker compose pull/up
       COMPOSE_PROJECT_NAME: lagerverwaltung
       COMPOSE_FILE_PATH: /workspace/docker-compose.main.yml
+      BACKEND_IMAGE: ghcr.io/sirbuschi2003/lagerverwaltung-backend:latest
     volumes:
       - ${BACKUP_STORAGE_HOST_PATH:-backups_data}:/app/backups
       - ${PURCHASE_ORDER_STORAGE_HOST_PATH:-purchase_orders_data}:/app/purchase-orders
