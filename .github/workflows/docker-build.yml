@@ -30,6 +30,13 @@ jobs:
           git push origin "v${{ env.APP_VERSION }}" --force
         continue-on-error: true
 
+      - name: Log in to Docker Hub (verhindert Rate-Limiting bei Base-Images)
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+        continue-on-error: true
+
       - name: Log in to GitHub Container Registry
         uses: docker/login-action@v3
         with:

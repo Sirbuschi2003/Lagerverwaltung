@@ -73,6 +73,8 @@ const AdminMaintenancePage = () => {
   const [waitingForRestart, setWaitingForRestart] = useState(false);
   const [updateError, setUpdateError] = useState<string | null>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const backendWentOfflineRef = useRef(false); // Ref statt State – vermeidet Stale-Closure in setInterval
+  const forceReloadTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Changelog
   const [changelog, setChangelog] = useState<string | null>(null);
@@ -95,36 +97,54 @@ const AdminMaintenancePage = () => {
       clearInterval(pollRef.current);
       pollRef.current = null;
     }
+    if (forceReloadTimerRef.current) {
+      clearTimeout(forceReloadTimerRef.current);
+      forceReloadTimerRef.current = null;
+    }
   };
 
   const startPolling = () => {
     stopPolling();
+    backendWentOfflineRef.current = false;
+
+    // Fallback: nach 3 Minuten auf jeden Fall neu laden
+    forceReloadTimerRef.current = setTimeout(() => {
+      stopPolling();
+      window.location.reload();
+    }, 3 * 60 * 1000);
+
     pollRef.current = setInterval(async () => {
       try {
         const status = await fetchUpdateStatus();
         setUpdateStatus(status);
 
-        if (status.updateRunning) {
-          // Update läuft noch – weiter pollen
+        if (status.updateRunning && status.updatePhase === 'pulling') {
+          // Noch am Downloaden – weiter warten
           return;
         }
 
-        if (waitingForRestart || status.updatePhase === 'restarting') {
-          // Backend ist wieder erreichbar nach Neustart
+        if (backendWentOfflineRef.current) {
+          // Backend war offline und ist jetzt wieder erreichbar → Update fertig!
           stopPolling();
-          setWaitingForRestart(false);
           window.location.reload();
           return;
         }
 
-        // Update fertig oder Fehler
-        stopPolling();
-        setUpdateStarting(false);
+        if (status.updatePhase === 'error') {
+          stopPolling();
+          setUpdateStarting(false);
+          setWaitingForRestart(false);
+          setUpdateError(status.error || 'Update fehlgeschlagen.');
+          return;
+        }
+
+        // updateRunning=false und kein Fehler und kein Offline-Zeitraum
+        // → Helper hat noch nicht neu gestartet oder Update war sehr schnell
+        // Weiter pollen bis wir offline gehen oder Timeout
       } catch {
         // Backend nicht erreichbar = Neustart läuft
-        if (!waitingForRestart) {
-          setWaitingForRestart(true);
-        }
+        backendWentOfflineRef.current = true; // Ref! Kein Stale-Closure-Problem
+        setWaitingForRestart(true);
       }
     }, 2000);
   };

@@ -3,6 +3,13 @@
 Alle Änderungen werden hier dokumentiert.
 
 
+## [2.1.2] – 2026-03-30
+
+### Bugfixes
+- **Update-Polling hängt in Endlosschleife** — Stale-Closure-Bug: `waitingForRestart` State-Variable wurde im `setInterval`-Callback nie aktualisiert (eingefroren beim Start). Gelöst durch `useRef` (`backendWentOfflineRef`) statt State für den Polling-Callback. Zusätzlich 3-Minuten-Fallback-Timeout der auf jeden Fall neu lädt.
+
+---
+
 ## [2.1.1] – 2026-03-30
 
 ### Bugfixes
