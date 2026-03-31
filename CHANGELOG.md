@@ -6,6 +6,18 @@ Alle Änderungen werden hier dokumentiert.
 
 ## 2026-03-31
 
+### [2.2.4] – Schnellbuchung & Bugfixes
+
+#### Neue Funktionen
+- **Kamera-Scanner in der Schnellbuchung** — Auf dem Handy erscheint ein großer "QR-Code / Barcode scannen"-Button. Auf dem Desktop ist das Kamera-Icon direkt im Barcode-Feld. Bei erkanntem Code wird der Artikel sofort gesucht und zur Buchungsliste hinzugefügt (bzw. sofort gebucht wenn "Sofort buchen" aktiv ist).
+- **Offline-Buchungen im Dashboard sichtbar** — Ausstehende Buchungen aus der Offline-Queue erscheinen sofort oben in "Letzte Buchungen" mit gelbem "Ausstehend"-Badge, auch wenn das Gerät offline ist.
+- **Artikelbilder** — Zu jedem Artikel kann ein Bild hochgeladen werden (JPEG/PNG/WebP, bis 25 MB). Sharp skaliert serverseitig auf max. 800×800 px. Vorschau und Upload direkt im Artikel-Bearbeitungsdialog, Thumbnail in der Artikelliste.
+
+#### Bugfixes
+- **Artikelbild wurde nicht angezeigt** — Image-Endpoint war JWT-geschützt; `<img src>` sendet keinen Token. Endpoint ist jetzt öffentlich (UUID als Schutz ausreichend).
+- **Bild-Upload schlug fehl mit "sharp is not a function"** — Import von `import * as sharp` auf `import sharp` (Default-Export) korrigiert.
+- **Bild-Upload-Limit erhöht** — Von 8 MB auf 25 MB, da Smartphone-Fotos oft größer sind.
+
 ### [2.2.3] – Zertifikat-Fix: Stabiles selbst-signiertes Zertifikat
 
 #### Neue Funktionen
