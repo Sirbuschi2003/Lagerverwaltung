@@ -143,8 +143,15 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // Navigation: Workbox precaching liefert index.html aus dem Cache
-  // Kein extra Handler nötig — precacheAndRoute übernimmt das.
+  // Navigation (Pull-to-Refresh, Direkt-URL): immer index.html aus Cache liefern
+  if (request.mode === 'navigate') {
+    event.respondWith(
+      fetch(request).catch(() =>
+        caches.match('/index.html').then((cached) => cached || caches.match('/'))
+      )
+    );
+    return;
+  }
 });
 
 // --- Push-Benachrichtigungen ---
