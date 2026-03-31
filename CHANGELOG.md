@@ -3,6 +3,13 @@
 Alle Änderungen werden hier dokumentiert.
 
 
+## [2.1.5] – 2026-03-31
+
+### Änderungen
+- **Update-Benachrichtigung im Header entfernt** — Der Chip "Update verfügbar" und der Badge-Punkt auf dem Avatar-Icon wurden entfernt. Updates werden weiterhin auf der Wartungsseite angezeigt und können dort eingespielt werden.
+
+---
+
 ## [2.1.4] – 2026-03-31
 
 ### Bugfixes
