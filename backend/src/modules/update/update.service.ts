@@ -115,8 +115,6 @@ export class UpdateService {
     const composeFile =
       process.env.COMPOSE_FILE_PATH || "/workspace/docker-compose.main.yml";
     const projectName = process.env.COMPOSE_PROJECT_NAME || "lagerverwaltung";
-    // Backslash am Ende des Pfads entfernen für das Volume-Argument
-    const workspaceDir = composeFile.replace(/\/[^/]+$/, "");
     const backendImage =
       process.env.BACKEND_IMAGE ||
       "ghcr.io/sirbuschi2003/lagerverwaltung-backend:latest";
@@ -132,7 +130,7 @@ export class UpdateService {
       error: null,
     };
 
-    // Sicherheits-Timeout: nach 5 Minuten Status zurücksetzen falls Update hängt
+    // Sicherheits-Timeout: nach 8 Minuten Status zurücksetzen falls Update hängt
     setTimeout(() => {
       if (this.cachedStatus.updateRunning) {
         this.logger.warn("Update-Timeout: Status wird zurückgesetzt");
@@ -140,13 +138,13 @@ export class UpdateService {
           ...this.cachedStatus,
           updateRunning: false,
           updatePhase: "error",
-          error: "Update-Timeout: Kein Abschluss nach 5 Minuten",
+          error: "Update-Timeout: Kein Abschluss nach 8 Minuten",
         };
       }
-    }, 5 * 60 * 1000);
+    }, 8 * 60 * 1000);
 
     // Phase 1: Pull – mit Live-Ausgabe
-    setTimeout(() => {
+    setTimeout(async () => {
       this.addLog("Neue Images werden von GHCR heruntergeladen…");
       this.cachedStatus = { ...this.cachedStatus, updatePhase: "pulling" };
 
@@ -160,7 +158,7 @@ export class UpdateService {
         lines.forEach((line) => this.addLog(line));
       });
 
-      pullChild.on("close", (code) => {
+      pullChild.on("close", async (code) => {
         if (code !== 0) {
           this.cachedStatus = {
             ...this.cachedStatus,
@@ -172,30 +170,61 @@ export class UpdateService {
           return;
         }
 
-        // Phase 2: Helper-Container starten der UNABHÄNGIG docker-compose up -d ausführt.
-        // Wenn unser Backend-Container sich selbst neustartet, stirbt unser Prozess –
-        // der Helper läuft in einem eigenen Container weiter und startet alle Container.
-        this.addLog("Images bereit. Starte Helper-Container für Neustart…");
+        // Phase 2: Host-Pfad des Projektverzeichnisses ermitteln.
+        // Sibling-Container (via docker.sock) brauchen HOST-Pfade für Volumes, keine Container-Pfade.
+        // Automatische Erkennung über Docker-Labels (com.docker.compose.project.working_dir).
         this.cachedStatus = { ...this.cachedStatus, updatePhase: "restarting" };
+        this.addLog("Images bereit. Ermittle Host-Projektpfad…");
 
+        const hostProjectPath = process.env.HOST_PROJECT_PATH || await this.getHostProjectPath();
+
+        if (!hostProjectPath) {
+          this.addLog("FEHLER: Host-Projektpfad konnte nicht ermittelt werden.");
+          this.addLog("Tipp: HOST_PROJECT_PATH=/volume1/docker/Lagerverwaltung in .env setzen.");
+          this.cachedStatus = {
+            ...this.cachedStatus,
+            updateRunning: false,
+            updatePhase: "error",
+            error: "Host-Projektpfad nicht ermittelbar. Bitte HOST_PROJECT_PATH in .env setzen.",
+          };
+          return;
+        }
+
+        this.addLog(`Host-Pfad: ${hostProjectPath}`);
+        this.addLog("Starte Helper-Container für Neustart…");
+
+        // Alten Helper-Container entfernen falls vorhanden (verhindert Namenskonflikt)
+        spawn("sh", ["-c", "docker rm -f lager-update-helper 2>/dev/null || true"], { stdio: "ignore" });
+
+        // Helper-Container startet als Sibling-Container unabhängig vom Backend.
+        // Wenn der Backend-Container neu gestartet wird, stirbt unser Prozess –
+        // der Helper läuft in einem eigenen Container weiter und führt up -d aus.
         const helperCmd = [
           "docker run --rm -d",
           "-v /var/run/docker.sock:/var/run/docker.sock",
-          `-v ${workspaceDir}:/workspace:ro`,
+          `-v ${hostProjectPath}:/workspace:ro`,  // HOST-Pfad → korrekt für Sibling-Container
           "--name lager-update-helper",
           backendImage,
-          `sh -c "sleep 8 && docker-compose -p ${projectName} -f /workspace/docker-compose.main.yml up -d 2>&1"`,
+          `sh -c "sleep 10 && docker-compose -p ${projectName} -f /workspace/docker-compose.main.yml up -d"`,
         ].join(" ");
 
-        const helperChild = spawn("sh", ["-c", helperCmd], { stdio: "ignore" });
+        const helperChild = spawn("sh", ["-c", helperCmd], {
+          stdio: ["ignore", "pipe", "pipe"],
+        });
+        let helperErr = "";
+        helperChild.stderr?.on("data", (d: Buffer) => (helperErr += d.toString()));
+
         helperChild.on("close", (helperCode) => {
           if (helperCode === 0) {
-            this.addLog("Helper-Container läuft. Container werden in ~8 Sekunden neu gestartet…");
+            this.addLog("Helper-Container läuft. Container werden in ~10 Sekunden neu gestartet…");
           } else {
-            // Fallback: direkt up -d versuchen
-            this.addLog("Helper konnte nicht gestartet werden – versuche direkten Neustart…");
-            const upCmd = `docker-compose -p ${projectName} -f ${composeFile} up -d 2>&1`;
-            const upChild = spawn("sh", ["-c", upCmd], { detached: true, stdio: "ignore" });
+            this.addLog(`Helper-Start fehlgeschlagen (Code ${helperCode}): ${helperErr.trim()}`);
+            this.addLog("Versuche direkten Neustart (detached)…");
+            const upChild = spawn(
+              "sh",
+              ["-c", `docker-compose -p ${projectName} -f ${composeFile} up -d`],
+              { detached: true, stdio: "ignore" },
+            );
             upChild.unref();
           }
         });
@@ -205,6 +234,35 @@ export class UpdateService {
     return {
       message: "Update wird eingespielt. Die Container werden in Kürze neu gestartet.",
     };
+  }
+
+  /**
+   * Ermittelt den HOST-Pfad des Projektverzeichnisses automatisch über Docker-Labels.
+   * docker-compose setzt com.docker.compose.project.working_dir auf den Host-Pfad.
+   * Wird für den Sibling-Container-Volume-Mount benötigt.
+   */
+  private getHostProjectPath(): Promise<string | null> {
+    return new Promise((resolve) => {
+      const { hostname } = require("os");
+      const containerId = hostname();
+      const child = spawn(
+        "sh",
+        [
+          "-c",
+          `docker inspect "${containerId}" --format '{{index .Config.Labels "com.docker.compose.project.working_dir"}}'`,
+        ],
+        { stdio: ["ignore", "pipe", "ignore"] },
+      );
+      let out = "";
+      child.stdout?.on("data", (d: Buffer) => (out += d.toString()));
+      child.on("close", () => {
+        const path = out.trim();
+        if (path) this.logger.log(`Host-Projektpfad auto-erkannt: ${path}`);
+        else this.logger.warn("Host-Projektpfad konnte nicht via Docker-Labels ermittelt werden");
+        resolve(path || null);
+      });
+      child.on("error", () => resolve(null));
+    });
   }
 
   private addLog(line: string): void {

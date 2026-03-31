@@ -3,6 +3,15 @@
 Alle Änderungen werden hier dokumentiert.
 
 
+## [2.1.4] – 2026-03-31
+
+### Bugfixes
+- **In-App Update: Helper-Container startete die Container nicht neu** — Root Cause: Der Helper-Container wurde als Sibling-Container über den Docker-Socket gestartet und benötigte daher HOST-Pfade für Volume-Mounts. Der Code verwendete jedoch den Container-internen Pfad `/workspace` statt des Host-Pfades (`/volume1/docker/Lagerverwaltung`), weshalb die `docker-compose.main.yml` im Helper nicht gefunden wurde und der Neustart lautlos fehlschlug. Gelöst durch automatische Erkennung des Host-Pfads via Docker-Label `com.docker.compose.project.working_dir` (kein manueller Konfigurationsaufwand). Fallback: `HOST_PROJECT_PATH` in `.env` setzen.
+- **Update-Timeout zu kurz für NAS** — Backend-Timeout von 5 auf 8 Minuten erhöht, Frontend-Fallback-Reload von 3 auf 6 Minuten (Synology NAS-Hardware braucht länger zum Container-Start)
+- **Helper-Container Namenskonflikt** — Alter `lager-update-helper` Container wird jetzt vor jedem Update-Versuch entfernt (`docker rm -f`)
+
+---
+
 ## [2.1.3] – 2026-03-31
 
 ### Neue Funktionen

@@ -52,6 +52,9 @@ services:
       COMPOSE_PROJECT_NAME: lagerverwaltung
       COMPOSE_FILE_PATH: /workspace/docker-compose.main.yml
       BACKEND_IMAGE: ghcr.io/sirbuschi2003/lagerverwaltung-backend:latest
+      # HOST_PROJECT_PATH: Pfad auf dem HOST-System (Fallback falls Docker-Label-Erkennung fehlschlägt)
+      # Wird normalerweise automatisch via "com.docker.compose.project.working_dir" Label erkannt.
+      HOST_PROJECT_PATH: ${HOST_PROJECT_PATH:-}
     volumes:
       - ${BACKUP_STORAGE_HOST_PATH:-backups_data}:/app/backups
       - ${PURCHASE_ORDER_STORAGE_HOST_PATH:-purchase_orders_data}:/app/purchase-orders

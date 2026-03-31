@@ -108,11 +108,11 @@ const AdminMaintenancePage = () => {
     stopPolling();
     backendWentOfflineRef.current = false;
 
-    // Fallback: nach 3 Minuten auf jeden Fall neu laden
+    // Fallback: nach 6 Minuten auf jeden Fall neu laden (NAS-Neustart kann länger dauern)
     forceReloadTimerRef.current = setTimeout(() => {
       stopPolling();
       window.location.reload();
-    }, 3 * 60 * 1000);
+    }, 6 * 60 * 1000);
 
     pollRef.current = setInterval(async () => {
       try {
