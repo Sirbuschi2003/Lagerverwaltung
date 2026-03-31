@@ -1,12 +1,16 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   Alert,
   Box,
   Button,
   Checkbox,
   Chip,
+  Dialog,
+  DialogContent,
+  DialogTitle,
   Divider,
   FormControlLabel,
+  IconButton,
   InputAdornment,
   Paper,
   Radio,
@@ -26,11 +30,14 @@ import SearchIcon from "@mui/icons-material/Search";
 import DeleteIcon from "@mui/icons-material/Delete";
 import CheckIcon from "@mui/icons-material/Check";
 import InfoOutlinedIcon from "@mui/icons-material/InfoOutlined";
+import QrCodeScannerIcon from "@mui/icons-material/QrCodeScanner";
+import CloseIcon from "@mui/icons-material/Close";
 import useItemsStore from "../store/useItemsStore";
 import useAuthStore from "../store/useAuthStore";
 import { findItemByAnyCode, recordMovement, type ItemDto } from "../utils/api";
 import useScanSound from "../hooks/useScanSound";
 import { findItemByCode } from "../utils/itemLookup";
+import useBarcodeScanner from "../hooks/useBarcodeScanner";
 
 type BookingMode = "CHECKOUT" | "CHECKIN";
 
@@ -61,6 +68,7 @@ const QuickBookingPage: React.FC = () => {
   const [busy, setBusy] = useState(false);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [cameraOpen, setCameraOpen] = useState(false);
 
   const barcodeRef = useRef<HTMLInputElement>(null);
 
@@ -81,7 +89,6 @@ const QuickBookingPage: React.FC = () => {
   };
 
   const lookupItem = async (code: string): Promise<ItemDto | null> => {
-    // Online: API-Suche (vollständige Daten inkl. Lagerort + Bestand)
     if (navigator.onLine) {
       try {
         return await findItemByAnyCode(code);
@@ -89,7 +96,6 @@ const QuickBookingPage: React.FC = () => {
         // API nicht erreichbar – Store-Fallback
       }
     }
-    // Offline-Fallback: lokaler Store
     return findItemByCode(items, code) ?? null;
   };
 
@@ -168,6 +174,21 @@ const QuickBookingPage: React.FC = () => {
     refocusBarcode();
   };
 
+  // Kamera-Scanner: wird nur aufgerufen wenn Dialog offen
+  const handleCameraDetected = useCallback(
+    (code: string) => {
+      setCameraOpen(false);
+      void handleScan(code);
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [mode, quantity, reference, sofortBuchen, items],
+  );
+
+  const { videoRef, isSupported, error: scannerError } = useBarcodeScanner({
+    onDetected: handleCameraDetected,
+    enabled: cameraOpen,
+  });
+
   const handleUebernehmen = async () => {
     if (bookingList.length === 0) return;
     setBusy(true);
@@ -227,7 +248,7 @@ const QuickBookingPage: React.FC = () => {
 
           <Divider orientation="vertical" flexItem sx={{ display: { xs: "none", sm: "block" } }} />
 
-          {/* Barcode */}
+          {/* Barcode + Kamera-Button */}
           <Box sx={{ flex: 2, minWidth: 200 }}>
             <TextField
               inputRef={barcodeRef}
@@ -247,6 +268,20 @@ const QuickBookingPage: React.FC = () => {
                 startAdornment: (
                   <InputAdornment position="start">
                     <SearchIcon fontSize="small" />
+                  </InputAdornment>
+                ),
+                endAdornment: (
+                  <InputAdornment position="end">
+                    <Tooltip title="Kamera-Scanner öffnen">
+                      <IconButton
+                        size="small"
+                        onClick={() => setCameraOpen(true)}
+                        edge="end"
+                        color="primary"
+                      >
+                        <QrCodeScannerIcon />
+                      </IconButton>
+                    </Tooltip>
                   </InputAdornment>
                 ),
               }}
@@ -285,6 +320,20 @@ const QuickBookingPage: React.FC = () => {
             />
           </Box>
         </Stack>
+
+        {/* Kamera-Scanner-Button für Mobile (prominent) */}
+        <Box sx={{ display: { xs: "block", sm: "none" }, mt: 1 }}>
+          <Button
+            variant="contained"
+            fullWidth
+            size="large"
+            startIcon={<QrCodeScannerIcon />}
+            onClick={() => setCameraOpen(true)}
+            disabled={busy}
+          >
+            QR-Code / Barcode scannen
+          </Button>
+        </Box>
       </Paper>
 
       {/* ── Artikel-Info Panel ── */}
@@ -465,6 +514,82 @@ const QuickBookingPage: React.FC = () => {
           </Button>
         </Stack>
       </Paper>
+
+      {/* ── Kamera-Scanner Dialog ── */}
+      <Dialog
+        open={cameraOpen}
+        onClose={() => setCameraOpen(false)}
+        fullWidth
+        maxWidth="sm"
+        sx={{
+          "& .MuiDialog-paper": {
+            margin: { xs: 1, sm: 2 },
+            width: { xs: "calc(100% - 16px)", sm: "auto" },
+          },
+        }}
+      >
+        <DialogTitle sx={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+          <Stack direction="row" spacing={1} alignItems="center">
+            <QrCodeScannerIcon />
+            <span>QR-Code / Barcode scannen</span>
+          </Stack>
+          <IconButton size="small" onClick={() => setCameraOpen(false)}>
+            <CloseIcon />
+          </IconButton>
+        </DialogTitle>
+        <DialogContent sx={{ p: 1 }}>
+          {scannerError && (
+            <Alert severity="error" sx={{ mb: 1 }}>
+              {scannerError}
+            </Alert>
+          )}
+          {!isSupported && !scannerError && (
+            <Alert severity="info" sx={{ mb: 1 }}>
+              Kamera wird auf diesem Gerät nicht unterstützt.
+            </Alert>
+          )}
+          <Box
+            sx={{
+              position: "relative",
+              width: "100%",
+              bgcolor: "black",
+              borderRadius: 1,
+              overflow: "hidden",
+            }}
+          >
+            <video
+              ref={videoRef}
+              style={{ width: "100%", display: "block", maxHeight: "60vh", objectFit: "cover" }}
+              muted
+              playsInline
+            />
+            {/* Fadenkreuz */}
+            <Box
+              sx={{
+                position: "absolute",
+                top: "50%",
+                left: "50%",
+                transform: "translate(-50%, -50%)",
+                width: 200,
+                height: 200,
+                border: "2px solid rgba(255,255,255,0.7)",
+                borderRadius: 1,
+                pointerEvents: "none",
+                "&::before, &::after": {
+                  content: '""',
+                  position: "absolute",
+                  background: "rgba(255,255,255,0.7)",
+                },
+                "&::before": { top: "50%", left: 0, right: 0, height: 1 },
+                "&::after": { left: "50%", top: 0, bottom: 0, width: 1 },
+              }}
+            />
+          </Box>
+          <Typography variant="caption" color="text.secondary" sx={{ display: "block", textAlign: "center", mt: 1 }}>
+            Halte den Code in den markierten Bereich
+          </Typography>
+        </DialogContent>
+      </Dialog>
     </Box>
   );
 };
