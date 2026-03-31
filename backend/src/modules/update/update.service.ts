@@ -112,14 +112,10 @@ export class UpdateService {
       return { message: "Update läuft bereits." };
     }
 
-    const composeFile =
-      process.env.COMPOSE_FILE_PATH || "/workspace/docker-compose.main.yml";
     const projectName = process.env.COMPOSE_PROJECT_NAME || "lagerverwaltung";
     const backendImage =
       process.env.BACKEND_IMAGE ||
       "ghcr.io/sirbuschi2003/lagerverwaltung-backend:latest";
-
-    this.logger.log(`Starte Update: Projekt=${projectName}, Datei=${composeFile}`);
 
     this.cachedStatus = {
       ...this.cachedStatus,
@@ -130,7 +126,7 @@ export class UpdateService {
       error: null,
     };
 
-    // Sicherheits-Timeout: nach 8 Minuten Status zurücksetzen falls Update hängt
+    // Sicherheits-Timeout nach 10 Minuten
     setTimeout(() => {
       if (this.cachedStatus.updateRunning) {
         this.logger.warn("Update-Timeout: Status wird zurückgesetzt");
@@ -138,104 +134,142 @@ export class UpdateService {
           ...this.cachedStatus,
           updateRunning: false,
           updatePhase: "error",
-          error: "Update-Timeout: Kein Abschluss nach 8 Minuten",
+          error: "Update-Timeout nach 10 Minuten – bitte manuell prüfen.",
         };
       }
-    }, 8 * 60 * 1000);
+    }, 10 * 60 * 1000);
 
-    // Phase 1: Pull – mit Live-Ausgabe
-    setTimeout(async () => {
-      this.addLog("Neue Images werden von GHCR heruntergeladen…");
-      this.cachedStatus = { ...this.cachedStatus, updatePhase: "pulling" };
+    setImmediate(() => this.runUpdate(projectName, backendImage));
 
-      const pullCmd = `docker-compose -p ${projectName} -f ${composeFile} pull 2>&1`;
-      const pullChild = spawn("sh", ["-c", pullCmd], {
-        stdio: ["ignore", "pipe", "pipe"],
+    return { message: "Update wird eingespielt. Die Container werden in Kürze neu gestartet." };
+  }
+
+  private async runUpdate(projectName: string, backendImage: string): Promise<void> {
+    // ── Phase 1: Host-Pfad ermitteln ────────────────────────────
+    this.addLog("Ermittle Host-Projektpfad…");
+    const hostProjectPath = process.env.HOST_PROJECT_PATH || await this.getHostProjectPath();
+
+    if (!hostProjectPath) {
+      this.addLog("FEHLER: Host-Projektpfad nicht ermittelbar.");
+      this.addLog("Lösung: HOST_PROJECT_PATH=/pfad/zum/projekt in .env eintragen.");
+      this.cachedStatus = {
+        ...this.cachedStatus,
+        updateRunning: false,
+        updatePhase: "error",
+        error: "HOST_PROJECT_PATH nicht ermittelbar. Bitte in .env setzen.",
+      };
+      return;
+    }
+    this.addLog(`Host-Pfad: ${hostProjectPath}`);
+
+    // ── Phase 2: Images pullen ───────────────────────────────────
+    this.cachedStatus = { ...this.cachedStatus, updatePhase: "pulling" };
+    this.addLog("Neue Images werden von GHCR heruntergeladen…");
+
+    const pullOk = await this.runCompose(
+      hostProjectPath, projectName,
+      ["pull"],
+      (line) => this.addLog(line),
+    );
+
+    if (!pullOk) {
+      this.cachedStatus = {
+        ...this.cachedStatus,
+        updateRunning: false,
+        updatePhase: "error",
+        error: "Image-Pull fehlgeschlagen. Bitte Logs prüfen.",
+      };
+      return;
+    }
+    this.addLog("Images bereit.");
+
+    // ── Phase 3: Container neu starten ──────────────────────────
+    this.cachedStatus = { ...this.cachedStatus, updatePhase: "restarting" };
+    this.addLog("Starte Helper-Container für Neustart…");
+
+    // Alten Helper-Container entfernen (verhindert Namenskonflikt)
+    await this.execShell("docker rm -f lager-update-helper 2>/dev/null || true");
+
+    // Helper-Container startet das eigentliche Compose-Up NACHDEM unser Prozess beendet ist.
+    // Volume wird am GLEICHEN Pfad wie auf dem Host gemountet → relative Pfade im
+    // Compose-File (./deploy/caddy/...) lösen sich korrekt zum Host-Pfad auf.
+    const helperCmd = [
+      "docker run --rm -d",
+      "-v /var/run/docker.sock:/var/run/docker.sock",
+      `-v ${hostProjectPath}:${hostProjectPath}:ro`,
+      `-e COMPOSE_PROJECT_NAME=${projectName}`,
+      "--name lager-update-helper",
+      backendImage,
+      `sh /app/update.sh ${hostProjectPath}`,
+    ].join(" ");
+
+    const { code: helperCode, stderr: helperErr } = await this.execShell(helperCmd);
+
+    if (helperCode === 0) {
+      this.addLog("Helper-Container gestartet. Container werden neu gestartet…");
+    } else {
+      this.addLog(`Helper-Start fehlgeschlagen (Code ${helperCode}): ${helperErr.trim()}`);
+      this.addLog("Fallback: Direkter detached Neustart…");
+      // Letzter Ausweg: detached spawnen
+      const fallback = spawn("sh", ["-c",
+        `sh /app/update.sh ${hostProjectPath}`,
+      ], { detached: true, stdio: "ignore" });
+      fallback.unref();
+    }
+  }
+
+  /**
+   * Führt einen Docker-Compose-Befehl aus. Erkennt automatisch ob
+   * 'docker compose' (v2) oder 'docker-compose' (v1) verfügbar ist.
+   */
+  private runCompose(
+    projectPath: string,
+    projectName: string,
+    args: string[],
+    onLog?: (line: string) => void,
+  ): Promise<boolean> {
+    return new Promise((resolve) => {
+      // Prüfe welche Compose-Variante verfügbar ist
+      const detectCmd = `
+        if docker compose version >/dev/null 2>&1; then
+          DC="docker compose"
+        elif docker-compose --version >/dev/null 2>&1; then
+          DC="docker-compose"
+        else
+          echo "KEIN_COMPOSE" && exit 1
+        fi
+        $DC -p "${projectName}" -f "${projectPath}/docker-compose.main.yml" --project-directory "${projectPath}" ${args.join(" ")} 2>&1
+      `;
+
+      const child = spawn("sh", ["-c", detectCmd], { stdio: ["ignore", "pipe", "pipe"] });
+
+      child.stdout?.on("data", (d: Buffer) => {
+        d.toString().split("\n").filter((l) => l.trim()).forEach((l) => onLog?.(l));
+      });
+      child.stderr?.on("data", (d: Buffer) => {
+        d.toString().split("\n").filter((l) => l.trim()).forEach((l) => onLog?.(l));
       });
 
-      pullChild.stdout?.on("data", (data: Buffer) => {
-        const lines = data.toString().split("\n").filter((l) => l.trim());
-        lines.forEach((line) => this.addLog(line));
+      child.on("close", (code) => {
+        this.logger.log(`Compose ${args.join(" ")} exit=${code}`);
+        resolve(code === 0);
       });
-
-      pullChild.on("close", async (code) => {
-        if (code !== 0) {
-          this.cachedStatus = {
-            ...this.cachedStatus,
-            updateRunning: false,
-            updatePhase: "error",
-            error: `docker-compose pull fehlgeschlagen (Exit-Code ${code})`,
-          };
-          this.addLog(`Fehler: Pull fehlgeschlagen (Code ${code})`);
-          return;
-        }
-
-        // Phase 2: Host-Pfad des Projektverzeichnisses ermitteln.
-        // Sibling-Container (via docker.sock) brauchen HOST-Pfade für Volumes, keine Container-Pfade.
-        // Automatische Erkennung über Docker-Labels (com.docker.compose.project.working_dir).
-        this.cachedStatus = { ...this.cachedStatus, updatePhase: "restarting" };
-        this.addLog("Images bereit. Ermittle Host-Projektpfad…");
-
-        const hostProjectPath = process.env.HOST_PROJECT_PATH || await this.getHostProjectPath();
-
-        if (!hostProjectPath) {
-          this.addLog("FEHLER: Host-Projektpfad konnte nicht ermittelt werden.");
-          this.addLog("Tipp: HOST_PROJECT_PATH=/volume1/docker/Lagerverwaltung in .env setzen.");
-          this.cachedStatus = {
-            ...this.cachedStatus,
-            updateRunning: false,
-            updatePhase: "error",
-            error: "Host-Projektpfad nicht ermittelbar. Bitte HOST_PROJECT_PATH in .env setzen.",
-          };
-          return;
-        }
-
-        this.addLog(`Host-Pfad: ${hostProjectPath}`);
-        this.addLog("Starte Helper-Container für Neustart…");
-
-        // Alten Helper-Container entfernen falls vorhanden (verhindert Namenskonflikt)
-        spawn("sh", ["-c", "docker rm -f lager-update-helper 2>/dev/null || true"], { stdio: "ignore" });
-
-        // Wichtig: Das Volume wird am GLEICHEN Pfad wie auf dem Host gemountet
-        // (z.B. /volume1/docker/Lagerverwaltung:/volume1/docker/Lagerverwaltung).
-        // Nur so löst docker-compose relative Pfade (./deploy/caddy/...) korrekt zu
-        // Host-Pfaden auf. Bei /workspace:/workspace würden die erzeugten Container
-        // /workspace/... als Host-Pfad bekommen, das auf dem Host nicht existiert.
-        const helperCmd = [
-          "docker run --rm -d",
-          "-v /var/run/docker.sock:/var/run/docker.sock",
-          `-v ${hostProjectPath}:${hostProjectPath}:ro`,
-          "--name lager-update-helper",
-          backendImage,
-          `sh -c "sleep 10 && docker-compose -p ${projectName} -f ${hostProjectPath}/docker-compose.main.yml up -d"`,
-        ].join(" ");
-
-        const helperChild = spawn("sh", ["-c", helperCmd], {
-          stdio: ["ignore", "pipe", "pipe"],
-        });
-        let helperErr = "";
-        helperChild.stderr?.on("data", (d: Buffer) => (helperErr += d.toString()));
-
-        helperChild.on("close", (helperCode) => {
-          if (helperCode === 0) {
-            this.addLog("Helper-Container läuft. Container werden in ~10 Sekunden neu gestartet…");
-          } else {
-            this.addLog(`Helper-Start fehlgeschlagen (Code ${helperCode}): ${helperErr.trim()}`);
-            this.addLog("Versuche direkten Neustart (detached)…");
-            const upChild = spawn(
-              "sh",
-              ["-c", `docker-compose -p ${projectName} -f ${composeFile} --project-directory ${hostProjectPath} up -d`],
-              { detached: true, stdio: "ignore" },
-            );
-            upChild.unref();
-          }
-        });
+      child.on("error", (err) => {
+        onLog?.(`Prozess-Fehler: ${err.message}`);
+        resolve(false);
       });
-    }, 500);
+    });
+  }
 
-    return {
-      message: "Update wird eingespielt. Die Container werden in Kürze neu gestartet.",
-    };
+  /** Führt einen Shell-Befehl aus und gibt Exit-Code + stderr zurück. */
+  private execShell(cmd: string): Promise<{ code: number; stderr: string }> {
+    return new Promise((resolve) => {
+      const child = spawn("sh", ["-c", cmd], { stdio: ["ignore", "pipe", "pipe"] });
+      let stderr = "";
+      child.stderr?.on("data", (d: Buffer) => (stderr += d.toString()));
+      child.on("close", (code) => resolve({ code: code ?? 1, stderr }));
+      child.on("error", (err) => resolve({ code: 1, stderr: err.message }));
+    });
   }
 
   /**

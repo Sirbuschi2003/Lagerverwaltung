@@ -40,6 +40,10 @@ RUN npm install --omit=dev
 # Copy built application
 COPY --from=builder /app/dist ./dist
 
+# Update-Helper-Script einbinden (wird vom In-App-Update-Mechanismus genutzt)
+COPY scripts/update.sh /app/update.sh
+RUN chmod +x /app/update.sh
+
 # Create non-root user for security
 RUN addgroup -g 1001 -S nodejs && \
     adduser -S nestjs -u 1001 && \
