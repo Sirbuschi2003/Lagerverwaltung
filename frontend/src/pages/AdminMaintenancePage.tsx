@@ -71,6 +71,7 @@ const AdminMaintenancePage = () => {
   const [updateChecking, setUpdateChecking] = useState(false);
   const [updateStarting, setUpdateStarting] = useState(false);
   const [waitingForRestart, setWaitingForRestart] = useState(false);
+  const [waitingForCaddy, setWaitingForCaddy] = useState(false); // Caddy/Frontend noch nicht bereit
   const [updateError, setUpdateError] = useState<string | null>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const backendWentOfflineRef = useRef(false); // Ref statt State – vermeidet Stale-Closure in setInterval
@@ -104,11 +105,44 @@ const AdminMaintenancePage = () => {
     }
   };
 
+  // Wartet bis Caddy + Frontend wieder erreichbar sind, dann reload.
+  // Verhindert den "Firefox kann keine Verbindung herstellen"-Fehler wenn
+  // docker-compose Caddy erst nach dem Backend neu startet.
+  const reloadWhenReady = () => {
+    setWaitingForCaddy(true);
+    let attempts = 0;
+    const maxAttempts = 90; // max 3 Minuten (90 × 2s)
+
+    const check = async () => {
+      attempts++;
+      try {
+        const resp = await fetch(window.location.origin + '/', {
+          cache: 'no-cache',
+          signal: AbortSignal.timeout(4000),
+        });
+        if (resp.ok) {
+          window.location.reload();
+          return;
+        }
+      } catch {
+        // Caddy noch nicht bereit – weiter warten
+      }
+      if (attempts >= maxAttempts) {
+        window.location.reload(); // Letzter Versuch
+        return;
+      }
+      setTimeout(check, 2000);
+    };
+
+    // Kurze Pause damit Caddy Zeit hat neu zu starten, dann prüfen
+    setTimeout(check, 3000);
+  };
+
   const startPolling = () => {
     stopPolling();
     backendWentOfflineRef.current = false;
 
-    // Fallback: nach 6 Minuten auf jeden Fall neu laden (NAS-Neustart kann länger dauern)
+    // Fallback: nach 6 Minuten auf jeden Fall neu laden
     forceReloadTimerRef.current = setTimeout(() => {
       stopPolling();
       window.location.reload();
@@ -119,10 +153,11 @@ const AdminMaintenancePage = () => {
         const status = await fetchUpdateStatus();
         setUpdateStatus(status);
 
-        // instanceId-Erkennung: Wenn sich die ID ändert → Backend hat neu gestartet
+        // instanceId-Erkennung: Backend hat neu gestartet (neue Prozess-ID)
+        // Aber: Caddy könnte noch nachstarten → nicht sofort reload, erst Caddy prüfen
         if (knownInstanceIdRef.current && status.instanceId && status.instanceId !== knownInstanceIdRef.current) {
           stopPolling();
-          window.location.reload();
+          reloadWhenReady();
           return;
         }
         if (status.instanceId) {
@@ -130,14 +165,13 @@ const AdminMaintenancePage = () => {
         }
 
         if (status.updateRunning && status.updatePhase === 'pulling') {
-          // Noch am Downloaden – weiter warten
           return;
         }
 
         if (backendWentOfflineRef.current) {
-          // Backend war offline und ist jetzt wieder erreichbar → Update fertig!
+          // Backend war offline und ist wieder da → auch auf Caddy warten
           stopPolling();
-          window.location.reload();
+          reloadWhenReady();
           return;
         }
 
@@ -148,13 +182,8 @@ const AdminMaintenancePage = () => {
           setUpdateError(status.error || 'Update fehlgeschlagen.');
           return;
         }
-
-        // updateRunning=false und kein Fehler und kein Offline-Zeitraum
-        // → Helper hat noch nicht neu gestartet oder Update war sehr schnell
-        // Weiter pollen bis wir offline gehen oder Timeout
       } catch {
-        // Backend nicht erreichbar = Neustart läuft
-        backendWentOfflineRef.current = true; // Ref! Kein Stale-Closure-Problem
+        backendWentOfflineRef.current = true;
         setWaitingForRestart(true);
       }
     }, 2000);
@@ -285,7 +314,7 @@ const AdminMaintenancePage = () => {
     }
   };
 
-  const isUpdating = updateStarting || (updateStatus?.updateRunning ?? false) || waitingForRestart;
+  const isUpdating = updateStarting || (updateStatus?.updateRunning ?? false) || waitingForRestart || waitingForCaddy;
   const currentPhase = updateStatus?.updatePhase ?? 'idle';
   const totalIssues = issues.reduce((sum, issue) => sum + issue.count, 0);
 
@@ -324,9 +353,13 @@ const AdminMaintenancePage = () => {
         {/* Fortschrittsanzeige während Update */}
         {isUpdating && (
           <Box sx={{ mb: 2 }}>
-            {waitingForRestart ? (
+            {waitingForCaddy ? (
+              <Alert severity="success" sx={{ mb: 2 }}>
+                <strong>Alle Dienste starten…</strong> Verbindung wird wiederhergestellt, Seite lädt automatisch.
+              </Alert>
+            ) : waitingForRestart ? (
               <Alert severity="info" sx={{ mb: 2 }}>
-                <strong>Backend startet neu…</strong> Verbindung wird wiederhergestellt, bitte warten.
+                <strong>Container werden neu gestartet…</strong> Bitte warten, dies kann 30–60 Sekunden dauern.
               </Alert>
             ) : (
               <Alert severity="info" sx={{ mb: 2 }}>
@@ -338,7 +371,7 @@ const AdminMaintenancePage = () => {
               </Alert>
             )}
 
-            <Stepper activeStep={waitingForRestart ? 2 : phaseToStep(currentPhase)} sx={{ mb: 2 }}>
+            <Stepper activeStep={waitingForCaddy ? 3 : waitingForRestart ? 2 : phaseToStep(currentPhase)} sx={{ mb: 2 }}>
               {UPDATE_STEPS.filter(s => s.phase !== 'done').map((step) => (
                 <Step key={step.phase}>
                   <StepLabel>{step.label}</StepLabel>

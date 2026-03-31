@@ -3,6 +3,13 @@
 Alle Änderungen werden hier dokumentiert.
 
 
+## [2.2.1] – 2026-03-31
+
+### Bugfixes
+- **Update: "Firefox kann keine Verbindung herstellen" nach Neustart** — Root Cause: `docker-compose up -d` startet Backend zuerst neu, Caddy erst danach. Das Frontend erkannte den Backend-Neustart (neue instanceId) und löste sofort `window.location.reload()` aus — genau in dem Moment wo Caddy noch hochfuhr. Fix: `reloadWhenReady()` prüft nun alle 2 Sekunden ob die Seite selbst (durch Caddy) wieder erreichbar ist, bevor sie neu lädt. Max. 3 Minuten Wartezeit als Fallback.
+
+---
+
 ## [2.2.0] – 2026-03-31
 
 ### Neue Funktionen
