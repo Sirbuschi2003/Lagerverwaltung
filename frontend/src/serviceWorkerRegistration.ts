@@ -24,10 +24,8 @@ export function registerSW() {
             newWorker.addEventListener("statechange", () => {
               if (newWorker.state === "installed") {
                 if (navigator.serviceWorker.controller) {
-                  // Update verfügbar
-                  if (confirm("Neue Version verfügbar! Jetzt aktualisieren?")) {
-                    newWorker.postMessage({ type: "SKIP_WAITING" });
-                  }
+                  // Automatisch aktualisieren ohne Rückfrage
+                  newWorker.postMessage({ type: "SKIP_WAITING" });
                 } else {
                   console.log("Service Worker erfolgreich installiert - PWA bereit!");
                 }
