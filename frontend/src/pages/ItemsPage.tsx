@@ -28,6 +28,7 @@ import {
 import EditIcon from "@mui/icons-material/Edit";
 import DeleteIcon from "@mui/icons-material/Delete";
 import QrCodeScannerIcon from "@mui/icons-material/QrCodeScanner";
+import AddPhotoAlternateIcon from "@mui/icons-material/AddPhotoAlternate";
 import useItemsStore from "../store/useItemsStore";
 import useAuthStore from "../store/useAuthStore";
 import { useNetworkStatus } from "../hooks/useNetworkStatus";
@@ -49,6 +50,8 @@ import {
   previewItemsBulk,
   updateItemsBulk,
   getItemImageUrl,
+  uploadItemImage,
+  deleteItemImage,
 } from "../utils/api";
 import useBarcodeScanner from "../hooks/useBarcodeScanner";
 
@@ -1623,6 +1626,8 @@ Import erfolgreich! Die Artikel sind jetzt verfügbar.`;
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setSubmitting] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
+  const [imageUploading, setImageUploading] = useState(false);
+  const [imageKey, setImageKey] = useState(0);
 
   const {
     items,
@@ -1877,6 +1882,7 @@ Import erfolgreich! Die Artikel sind jetzt verfügbar.`;
     if (isSubmitting) return;
     setOpen(false);
     setEditingId(null);
+    setImageUploading(false);
   };
 
   const validate = () => {
@@ -2753,6 +2759,79 @@ Import erfolgreich! Die Artikel sind jetzt verfügbar.`;
           </DialogTitle>
           <DialogContent dividers>
             <Grid container spacing={2} sx={{ mt: 0.5 }}>
+              {/* Artikelbild – nur im Edit-Modus */}
+              {editingId && (
+                <Grid item xs={12}>
+                  <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
+                    {editingItem?.imagePath ? (
+                      <Box
+                        component="img"
+                        src={`${getItemImageUrl(editingId)}?v=${imageKey}`}
+                        alt="Artikelbild"
+                        sx={{ width: 80, height: 80, objectFit: "cover", borderRadius: 1, border: "1px solid", borderColor: "divider" }}
+                      />
+                    ) : (
+                      <Box sx={{ width: 80, height: 80, display: "flex", alignItems: "center", justifyContent: "center", bgcolor: "action.hover", borderRadius: 1, border: "1px dashed", borderColor: "divider" }}>
+                        <AddPhotoAlternateIcon color="disabled" />
+                      </Box>
+                    )}
+                    <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
+                      <Button
+                        component="label"
+                        variant="outlined"
+                        size="small"
+                        startIcon={imageUploading ? <CircularProgress size={14} /> : <AddPhotoAlternateIcon />}
+                        disabled={imageUploading}
+                      >
+                        {editingItem?.imagePath ? "Bild ersetzen" : "Bild hochladen"}
+                        <input
+                          type="file"
+                          hidden
+                          accept="image/jpeg,image/png,image/webp"
+                          onChange={async (e) => {
+                            const file = e.target.files?.[0];
+                            if (!file || !editingId) return;
+                            setImageUploading(true);
+                            try {
+                              await uploadItemImage(editingId, file);
+                              setImageKey((k) => k + 1);
+                              await loadItems({ force: true });
+                            } catch {
+                              setError("Bild konnte nicht hochgeladen werden.");
+                            } finally {
+                              setImageUploading(false);
+                              e.target.value = "";
+                            }
+                          }}
+                        />
+                      </Button>
+                      {editingItem?.imagePath && (
+                        <Button
+                          variant="outlined"
+                          size="small"
+                          color="error"
+                          startIcon={<DeleteIcon />}
+                          disabled={imageUploading}
+                          onClick={async () => {
+                            setImageUploading(true);
+                            try {
+                              await deleteItemImage(editingId);
+                              setImageKey((k) => k + 1);
+                              await loadItems({ force: true });
+                            } catch {
+                              setError("Bild konnte nicht gelöscht werden.");
+                            } finally {
+                              setImageUploading(false);
+                            }
+                          }}
+                        >
+                          Bild entfernen
+                        </Button>
+                      )}
+                    </Box>
+                  </Box>
+                </Grid>
+              )}
               <Grid item xs={12} sm={6}>
                 <TextField
                   label="Artikelnummer"
