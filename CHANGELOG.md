@@ -6,6 +6,13 @@ Alle Änderungen werden hier dokumentiert.
 
 ## 2026-03-31
 
+### [2.2.5] – Mobile Schnellbuchung verbessert
+
+#### Verbesserungen
+- **Buchungsliste auf dem Handy als Karten-Ansicht** — Auf kleinen Bildschirmen (Handy) wird die Buchungsliste nicht mehr als breite Tabelle angezeigt, sondern als kompakte Karten. Jede Karte zeigt Buchungsart, Artikel-Nr., Bezeichnung, Menge, Lagerort und Vorgangsnummer übersichtlich übereinander – kein horizontales Scrollen mehr nötig. Auf dem Desktop bleibt die Tabellenansicht erhalten.
+
+---
+
 ### [2.2.4] – Schnellbuchung & Bugfixes
 
 #### Neue Funktionen

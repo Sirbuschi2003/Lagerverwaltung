@@ -406,7 +406,83 @@ const QuickBookingPage: React.FC = () => {
 
       {/* ── Buchungsliste ── */}
       <Paper>
-        <TableContainer sx={{ minHeight: 180 }}>
+        {/* Mobile: Karten-Ansicht */}
+        <Box sx={{ display: { xs: "block", sm: "none" }, minHeight: 180 }}>
+          {bookingList.length === 0 ? (
+            <Box sx={{ textAlign: "center", py: 6 }}>
+              <Typography variant="body2" color="text.secondary">
+                Noch keine Artikel in der Liste
+              </Typography>
+            </Box>
+          ) : (
+            <Stack spacing={1} sx={{ p: 1 }}>
+              {bookingList.map((entry, idx) => (
+                <Paper
+                  key={idx}
+                  variant="outlined"
+                  sx={{
+                    p: 1.5,
+                    bgcolor:
+                      entry.mode === "CHECKIN"
+                        ? "rgba(76,175,80,0.06)"
+                        : "rgba(244,67,54,0.06)",
+                  }}
+                >
+                  <Stack direction="row" alignItems="flex-start" justifyContent="space-between">
+                    <Stack spacing={0.5} sx={{ flex: 1, minWidth: 0 }}>
+                      <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap">
+                        <Chip
+                          label={entry.mode === "CHECKIN" ? "Eingang" : "Entnahme"}
+                          color={entry.mode === "CHECKIN" ? "success" : "error"}
+                          size="small"
+                          variant="outlined"
+                        />
+                        <Typography variant="body2" sx={{ fontWeight: 700 }}>
+                          {entry.itemCode}
+                        </Typography>
+                      </Stack>
+                      <Typography
+                        variant="body2"
+                        sx={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
+                      >
+                        {entry.itemName}
+                      </Typography>
+                      <Stack direction="row" spacing={2} flexWrap="wrap">
+                        <Typography variant="caption" color="text.secondary">
+                          Menge:{" "}
+                          <Box component="span" sx={{ fontWeight: 700 }}>
+                            {entry.quantity}
+                          </Box>
+                        </Typography>
+                        {entry.locationName && (
+                          <Typography variant="caption" color="text.secondary">
+                            {entry.locationName}
+                          </Typography>
+                        )}
+                        {entry.reference && (
+                          <Typography variant="caption" color="text.secondary">
+                            #{entry.reference}
+                          </Typography>
+                        )}
+                      </Stack>
+                    </Stack>
+                    <IconButton
+                      size="small"
+                      color="error"
+                      onClick={() => setBookingList((prev) => prev.filter((_, i) => i !== idx))}
+                      sx={{ ml: 1, flexShrink: 0 }}
+                    >
+                      <DeleteIcon fontSize="small" />
+                    </IconButton>
+                  </Stack>
+                </Paper>
+              ))}
+            </Stack>
+          )}
+        </Box>
+
+        {/* Desktop: Tabellen-Ansicht */}
+        <TableContainer sx={{ minHeight: 180, display: { xs: "none", sm: "block" } }}>
           <Table size="small">
             <TableHead>
               <TableRow>
