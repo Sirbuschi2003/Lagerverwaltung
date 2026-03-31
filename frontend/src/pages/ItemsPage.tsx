@@ -48,6 +48,7 @@ import {
   recordMovement,
   previewItemsBulk,
   updateItemsBulk,
+  getItemImageUrl,
 } from "../utils/api";
 import useBarcodeScanner from "../hooks/useBarcodeScanner";
 
@@ -2596,6 +2597,7 @@ Import erfolgreich! Die Artikel sind jetzt verfügbar.`;
           <Table size="small">
             <TableHead>
               <TableRow>
+                <TableCell sx={{ width: 48, p: 0.5 }} />
                 <TableCell>Code</TableCell>
                 <TableCell>Bezeichnung</TableCell>
                 <TableCell>Hersteller</TableCell>
@@ -2612,6 +2614,16 @@ Import erfolgreich! Die Artikel sind jetzt verfügbar.`;
           <TableBody>
             {paginatedItems.map((item: any) => (
               <TableRow key={item.id} hover>
+                <TableCell sx={{ width: 48, p: 0.5 }}>
+                  {item.imagePath ? (
+                    <Box
+                      component="img"
+                      src={getItemImageUrl(item.id)}
+                      alt=""
+                      sx={{ width: 40, height: 40, objectFit: "cover", borderRadius: 0.5, display: "block" }}
+                    />
+                  ) : null}
+                </TableCell>
                 <TableCell>{item.code}</TableCell>
                 <TableCell>
                   <Typography variant="body2" sx={{ fontWeight: 600 }}>
@@ -2656,7 +2668,7 @@ Import erfolgreich! Die Artikel sind jetzt verfügbar.`;
             ))}
             {paginatedItems.length === 0 && !isLoading && (
               <TableRow>
-                <TableCell colSpan={11} align="center">
+                <TableCell colSpan={12} align="center">
                   {filteredItems.length === 0 ? 'Keine Artikel gefunden.' : 'Keine Artikel auf dieser Seite.'}
                 </TableCell>
               </TableRow>

@@ -3,6 +3,16 @@
 Alle Änderungen werden hier dokumentiert.
 
 
+## [2.2.0] – 2026-03-31
+
+### Neue Funktionen
+- **Artikelbilder** — Zu jedem Ersatzteil kann ein Bild hochgeladen werden (JPEG/PNG/WebP, max 8 MB). Das Bild wird serverseitig automatisch auf max. 800×800 px skaliert und als JPEG gespeichert. Eigener Docker-Volume-Mount (`ITEM_IMAGE_STORAGE_HOST_PATH`), Bilder bleiben bei Updates erhalten.
+- **Bild-Upload im Artikel-Dialog** — In der Artikel-Bearbeitung (ItemEditDialog) gibt es eine Vorschau des aktuellen Bildes und Buttons zum Hochladen bzw. Entfernen ohne den Dialog zu schließen.
+- **Thumbnail in der Artikelliste** — Artikel mit hinterlegtem Bild zeigen ein 40×40 px Vorschaubild in der Desktop-Tabellenansicht.
+- **Log-Übersicht neu gestaltet** — Aktivitäts-Feed statt Rohtabelle: menschenlesbare Meldungen („Thomas hat 3× Bremsbelag ausgebucht"), farbige Icons nach Kategorie (Buchungen/Bestellungen/Inventur/…), Datumsgruppen (Heute/Gestern), Kategoriefilter-Chips. Log-Verwaltung in ausklappbarer Sektion. Weitere Einträge nachladen statt Pagination.
+
+---
+
 ## [2.1.5] – 2026-03-31
 
 ### Bugfixes

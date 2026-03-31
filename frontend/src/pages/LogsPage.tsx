@@ -1,23 +1,16 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   Container,
-  Paper,
   Typography,
   Box,
   Button,
-  Alert,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableRow,
+  Paper,
   Chip,
-  FormControl,
-  InputLabel,
-  Select,
-  MenuItem,
-  Pagination,
+  Avatar,
+  List,
+  ListItem,
+  ListItemAvatar,
+  ListItemText,
   CircularProgress,
   IconButton,
   Tooltip,
@@ -25,18 +18,37 @@ import {
   DialogTitle,
   DialogContent,
   DialogActions,
-  Card,
-  CardContent,
-  Grid,
   TextField,
   Stack,
   Snackbar,
+  Accordion,
+  AccordionSummary,
+  AccordionDetails,
+  Divider,
+  useTheme,
+  alpha,
 } from '@mui/material';
 import {
   Download as DownloadIcon,
   Refresh as RefreshIcon,
   Info as InfoIcon,
-  Analytics as AnalyticsIcon,
+  ExpandMore as ExpandMoreIcon,
+  ArrowDownward as ArrowDownwardIcon,
+  ArrowUpward as ArrowUpwardIcon,
+  Tune as TuneIcon,
+  Login as LoginIcon,
+  Logout as LogoutIcon,
+  Receipt as ReceiptIcon,
+  Assignment as AssignmentIcon,
+  ShoppingCart as ShoppingCartIcon,
+  Person as PersonIcon,
+  Settings as SettingsIcon,
+  Email as EmailIcon,
+  DirectionsCar as DirectionsCarIcon,
+  Block as BlockIcon,
+  Warning as WarningIcon,
+  Build as BuildIcon,
+  MoreHoriz as MoreHorizIcon,
 } from '@mui/icons-material';
 import {
   getLogs,
@@ -52,185 +64,612 @@ import {
   type LogStats,
 } from '../utils/api';
 
+// ─── Activity formatting ──────────────────────────────────────────────────────
+
+interface ActivityInfo {
+  avatarBg: string;
+  icon: React.ReactElement;
+  primary: string;
+  secondary?: string;
+}
+
+function formatActivity(log: LogEntry, theme: any): ActivityInfo {
+  const m = log.metadata || {};
+  const who = log.username ? log.username : 'System';
+  const cat = log.category || '';
+  const action = (log.action || '').toUpperCase();
+
+  // STOCK – Buchungen
+  if (cat === 'STOCK') {
+    const item = m.itemDescription || m.itemName || m.itemCode || 'Artikel';
+    const code = m.itemCode ? ` (${m.itemCode})` : '';
+    const qty = m.quantity != null ? `${m.quantity}×` : '';
+    const vehicle = m.vehicleName || m.vehicle || '';
+    const vehicleStr = vehicle ? ` — ${vehicle}` : '';
+
+    if (action.includes('OUT') || action.includes('CHECKOUT')) {
+      return {
+        avatarBg: theme.palette.error.main,
+        icon: <ArrowDownwardIcon fontSize="small" />,
+        primary: `${who} hat ${qty} ${item}${code} ausgebucht`,
+        secondary: vehicle ? `Fahrzeug: ${vehicle}` : undefined,
+      };
+    }
+    if (action.includes('IN') || action.includes('CHECKIN')) {
+      return {
+        avatarBg: theme.palette.success.main,
+        icon: <ArrowUpwardIcon fontSize="small" />,
+        primary: `${who} hat ${qty} ${item}${code} eingebucht`,
+        secondary: vehicle ? `Fahrzeug: ${vehicle}` : undefined,
+      };
+    }
+    if (action.includes('ADJUST')) {
+      return {
+        avatarBg: theme.palette.info.main,
+        icon: <TuneIcon fontSize="small" />,
+        primary: `${who} hat Bestand von ${item}${code} korrigiert`,
+        secondary: m.note || (vehicle ? `Fahrzeug: ${vehicle}` : undefined),
+      };
+    }
+    return {
+      avatarBg: theme.palette.info.main,
+      icon: <TuneIcon fontSize="small" />,
+      primary: `Lagerbewegung: ${item}${code}${vehicleStr}`,
+      secondary: log.action,
+    };
+  }
+
+  // AUTH – Anmeldungen
+  if (cat === 'AUTH') {
+    if (action.includes('LOGOUT')) {
+      return {
+        avatarBg: theme.palette.text.secondary,
+        icon: <LogoutIcon fontSize="small" />,
+        primary: `${who} hat sich abgemeldet`,
+      };
+    }
+    if (action.includes('FAIL') || action.includes('INVALID')) {
+      return {
+        avatarBg: theme.palette.warning.main,
+        icon: <BlockIcon fontSize="small" />,
+        primary: `Fehlgeschlagene Anmeldung${m.username ? ` für „${m.username}"` : ''}`,
+        secondary: m.ipAddress || log.ipAddress,
+      };
+    }
+    return {
+      avatarBg: theme.palette.grey[600],
+      icon: <LoginIcon fontSize="small" />,
+      primary: `${who} hat sich angemeldet`,
+      secondary: m.ipAddress || log.ipAddress,
+    };
+  }
+
+  // PURCHASE – Bestellungen
+  if (cat === 'PURCHASE') {
+    const supplier = m.supplierName || m.supplier || '';
+    const orderNum = m.orderNumber || m.orderId ? ` #${m.orderNumber || m.orderId}` : '';
+    const items = m.itemCount != null ? ` (${m.itemCount} Pos.)` : '';
+    if (action.includes('CREATED') || action.includes('CREATE')) {
+      return {
+        avatarBg: theme.palette.warning.main,
+        icon: <ReceiptIcon fontSize="small" />,
+        primary: `${who} hat Bestellung${orderNum} erstellt${items}`,
+        secondary: supplier ? `Lieferant: ${supplier}` : undefined,
+      };
+    }
+    if (action.includes('ORDERED') || action.includes('SENT')) {
+      return {
+        avatarBg: theme.palette.warning.dark,
+        icon: <ReceiptIcon fontSize="small" />,
+        primary: `${who} hat Bestellung${orderNum} aufgegeben${items}`,
+        secondary: supplier ? `Lieferant: ${supplier}` : undefined,
+      };
+    }
+    if (action.includes('RECEIVED') || action.includes('ARCHIVED')) {
+      return {
+        avatarBg: theme.palette.success.dark,
+        icon: <ReceiptIcon fontSize="small" />,
+        primary: `Bestellung${orderNum} abgeschlossen${items}`,
+        secondary: supplier ? `Lieferant: ${supplier}` : undefined,
+      };
+    }
+    return {
+      avatarBg: theme.palette.warning.main,
+      icon: <ReceiptIcon fontSize="small" />,
+      primary: `Bestellung${orderNum}${items}`,
+      secondary: log.action,
+    };
+  }
+
+  // INVENTORY – Inventur
+  if (cat === 'INVENTORY') {
+    const sessionId = m.sessionId ? ` (${String(m.sessionId).slice(0, 8)}…)` : '';
+    if (action.includes('START') || action.includes('CREATE')) {
+      return {
+        avatarBg: theme.palette.secondary.main,
+        icon: <AssignmentIcon fontSize="small" />,
+        primary: `${who} hat eine Inventur gestartet${sessionId}`,
+      };
+    }
+    if (action.includes('FINAL')) {
+      return {
+        avatarBg: theme.palette.secondary.dark,
+        icon: <AssignmentIcon fontSize="small" />,
+        primary: `${who} hat Inventur abgeschlossen${sessionId}`,
+      };
+    }
+    if (action.includes('DELETE') || action.includes('DELET')) {
+      return {
+        avatarBg: theme.palette.error.main,
+        icon: <AssignmentIcon fontSize="small" />,
+        primary: `Inventur gelöscht${sessionId}`,
+        secondary: m.reason,
+      };
+    }
+    return {
+      avatarBg: theme.palette.secondary.main,
+      icon: <AssignmentIcon fontSize="small" />,
+      primary: `Inventur-Aktion${sessionId}`,
+      secondary: log.action,
+    };
+  }
+
+  // RESTOCK – Nachbestellanfragen
+  if (cat === 'RESTOCK') {
+    const item = m.itemDescription || m.itemName || m.itemCode || 'Artikel';
+    const code = m.itemCode ? ` (${m.itemCode})` : '';
+    if (action.includes('REQUEST') || action.includes('CREATE')) {
+      return {
+        avatarBg: theme.palette.warning.light,
+        icon: <ShoppingCartIcon fontSize="small" />,
+        primary: `${who} hat Nachbestellung für ${item}${code} angefordert`,
+        secondary: m.quantity != null ? `Menge: ${m.quantity}` : undefined,
+      };
+    }
+    if (action.includes('FULFILL') || action.includes('DONE')) {
+      return {
+        avatarBg: theme.palette.success.main,
+        icon: <ShoppingCartIcon fontSize="small" />,
+        primary: `Nachbestellung für ${item}${code} erledigt`,
+      };
+    }
+    return {
+      avatarBg: '#f59e0b',
+      icon: <ShoppingCartIcon fontSize="small" />,
+      primary: `Nachbestellung: ${item}${code}`,
+      secondary: log.action,
+    };
+  }
+
+  // USER – Benutzerverwaltung
+  if (cat === 'USER') {
+    const target = m.targetUsername || m.targetUser || '';
+    if (action.includes('CREATE')) {
+      return {
+        avatarBg: theme.palette.info.dark,
+        icon: <PersonIcon fontSize="small" />,
+        primary: `${who} hat Benutzer${target ? ` „${target}"` : ''} erstellt`,
+      };
+    }
+    if (action.includes('UPDATE') || action.includes('EDIT')) {
+      return {
+        avatarBg: theme.palette.info.main,
+        icon: <PersonIcon fontSize="small" />,
+        primary: `${who} hat Benutzer${target ? ` „${target}"` : ''} bearbeitet`,
+      };
+    }
+    if (action.includes('DELETE')) {
+      return {
+        avatarBg: theme.palette.error.main,
+        icon: <PersonIcon fontSize="small" />,
+        primary: `${who} hat Benutzer${target ? ` „${target}"` : ''} gelöscht`,
+      };
+    }
+    if (action.includes('PASS') || action.includes('PWD')) {
+      return {
+        avatarBg: theme.palette.warning.main,
+        icon: <PersonIcon fontSize="small" />,
+        primary: `${who} hat Passwort geändert${target ? ` für „${target}"` : ''}`,
+      };
+    }
+    return {
+      avatarBg: theme.palette.info.main,
+      icon: <PersonIcon fontSize="small" />,
+      primary: `Benutzer-Aktion${target ? ` für „${target}"` : ''}`,
+      secondary: log.action,
+    };
+  }
+
+  // EMAIL
+  if (cat === 'EMAIL') {
+    const recipient = m.to || m.recipient || '';
+    return {
+      avatarBg: theme.palette.primary.main,
+      icon: <EmailIcon fontSize="small" />,
+      primary: `E-Mail versendet${recipient ? ` an ${recipient}` : ''}`,
+      secondary: m.subject,
+    };
+  }
+
+  // VEHICLE
+  if (cat === 'VEHICLE') {
+    const vehicle = m.vehicleName || m.name || '';
+    if (action.includes('CREATE')) {
+      return {
+        avatarBg: theme.palette.primary.dark,
+        icon: <DirectionsCarIcon fontSize="small" />,
+        primary: `${who} hat Fahrzeug${vehicle ? ` „${vehicle}"` : ''} angelegt`,
+      };
+    }
+    return {
+      avatarBg: theme.palette.primary.main,
+      icon: <DirectionsCarIcon fontSize="small" />,
+      primary: `Fahrzeug${vehicle ? ` „${vehicle}"` : ''}`,
+      secondary: log.action,
+    };
+  }
+
+  // SYSTEM
+  if (cat === 'SYSTEM') {
+    if (action.includes('UPDATE')) {
+      return {
+        avatarBg: theme.palette.success.main,
+        icon: <BuildIcon fontSize="small" />,
+        primary: 'System-Update durchgeführt',
+        secondary: m.version,
+      };
+    }
+    if (action.includes('BACKUP')) {
+      return {
+        avatarBg: theme.palette.info.main,
+        icon: <BuildIcon fontSize="small" />,
+        primary: `${who} hat Daten-Backup erstellt`,
+      };
+    }
+    return {
+      avatarBg: theme.palette.grey[500],
+      icon: <SettingsIcon fontSize="small" />,
+      primary: log.action || 'System-Ereignis',
+      secondary: m.details,
+    };
+  }
+
+  // Fallback
+  return {
+    avatarBg: theme.palette.grey[400],
+    icon: <MoreHorizIcon fontSize="small" />,
+    primary: log.action || `${cat} — Ereignis`,
+    secondary: undefined,
+  };
+}
+
+// ─── Day label helper ──────────────────────────────────────────────────────────
+
+function getDayLabel(dateStr: string): string {
+  const d = new Date(dateStr);
+  const today = new Date();
+  const yesterday = new Date(today);
+  yesterday.setDate(today.getDate() - 1);
+
+  const toDay = (x: Date) => x.toLocaleDateString('de-DE', { year: 'numeric', month: '2-digit', day: '2-digit' });
+
+  if (toDay(d) === toDay(today)) return 'Heute';
+  if (toDay(d) === toDay(yesterday)) return 'Gestern';
+  return d.toLocaleDateString('de-DE', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+}
+
+function getDayKey(dateStr: string): string {
+  return new Date(dateStr).toLocaleDateString('de-DE');
+}
+
+// ─── Category chip config ──────────────────────────────────────────────────────
+
+const CATEGORY_FILTERS = [
+  { label: 'Alle', value: '' },
+  { label: 'Buchungen', value: 'STOCK' },
+  { label: 'Bestellungen', value: 'PURCHASE' },
+  { label: 'Inventur', value: 'INVENTORY' },
+  { label: 'Nachbestellungen', value: 'RESTOCK' },
+  { label: 'Anmeldungen', value: 'AUTH' },
+  { label: 'Benutzer', value: 'USER' },
+  { label: 'System', value: 'SYSTEM' },
+];
+
+// ─── Component ────────────────────────────────────────────────────────────────
+
 const LogsPage: React.FC<{ isEmbedded?: boolean }> = ({ isEmbedded = false }) => {
+  const theme = useTheme();
+
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const [logStats, setLogStats] = useState<LogStats | null>(null);
-  const [logsLoading, setLogsLoading] = useState(false);
-  const [logFilters, setLogFilters] = useState<LogFilters>({
-    limit: 50,
-    offset: 0,
-  });
+  const [loading, setLoading] = useState(false);
+  const [hasMore, setHasMore] = useState(false);
+  const [logFilters, setLogFilters] = useState<LogFilters>({ limit: 50, offset: 0 });
   const [totalLogs, setTotalLogs] = useState(0);
-  const [currentPage, setCurrentPage] = useState(1);
-  const [showLogDetails, setShowLogDetails] = useState<LogEntry | null>(null);
+  const [selectedCategory, setSelectedCategory] = useState('');
+  const [showDetails, setShowDetails] = useState<LogEntry | null>(null);
   const [retentionDays, setRetentionDaysState] = useState<number>(90);
   const [savingRetention, setSavingRetention] = useState(false);
   const [busyDeleteAll, setBusyDeleteAll] = useState(false);
-  const [snackbar, setSnackbar] = useState<{ open: boolean; message: string; severity: 'success' | 'error' | 'info'}>({ open: false, message: '', severity: 'info' });
+  const [snackbar, setSnackbar] = useState<{ open: boolean; message: string }>({ open: false, message: '' });
 
-  // Logs laden
-  const loadLogs = async () => {
-    setLogsLoading(true);
+  const loadLogs = useCallback(async (filters: LogFilters, append = false) => {
+    setLoading(true);
     try {
-      const response = await getLogs(logFilters);
-      setLogs(response.logs);
+      const response = await getLogs(filters);
+      setLogs(prev => append ? [...prev, ...response.logs] : response.logs);
       setTotalLogs(response.total);
-    } catch (error) {
-      console.error('Fehler beim Laden der Logs:', error);
+      setHasMore((filters.offset || 0) + response.logs.length < response.total);
+    } catch (e) {
+      console.error('Fehler beim Laden der Logs:', e);
     }
-    setLogsLoading(false);
-  };
+    setLoading(false);
+  }, []);
 
-  // Log-Statistiken laden
-  const loadLogStats = async () => {
+  const loadStats = useCallback(async () => {
     try {
       const stats = await getLogStats();
       setLogStats(stats);
-    } catch (error) {
-      console.error('Fehler beim Laden der Log-Statistiken:', error);
+    } catch (e) {
+      console.error('Fehler beim Laden der Statistiken:', e);
     }
-  };
+  }, []);
 
   useEffect(() => {
-    loadLogs();
-    loadLogStats();
+    loadLogs(logFilters);
   }, [logFilters]);
 
   useEffect(() => {
-    // Retention laden
+    loadStats();
     (async () => {
       try {
         const res = await getLogRetention();
-        if (res && typeof res.retentionDays === 'number') {
-          setRetentionDaysState(res.retentionDays);
-        }
-      } catch (e) {
-        console.warn('Konnte Aufbewahrungsdauer nicht laden:', e);
-      }
+        if (res?.retentionDays) setRetentionDaysState(res.retentionDays);
+      } catch (e) {}
     })();
   }, []);
 
-  // Logs herunterladen
-  const handleDownloadLogs = async (format: 'csv' | 'json') => {
+  const handleCategoryChange = (cat: string) => {
+    setSelectedCategory(cat);
+    setLogFilters({ limit: 50, offset: 0, category: cat || undefined });
+  };
+
+  const handleLoadMore = () => {
+    const nextFilters = { ...logFilters, offset: (logFilters.offset || 0) + 50 };
+    setLogFilters(nextFilters);
+    loadLogs(nextFilters, true);
+  };
+
+  const handleRefresh = () => {
+    const resetFilters = { ...logFilters, offset: 0 };
+    setLogFilters(resetFilters);
+  };
+
+  const handleDownload = async (format: 'csv' | 'json') => {
     try {
-      let blob: Blob;
-      let filename: string;
-      
-      if (format === 'csv') {
-        blob = await downloadLogsCSV(logFilters);
-        filename = `system-logs-${new Date().toISOString().slice(0, 10)}.csv`;
-      } else {
-        blob = await downloadLogsJSON(logFilters);
-        filename = `system-logs-${new Date().toISOString().slice(0, 10)}.json`;
-      }
-
-      // Download auslösen
-      const url = window.URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = filename;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      window.URL.revokeObjectURL(url);
-    } catch (error) {
-      console.error(`Fehler beim Herunterladen (${format}):`, error);
+      const blob = format === 'csv'
+        ? await downloadLogsCSV(logFilters)
+        : await downloadLogsJSON(logFilters);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `system-logs-${new Date().toISOString().slice(0, 10)}.${format}`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      console.error('Fehler beim Download:', e);
     }
   };
 
-  // Seitennavigation
-  const handlePageChange = (event: React.ChangeEvent<unknown>, page: number) => {
-    setCurrentPage(page);
-    setLogFilters(prev => ({
-      ...prev,
-      offset: (page - 1) * (prev.limit || 50),
-    }));
-  };
-
-  // Log-Level Farben
-  const getLogLevelColor = (level: string) => {
-    switch (level) {
-      case 'ERROR': return 'error';
-      case 'WARNING': return 'warning';
-      case 'SECURITY': return 'secondary';
-      case 'INFO': 
-      default: return 'default';
+  // Group logs by day
+  const grouped: { dayKey: string; dayLabel: string; entries: LogEntry[] }[] = [];
+  logs.forEach((log) => {
+    const key = getDayKey(log.timestamp);
+    const last = grouped[grouped.length - 1];
+    if (last && last.dayKey === key) {
+      last.entries.push(log);
+    } else {
+      grouped.push({ dayKey: key, dayLabel: getDayLabel(log.timestamp), entries: [log] });
     }
-  };
-
-  const totalPages = Math.ceil(totalLogs / (logFilters.limit || 50));
+  });
 
   return (
-    <Container maxWidth={isEmbedded ? "lg" : "xl"} sx={{ mt: isEmbedded ? 0 : 4, mb: 4 }}>
+    <Container maxWidth={isEmbedded ? 'lg' : 'xl'} sx={{ mt: isEmbedded ? 0 : 4, mb: 4 }}>
       {!isEmbedded && (
-        <>
+        <Box sx={{ mb: 3 }}>
           <Typography variant="h4" gutterBottom>
-            Systemprotokolle
+            Systemprotokoll
           </Typography>
-          <Typography variant="body2" color="text.secondary" paragraph>
-            Überwachung aller Frontend- und Backend-Logs in Echtzeit. Filterbar nach Quelle, Level und Kategorie.
+          <Typography variant="body2" color="text.secondary">
+            Aktivitäten und Ereignisse im Überblick
           </Typography>
-        </>
+        </Box>
       )}
 
-      {/* Statistiken */}
+      {/* Statistik-Chips */}
       {logStats && (
-        <Grid container spacing={2} sx={{ mb: 3 }}>
-          <Grid item xs={12} md={3}>
-            <Card>
-              <CardContent>
-                <Typography color="text.secondary" gutterBottom>
-                  Gesamt
-                </Typography>
-                <Typography variant="h5">
-                  {logStats.totalLogs?.toLocaleString() || 0}
-                </Typography>
-              </CardContent>
-            </Card>
-          </Grid>
-          <Grid item xs={12} md={3}>
-            <Card>
-              <CardContent>
-                <Typography color="text.secondary" gutterBottom>
-                  Fehler
-                </Typography>
-                <Typography variant="h5" color="error">
-                  {logStats.byLevel?.ERROR || 0}
-                </Typography>
-              </CardContent>
-            </Card>
-          </Grid>
-          <Grid item xs={12} md={3}>
-            <Card>
-              <CardContent>
-                <Typography color="text.secondary" gutterBottom>
-                  Warnungen
-                </Typography>
-                <Typography variant="h5" color="warning.main">
-                  {logStats.byLevel?.WARNING || 0}
-                </Typography>
-              </CardContent>
-            </Card>
-          </Grid>
-          <Grid item xs={12} md={3}>
-            <Card>
-              <CardContent>
-                <Typography color="text.secondary" gutterBottom>
-                  Sicherheit
-                </Typography>
-                <Typography variant="h5" color="secondary">
-                  {logStats.byLevel?.SECURITY || 0}
-                </Typography>
-              </CardContent>
-            </Card>
-          </Grid>
-        </Grid>
+        <Stack direction="row" spacing={1.5} sx={{ mb: 2.5 }} flexWrap="wrap" useFlexGap>
+          <Chip label={`${logStats.totalLogs?.toLocaleString() || 0} gesamt`} size="small" />
+          {(logStats.byLevel?.ERROR || 0) > 0 && (
+            <Chip icon={<WarningIcon />} label={`${logStats.byLevel.ERROR} Fehler`} size="small" color="error" variant="outlined" />
+          )}
+          {(logStats.byLevel?.WARNING || 0) > 0 && (
+            <Chip icon={<WarningIcon />} label={`${logStats.byLevel.WARNING} Warnungen`} size="small" color="warning" variant="outlined" />
+          )}
+          {(logStats.byLevel?.SECURITY || 0) > 0 && (
+            <Chip icon={<BlockIcon />} label={`${logStats.byLevel.SECURITY} Sicherheit`} size="small" color="secondary" variant="outlined" />
+          )}
+        </Stack>
       )}
 
-      <Paper sx={{ p: 2, mb: 3 }}>
-        {/* Aufbewahrung & Bereinigung */}
-        <Box display="flex" alignItems="center" justifyContent="space-between" flexWrap="wrap" gap={2} sx={{ mb: 2 }}>
-          <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} alignItems={{ xs: 'stretch', sm: 'center' }}>
+      {/* Kategoriefilter + Aktionen */}
+      <Paper sx={{ p: 2, mb: 2 }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 1.5 }}>
+          <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
+            {CATEGORY_FILTERS.map((f) => (
+              <Chip
+                key={f.value}
+                label={f.label}
+                size="small"
+                onClick={() => handleCategoryChange(f.value)}
+                color={selectedCategory === f.value ? 'primary' : 'default'}
+                variant={selectedCategory === f.value ? 'filled' : 'outlined'}
+                sx={{ cursor: 'pointer' }}
+              />
+            ))}
+          </Stack>
+
+          <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', flexShrink: 0 }}>
+            <Tooltip title="Aktualisieren">
+              <IconButton size="small" onClick={handleRefresh} disabled={loading}>
+                <RefreshIcon />
+              </IconButton>
+            </Tooltip>
+            <Button size="small" startIcon={<DownloadIcon />} onClick={() => handleDownload('csv')}>
+              CSV
+            </Button>
+            <Button size="small" startIcon={<DownloadIcon />} onClick={() => handleDownload('json')}>
+              JSON
+            </Button>
+          </Box>
+        </Box>
+      </Paper>
+
+      {/* Activity Feed */}
+      <Paper sx={{ mb: 2 }}>
+        {loading && logs.length === 0 ? (
+          <Box sx={{ display: 'flex', justifyContent: 'center', p: 6 }}>
+            <CircularProgress />
+          </Box>
+        ) : logs.length === 0 ? (
+          <Box sx={{ p: 4, textAlign: 'center' }}>
+            <Typography color="text.secondary">Keine Einträge gefunden</Typography>
+          </Box>
+        ) : (
+          <>
+            {grouped.map((group, gi) => (
+              <Box key={group.dayKey}>
+                {/* Day header */}
+                <Box
+                  sx={{
+                    px: 2.5,
+                    py: 1,
+                    bgcolor: alpha(theme.palette.primary.main, 0.06),
+                    borderBottom: `1px solid ${theme.palette.divider}`,
+                    borderTop: gi > 0 ? `1px solid ${theme.palette.divider}` : 'none',
+                    position: 'sticky',
+                    top: 0,
+                    zIndex: 1,
+                  }}
+                >
+                  <Typography variant="caption" fontWeight={700} color="text.secondary" sx={{ textTransform: 'uppercase', letterSpacing: 0.8 }}>
+                    {group.dayLabel}
+                  </Typography>
+                </Box>
+
+                <List disablePadding>
+                  {group.entries.map((log, idx) => {
+                    const info = formatActivity(log, theme);
+                    const isLast = idx === group.entries.length - 1;
+                    const isError = log.level === 'ERROR';
+                    const isWarning = log.level === 'WARNING';
+                    const isSecurity = log.level === 'SECURITY';
+                    const rowBg = isError
+                      ? alpha(theme.palette.error.main, 0.05)
+                      : isWarning
+                      ? alpha(theme.palette.warning.main, 0.04)
+                      : isSecurity
+                      ? alpha(theme.palette.secondary.main, 0.05)
+                      : undefined;
+
+                    return (
+                      <React.Fragment key={log.id}>
+                        <ListItem
+                          alignItems="flex-start"
+                          sx={{
+                            px: 2.5,
+                            py: 1.25,
+                            bgcolor: rowBg,
+                            '&:hover': { bgcolor: alpha(theme.palette.action.hover, 0.06) },
+                            cursor: 'pointer',
+                          }}
+                          onClick={() => setShowDetails(log)}
+                          secondaryAction={
+                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                              <Typography variant="caption" color="text.secondary" sx={{ minWidth: 45, textAlign: 'right' }}>
+                                {new Date(log.timestamp).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })}
+                              </Typography>
+                              <Tooltip title="Details">
+                                <IconButton size="small" onClick={(e) => { e.stopPropagation(); setShowDetails(log); }}>
+                                  <InfoIcon fontSize="small" />
+                                </IconButton>
+                              </Tooltip>
+                            </Box>
+                          }
+                        >
+                          <ListItemAvatar sx={{ minWidth: 44 }}>
+                            <Avatar sx={{ width: 34, height: 34, bgcolor: info.avatarBg, fontSize: 16 }}>
+                              {info.icon}
+                            </Avatar>
+                          </ListItemAvatar>
+                          <ListItemText
+                            primary={
+                              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap', pr: 8 }}>
+                                <Typography variant="body2" fontWeight={500}>
+                                  {info.primary}
+                                </Typography>
+                                {isError && <Chip label="Fehler" size="small" color="error" sx={{ height: 18, fontSize: 10 }} />}
+                                {isWarning && <Chip label="Warnung" size="small" color="warning" sx={{ height: 18, fontSize: 10 }} />}
+                                {isSecurity && <Chip label="Sicherheit" size="small" color="secondary" sx={{ height: 18, fontSize: 10 }} />}
+                              </Box>
+                            }
+                            secondary={
+                              info.secondary ? (
+                                <Typography variant="caption" color="text.secondary">
+                                  {info.secondary}
+                                </Typography>
+                              ) : undefined
+                            }
+                          />
+                        </ListItem>
+                        {!isLast && <Divider component="li" sx={{ ml: '68px' }} />}
+                      </React.Fragment>
+                    );
+                  })}
+                </List>
+              </Box>
+            ))}
+
+            {/* Load more */}
+            <Box sx={{ p: 2, textAlign: 'center', borderTop: `1px solid ${theme.palette.divider}` }}>
+              {loading ? (
+                <CircularProgress size={24} />
+              ) : hasMore ? (
+                <Button variant="text" onClick={handleLoadMore}>
+                  Weitere laden ({totalLogs - logs.length} verbleibend)
+                </Button>
+              ) : (
+                <Typography variant="caption" color="text.secondary">
+                  Alle {totalLogs} Einträge geladen
+                </Typography>
+              )}
+            </Box>
+          </>
+        )}
+      </Paper>
+
+      {/* Verwaltung (einklappbar) */}
+      <Accordion>
+        <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <SettingsIcon fontSize="small" color="action" />
+            <Typography variant="body2" fontWeight={600}>
+              Log-Verwaltung
+            </Typography>
+          </Box>
+        </AccordionSummary>
+        <AccordionDetails>
+          <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} alignItems={{ xs: 'stretch', sm: 'center' }} flexWrap="wrap" useFlexGap>
             <TextField
               type="number"
               size="small"
@@ -238,17 +677,19 @@ const LogsPage: React.FC<{ isEmbedded?: boolean }> = ({ isEmbedded = false }) =>
               value={retentionDays}
               onChange={(e) => setRetentionDaysState(Math.max(1, Math.min(3650, Number(e.target.value) || 1)))}
               inputProps={{ min: 1, max: 3650 }}
+              sx={{ width: 200 }}
             />
             <Button
               variant="contained"
+              size="small"
               disabled={savingRetention}
               onClick={async () => {
                 try {
                   setSavingRetention(true);
                   const res = await setLogRetention(retentionDays);
-                  setSnackbar({ open: true, message: `Aufbewahrung gespeichert: ${res.retentionDays} Tage`, severity: 'success' });
-                } catch (e) {
-                  setSnackbar({ open: true, message: 'Fehler beim Speichern der Aufbewahrung', severity: 'error' });
+                  setSnackbar({ open: true, message: `Aufbewahrung gespeichert: ${res.retentionDays} Tage` });
+                } catch {
+                  setSnackbar({ open: true, message: 'Fehler beim Speichern der Aufbewahrung' });
                 } finally {
                   setSavingRetention(false);
                 }
@@ -258,24 +699,23 @@ const LogsPage: React.FC<{ isEmbedded?: boolean }> = ({ isEmbedded = false }) =>
             </Button>
             <Button
               variant="outlined"
+              size="small"
               color="warning"
               onClick={async () => {
                 try {
                   const res = await cleanupOldLogs(retentionDays);
-                  setSnackbar({ open: true, message: `${res.deletedCount} alte Logs gelöscht (> ${res.daysToKeep} Tage)`, severity: 'success' });
-                  await Promise.all([loadLogs(), loadLogStats()]);
-                } catch (e) {
-                  setSnackbar({ open: true, message: 'Fehler beim Bereinigen alter Logs', severity: 'error' });
+                  setSnackbar({ open: true, message: `${res.deletedCount} alte Logs gelöscht (> ${res.daysToKeep} Tage)` });
+                  await Promise.all([loadLogs({ ...logFilters, offset: 0 }), loadStats()]);
+                } catch {
+                  setSnackbar({ open: true, message: 'Fehler beim Bereinigen alter Logs' });
                 }
               }}
             >
               Alte Logs bereinigen
             </Button>
-          </Stack>
-
-          <Box>
             <Button
               variant="contained"
+              size="small"
               color="error"
               disabled={busyDeleteAll}
               onClick={async () => {
@@ -283,10 +723,10 @@ const LogsPage: React.FC<{ isEmbedded?: boolean }> = ({ isEmbedded = false }) =>
                 try {
                   setBusyDeleteAll(true);
                   const res = await deleteAllLogs();
-                  setSnackbar({ open: true, message: `Alle Logs gelöscht (${res.deletedCount})`, severity: 'success' });
-                  await Promise.all([loadLogs(), loadLogStats()]);
-                } catch (e) {
-                  setSnackbar({ open: true, message: 'Fehler beim Löschen aller Logs', severity: 'error' });
+                  setSnackbar({ open: true, message: `Alle Logs gelöscht (${res.deletedCount})` });
+                  await Promise.all([loadLogs({ ...logFilters, offset: 0 }), loadStats()]);
+                } catch {
+                  setSnackbar({ open: true, message: 'Fehler beim Löschen aller Logs' });
                 } finally {
                   setBusyDeleteAll(false);
                 }
@@ -294,95 +734,65 @@ const LogsPage: React.FC<{ isEmbedded?: boolean }> = ({ isEmbedded = false }) =>
             >
               Alle Logs löschen
             </Button>
-          </Box>
-        </Box>
+          </Stack>
+        </AccordionDetails>
+      </Accordion>
 
-        <Box display="flex" alignItems="center" justifyContent="space-between" flexWrap="wrap" gap={2}>
-          {/* Filter */}
-          <Box display="flex" gap={2} flexWrap="wrap">
-            <FormControl size="small" sx={{ minWidth: 120 }}>
-              <InputLabel>Quelle</InputLabel>
-              <Select
-                value={logFilters.source || ''}
-                label="Quelle"
-                onChange={(e) => setLogFilters(prev => ({ ...prev, source: e.target.value || undefined, offset: 0 }))}
-              >
-                <MenuItem value="">Alle</MenuItem>
-                <MenuItem value="FRONTEND">Frontend</MenuItem>
-                <MenuItem value="BACKEND">Backend</MenuItem>
-              </Select>
-            </FormControl>
+      {/* Detail-Dialog */}
+      <Dialog open={!!showDetails} onClose={() => setShowDetails(null)} maxWidth="md" fullWidth>
+        <DialogTitle>Ereignis-Details</DialogTitle>
+        <DialogContent dividers>
+          {showDetails && (
+            <Stack spacing={1.5}>
+              {[
+                ['Zeitstempel', new Date(showDetails.timestamp).toLocaleString('de-DE')],
+                ['Kategorie', showDetails.category],
+                ['Aktion', showDetails.action],
+                ['Level', showDetails.level],
+                ['Quelle', showDetails.source || '-'],
+                ['Benutzer', showDetails.username || '-'],
+                ['IP-Adresse', showDetails.ipAddress || '-'],
+              ].map(([label, value]) => (
+                <Box key={label} sx={{ display: 'flex', gap: 2 }}>
+                  <Typography variant="body2" color="text.secondary" sx={{ minWidth: 110, fontWeight: 600 }}>
+                    {label}
+                  </Typography>
+                  <Typography variant="body2">{value}</Typography>
+                </Box>
+              ))}
 
-            <FormControl size="small" sx={{ minWidth: 120 }}>
-              <InputLabel>Level</InputLabel>
-              <Select
-                value={logFilters.level || ''}
-                label="Level"
-                onChange={(e) => setLogFilters(prev => ({ ...prev, level: e.target.value || undefined, offset: 0 }))}
-              >
-                <MenuItem value="">Alle</MenuItem>
-                <MenuItem value="INFO">Info</MenuItem>
-                <MenuItem value="WARNING">Warning</MenuItem>
-                <MenuItem value="ERROR">Error</MenuItem>
-                <MenuItem value="SECURITY">Security</MenuItem>
-              </Select>
-            </FormControl>
+              {showDetails.details && (
+                <>
+                  <Divider />
+                  <Typography variant="body2" fontWeight={600}>Details</Typography>
+                  <Paper variant="outlined" sx={{ p: 1.5, bgcolor: 'background.paper' }}>
+                    <Typography variant="body2" component="pre" sx={{ whiteSpace: 'pre-wrap', fontFamily: 'monospace', fontSize: 12, m: 0 }}>
+                      {typeof showDetails.details === 'string'
+                        ? showDetails.details
+                        : JSON.stringify(showDetails.details, null, 2)}
+                    </Typography>
+                  </Paper>
+                </>
+              )}
 
-            <FormControl size="small" sx={{ minWidth: 120 }}>
-              <InputLabel>Kategorie</InputLabel>
-              <Select
-                value={logFilters.category || ''}
-                label="Kategorie"
-                onChange={(e) => setLogFilters(prev => ({ ...prev, category: e.target.value || undefined, offset: 0 }))}
-              >
-                <MenuItem value="">Alle</MenuItem>
-                <MenuItem value="AUTH">Auth</MenuItem>
-                <MenuItem value="STOCK">Stock</MenuItem>
-                <MenuItem value="INVENTORY">Inventory</MenuItem>
-                <MenuItem value="SYSTEM">System</MenuItem>
-                <MenuItem value="API">API</MenuItem>
-              </Select>
-            </FormControl>
-
-            <FormControl size="small" sx={{ minWidth: 100 }}>
-              <InputLabel>Limit</InputLabel>
-              <Select
-                value={logFilters.limit || 50}
-                label="Limit"
-                onChange={(e) => setLogFilters(prev => ({ ...prev, limit: Number(e.target.value), offset: 0 }))}
-              >
-                <MenuItem value={25}>25</MenuItem>
-                <MenuItem value={50}>50</MenuItem>
-                <MenuItem value={100}>100</MenuItem>
-                <MenuItem value={200}>200</MenuItem>
-              </Select>
-            </FormControl>
-          </Box>
-
-          {/* Aktionen */}
-          <Box display="flex" gap={1}>
-            <Tooltip title="Logs neu laden">
-              <IconButton onClick={loadLogs} size="small">
-                <RefreshIcon />
-              </IconButton>
-            </Tooltip>
-            <Button
-              size="small"
-              startIcon={<DownloadIcon />}
-              onClick={() => handleDownloadLogs('csv')}
-            >
-              CSV
-            </Button>
-            <Button
-              size="small"
-              startIcon={<DownloadIcon />}
-              onClick={() => handleDownloadLogs('json')}
-            >
-              JSON
-            </Button>
-          </Box>
-        </Box>
-      </Paper>
+              {showDetails.metadata && Object.keys(showDetails.metadata).length > 0 && (
+                <>
+                  <Divider />
+                  <Typography variant="body2" fontWeight={600}>Metadaten</Typography>
+                  <Paper variant="outlined" sx={{ p: 1.5, bgcolor: 'background.paper' }}>
+                    <Typography variant="body2" component="pre" sx={{ whiteSpace: 'pre-wrap', fontFamily: 'monospace', fontSize: 12, m: 0 }}>
+                      {JSON.stringify(showDetails.metadata, null, 2)}
+                    </Typography>
+                  </Paper>
+                </>
+              )}
+            </Stack>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setShowDetails(null)}>Schließen</Button>
+        </DialogActions>
+      </Dialog>
 
       <Snackbar
         open={snackbar.open}
@@ -390,169 +800,6 @@ const LogsPage: React.FC<{ isEmbedded?: boolean }> = ({ isEmbedded = false }) =>
         onClose={() => setSnackbar(s => ({ ...s, open: false }))}
         message={snackbar.message}
       />
-
-      {/* Log-Tabelle */}
-      <Paper>
-        <TableContainer>
-          <Table size="small">
-            <TableHead>
-              <TableRow>
-                <TableCell>Zeitstempel</TableCell>
-                <TableCell>Quelle</TableCell>
-                <TableCell>Level</TableCell>
-                <TableCell>Kategorie</TableCell>
-                <TableCell>Nachricht</TableCell>
-                <TableCell>Benutzer</TableCell>
-                <TableCell align="right">Aktionen</TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {logsLoading ? (
-                <TableRow>
-                  <TableCell colSpan={7} align="center">
-                    <CircularProgress />
-                  </TableCell>
-                </TableRow>
-              ) : logs.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={7} align="center">
-                    Keine Logs gefunden
-                  </TableCell>
-                </TableRow>
-              ) : (
-                logs.map((log) => (
-                  <TableRow key={log.id} hover>
-                    <TableCell>
-                      {new Date(log.timestamp).toLocaleString('de-DE')}
-                    </TableCell>
-                    <TableCell>
-                      <Chip 
-                        label={log.source || 'N/A'} 
-                        size="small" 
-                        color={log.source === 'BACKEND' ? 'primary' : 'info'}
-                      />
-                    </TableCell>
-                    <TableCell>
-                      <Chip 
-                        label={log.level} 
-                        size="small" 
-                        color={getLogLevelColor(log.level) as any}
-                      />
-                    </TableCell>
-                    <TableCell>
-                      <Chip label={log.category} size="small" variant="outlined" />
-                    </TableCell>
-                    <TableCell sx={{ maxWidth: 400 }}>
-                      <Typography variant="body2" noWrap>
-                        {log.action || log.message || '-'}
-                      </Typography>
-                    </TableCell>
-                    <TableCell>{log.username || '-'}</TableCell>
-                    <TableCell align="right">
-                      <Tooltip title="Details anzeigen">
-                        <IconButton 
-                          size="small" 
-                          onClick={() => setShowLogDetails(log)}
-                        >
-                          <InfoIcon fontSize="small" />
-                        </IconButton>
-                      </Tooltip>
-                    </TableCell>
-                  </TableRow>
-                ))
-              )}
-            </TableBody>
-          </Table>
-        </TableContainer>
-
-        {/* Pagination */}
-        {totalPages > 1 && (
-          <Box display="flex" justifyContent="center" p={2}>
-            <Pagination 
-              count={totalPages} 
-              page={currentPage} 
-              onChange={handlePageChange}
-              color="primary"
-            />
-          </Box>
-        )}
-      </Paper>
-
-      {/* Log-Details Dialog */}
-      <Dialog
-        open={!!showLogDetails}
-        onClose={() => setShowLogDetails(null)}
-        maxWidth="md"
-        fullWidth
-      >
-        <DialogTitle>Log-Details</DialogTitle>
-        <DialogContent>
-          {showLogDetails && (
-            <Box>
-              <Typography variant="body2" color="text.secondary" gutterBottom>
-                <strong>ID:</strong> {showLogDetails.id}
-              </Typography>
-              <Typography variant="body2" color="text.secondary" gutterBottom>
-                <strong>Zeitstempel:</strong> {new Date(showLogDetails.timestamp).toLocaleString('de-DE')}
-              </Typography>
-              <Typography variant="body2" color="text.secondary" gutterBottom>
-                <strong>Quelle:</strong> {showLogDetails.source || '-'}
-              </Typography>
-              <Typography variant="body2" color="text.secondary" gutterBottom>
-                <strong>Level:</strong> {showLogDetails.level}
-              </Typography>
-              <Typography variant="body2" color="text.secondary" gutterBottom>
-                <strong>Kategorie:</strong> {showLogDetails.category}
-              </Typography>
-              {showLogDetails.username && (
-                <Typography variant="body2" color="text.secondary" gutterBottom>
-                  <strong>Benutzer:</strong> {showLogDetails.username}
-                </Typography>
-              )}
-              {showLogDetails.userId && (
-                <Typography variant="body2" color="text.secondary" gutterBottom>
-                  <strong>Benutzer-ID:</strong> {showLogDetails.userId}
-                </Typography>
-              )}
-              {showLogDetails.ipAddress && (
-                <Typography variant="body2" color="text.secondary" gutterBottom>
-                  <strong>IP-Adresse:</strong> {showLogDetails.ipAddress}
-                </Typography>
-              )}
-              {showLogDetails.userAgent && (
-                <Typography variant="body2" color="text.secondary" gutterBottom>
-                  <strong>User Agent:</strong> {showLogDetails.userAgent}
-                </Typography>
-              )}
-              <Typography variant="body2" color="text.secondary" gutterBottom sx={{ mt: 2 }}>
-                <strong>Nachricht:</strong>
-              </Typography>
-              <Paper variant="outlined" sx={{ p: 2, bgcolor: 'background.paper' }}>
-                <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap' }}>
-                  {showLogDetails.action || showLogDetails.message || '-'}
-                </Typography>
-              </Paper>
-              {showLogDetails.details && (
-                <>
-                  <Typography variant="body2" color="text.secondary" gutterBottom sx={{ mt: 2 }}>
-                    <strong>Details:</strong>
-                  </Typography>
-                  <Paper variant="outlined" sx={{ p: 2, bgcolor: 'background.paper' }}>
-                    <Typography variant="body2" component="pre" sx={{ whiteSpace: 'pre-wrap', fontFamily: 'monospace' }}>
-                      {JSON.stringify(showLogDetails.details, null, 2)}
-                    </Typography>
-                  </Paper>
-                </>
-              )}
-            </Box>
-          )}
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setShowLogDetails(null)}>
-            Schließen
-          </Button>
-        </DialogActions>
-      </Dialog>
     </Container>
   );
 };

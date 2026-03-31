@@ -16,12 +16,17 @@ import {
   Typography,
 } from "@mui/material";
 import QrCodeScannerIcon from "@mui/icons-material/QrCodeScanner";
+import AddPhotoAlternateIcon from "@mui/icons-material/AddPhotoAlternate";
+import DeleteIcon from "@mui/icons-material/Delete";
 import {
   fetchItemById,
   updateItem,
   fetchSuppliers,
   fetchLocations,
   recordMovement,
+  uploadItemImage,
+  deleteItemImage,
+  getItemImageUrl,
   type CreateItemRequest,
   type ItemDto,
   type LocationDto,
@@ -162,6 +167,8 @@ const ItemEditDialog: React.FC<ItemEditDialogProps> = ({ itemId, open, onClose, 
   const [locations, setLocations] = useState<LocationDto[]>([]);
   const [scanOpen, setScanOpen] = useState(false);
   const [altCodeScanOpen, setAltCodeScanOpen] = useState(false);
+  const [imageUploading, setImageUploading] = useState(false);
+  const [imageKey, setImageKey] = useState(0); // bump to force img reload
 
   // Daten laden wenn Dialog öffnet
   useEffect(() => {
@@ -377,6 +384,78 @@ const ItemEditDialog: React.FC<ItemEditDialogProps> = ({ itemId, open, onClose, 
               </Box>
             ) : (
               <Grid container spacing={2} sx={{ mt: 0.5 }}>
+                {/* Artikelbild */}
+                <Grid item xs={12}>
+                  <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
+                    {originalItem?.imagePath ? (
+                      <Box
+                        component="img"
+                        src={`${getItemImageUrl(originalItem.id)}?v=${imageKey}`}
+                        alt="Artikelbild"
+                        sx={{ width: 80, height: 80, objectFit: "cover", borderRadius: 1, border: "1px solid", borderColor: "divider" }}
+                      />
+                    ) : (
+                      <Box sx={{ width: 80, height: 80, display: "flex", alignItems: "center", justifyContent: "center", bgcolor: "action.hover", borderRadius: 1, border: "1px dashed", borderColor: "divider" }}>
+                        <AddPhotoAlternateIcon color="disabled" />
+                      </Box>
+                    )}
+                    <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
+                      <Button
+                        component="label"
+                        variant="outlined"
+                        size="small"
+                        startIcon={imageUploading ? <CircularProgress size={14} /> : <AddPhotoAlternateIcon />}
+                        disabled={imageUploading || !itemId}
+                      >
+                        {originalItem?.imagePath ? "Bild ersetzen" : "Bild hochladen"}
+                        <input
+                          type="file"
+                          hidden
+                          accept="image/jpeg,image/png,image/webp"
+                          onChange={async (e) => {
+                            const file = e.target.files?.[0];
+                            if (!file || !itemId) return;
+                            setImageUploading(true);
+                            try {
+                              const updated = await uploadItemImage(itemId, file);
+                              setOriginalItem(updated);
+                              setImageKey((k) => k + 1);
+                            } catch {
+                              setError("Bild konnte nicht hochgeladen werden.");
+                            } finally {
+                              setImageUploading(false);
+                              e.target.value = "";
+                            }
+                          }}
+                        />
+                      </Button>
+                      {originalItem?.imagePath && (
+                        <Button
+                          variant="outlined"
+                          size="small"
+                          color="error"
+                          startIcon={<DeleteIcon />}
+                          disabled={imageUploading}
+                          onClick={async () => {
+                            if (!itemId) return;
+                            setImageUploading(true);
+                            try {
+                              const updated = await deleteItemImage(itemId);
+                              setOriginalItem(updated);
+                              setImageKey((k) => k + 1);
+                            } catch {
+                              setError("Bild konnte nicht gelöscht werden.");
+                            } finally {
+                              setImageUploading(false);
+                            }
+                          }}
+                        >
+                          Bild entfernen
+                        </Button>
+                      )}
+                    </Box>
+                  </Box>
+                </Grid>
                 <Grid item xs={12} sm={6}>
                   <TextField
                     label="Artikelnummer"

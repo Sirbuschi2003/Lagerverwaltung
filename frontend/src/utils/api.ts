@@ -183,6 +183,7 @@ export interface ItemDto {
   packSize?: number | null;
   orderQuantity?: number | null;
   currentQuantity?: number | null;
+  imagePath?: string | null;
 }
 
 export interface VehicleDto {
@@ -373,6 +374,25 @@ export const fetchItemById = async (id: string): Promise<ItemDto> => {
 
 export const deleteItem = async (id: string): Promise<void> => {
   await api.delete(`/items/${id}`);
+};
+
+export const uploadItemImage = async (id: string, file: File): Promise<ItemDto> => {
+  const formData = new FormData();
+  formData.append("image", file);
+  const response = await api.post<ItemDto>(`/items/${id}/image`, formData, {
+    headers: { "Content-Type": "multipart/form-data" },
+  });
+  return response.data;
+};
+
+export const deleteItemImage = async (id: string): Promise<ItemDto> => {
+  const response = await api.delete<ItemDto>(`/items/${id}/image`);
+  return response.data;
+};
+
+export const getItemImageUrl = (id: string): string => {
+  const baseUrl = (api.defaults.baseURL || "/api").replace(/\/$/, "");
+  return `${baseUrl}/items/${id}/image`;
 };
 
 export const findItemByAnyCode = async (code: string): Promise<ItemDto | null> => {

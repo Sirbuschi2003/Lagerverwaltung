@@ -1,6 +1,9 @@
 import { Injectable, NotFoundException, Logger } from "@nestjs/common";
 import { InjectRepository } from "@nestjs/typeorm";
 import { In, Repository } from "typeorm";
+import * as fs from "fs/promises";
+import * as path from "path";
+import * as sharp from "sharp";
 
 import { CreateItemDto } from "./dto/create-item.dto";
 import { UpdateItemDto } from "./dto/update-item.dto";
@@ -840,5 +843,45 @@ export class ItemsService {
       this.logger.error("Fehler bei removeAll:", error);
       throw error;
     }
+  }
+
+  // ─── Artikelbild ──────────────────────────────────────────────────────────
+
+  private get imageDir(): string {
+    return process.env.ITEM_IMAGE_PATH || "/app/item-images";
+  }
+
+  async uploadImage(id: string, file: Express.Multer.File): Promise<Item> {
+    const item = await this.findOne(id);
+    if (!item) throw new NotFoundException("Artikel nicht gefunden");
+
+    await fs.mkdir(this.imageDir, { recursive: true });
+
+    const filename = `${id}.jpg`;
+    const filepath = path.join(this.imageDir, filename);
+
+    await (sharp as any)(file.buffer)
+      .resize(800, 800, { fit: "inside", withoutEnlargement: true })
+      .jpeg({ quality: 82 })
+      .toFile(filepath);
+
+    await this.repository.update(id, { imagePath: filename });
+    return this.findOne(id) as Promise<Item>;
+  }
+
+  async deleteImage(id: string): Promise<Item> {
+    const item = await this.findOne(id);
+    if (!item) throw new NotFoundException("Artikel nicht gefunden");
+
+    if (item.imagePath) {
+      const filepath = path.join(this.imageDir, item.imagePath);
+      await fs.unlink(filepath).catch(() => {});
+      await this.repository.update(id, { imagePath: null });
+    }
+    return this.findOne(id) as Promise<Item>;
+  }
+
+  getImageFilePath(imagePath: string): string {
+    return path.join(this.imageDir, imagePath);
   }
 }

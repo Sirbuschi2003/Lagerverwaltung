@@ -69,6 +69,9 @@ export class Item {
   @Column({ type: "int", nullable: true })
   orderQuantity!: number | null;
 
+  @Column({ type: "varchar", length: 255, nullable: true })
+  imagePath!: string | null;
+
   @CreateDateColumn()
   createdAt!: Date;
 

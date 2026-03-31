@@ -61,6 +61,7 @@ services:
     volumes:
       - ./backups:/app/backups
       - ${PURCHASE_ORDER_STORAGE_HOST_PATH:-./purchase-orders}:/app/purchase-orders
+      - ${ITEM_IMAGE_STORAGE_HOST_PATH:-./item-images}:/app/item-images
     healthcheck:
       test: ["CMD-SHELL", "wget --spider --quiet http://127.0.0.1:3000/api/health || exit 1"]
       interval: 30s

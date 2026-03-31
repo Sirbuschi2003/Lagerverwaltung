@@ -1,4 +1,6 @@
-import { Body, Controller, Delete, Get, NotFoundException, Param, Patch, Post, Query, Req, UseGuards, InternalServerErrorException, BadRequestException, Logger, Res } from "@nestjs/common";
+import { Body, Controller, Delete, Get, NotFoundException, Param, Patch, Post, Query, Req, UseGuards, InternalServerErrorException, BadRequestException, Logger, Res, UseInterceptors, UploadedFile } from "@nestjs/common";
+import { FileInterceptor } from "@nestjs/platform-express";
+import { memoryStorage } from "multer";
 import { plainToInstance } from "class-transformer";
 import type { Request, Response } from "express";
 
@@ -179,6 +181,50 @@ export class ItemsController {
       }
       this.logger.error(`Fehler bei Codesuche: ${error instanceof Error ? error.message : String(error)}`);
       throw new InternalServerErrorException('Artikel konnte nicht gefunden werden');
+    }
+  }
+
+  @Post(":id/image")
+  @Permissions("items.edit")
+  @UseInterceptors(FileInterceptor("image", { storage: memoryStorage(), limits: { fileSize: 8 * 1024 * 1024 } }))
+  async uploadImage(@Param("id") id: string, @UploadedFile() file: Express.Multer.File) {
+    if (!file) throw new BadRequestException("Keine Datei angegeben");
+    const allowed = ["image/jpeg", "image/png", "image/webp", "image/gif"];
+    if (!allowed.includes(file.mimetype)) {
+      throw new BadRequestException("Nur JPEG, PNG, WebP und GIF sind erlaubt");
+    }
+    try {
+      const item = await this.itemsService.uploadImage(id, file);
+      return { ...item, alternateCodes: item.codes ? item.codes.map(c => c.code) : [] };
+    } catch (error) {
+      if (error instanceof NotFoundException) throw error;
+      this.logger.error(`Fehler beim Bild-Upload: ${error instanceof Error ? error.message : String(error)}`);
+      throw new InternalServerErrorException("Bild konnte nicht gespeichert werden");
+    }
+  }
+
+  @Delete(":id/image")
+  @Permissions("items.edit")
+  async deleteImage(@Param("id") id: string) {
+    try {
+      const item = await this.itemsService.deleteImage(id);
+      return { ...item, alternateCodes: item.codes ? item.codes.map(c => c.code) : [] };
+    } catch (error) {
+      if (error instanceof NotFoundException) throw error;
+      throw new InternalServerErrorException("Bild konnte nicht gelöscht werden");
+    }
+  }
+
+  @Get(":id/image")
+  @Permissions("items.view")
+  async getImage(@Param("id") id: string, @Res() res: Response) {
+    const item = await this.itemsService.findOne(id);
+    if (!item?.imagePath) throw new NotFoundException("Kein Bild vorhanden");
+    const filepath = this.itemsService.getImageFilePath(item.imagePath);
+    try {
+      return res.sendFile(filepath);
+    } catch {
+      throw new NotFoundException("Bilddatei nicht gefunden");
     }
   }
 

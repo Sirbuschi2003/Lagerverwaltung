@@ -55,9 +55,11 @@ services:
       # HOST_PROJECT_PATH: Pfad auf dem HOST-System (Fallback falls Docker-Label-Erkennung fehlschlägt)
       # Wird normalerweise automatisch via "com.docker.compose.project.working_dir" Label erkannt.
       HOST_PROJECT_PATH: ${HOST_PROJECT_PATH:-}
+      ITEM_IMAGE_PATH: /app/item-images
     volumes:
       - ${BACKUP_STORAGE_HOST_PATH:-backups_data}:/app/backups
       - ${PURCHASE_ORDER_STORAGE_HOST_PATH:-purchase_orders_data}:/app/purchase-orders
+      - ${ITEM_IMAGE_STORAGE_HOST_PATH:-item_images_data}:/app/item-images
       # Docker-Socket fuer automatisches Update (In-App Update-Funktion)
       - /var/run/docker.sock:/var/run/docker.sock
       # Compose-Datei fuer Update-Skript einbinden
@@ -123,5 +125,6 @@ volumes:
   mysql_data:
   backups_data:
   purchase_orders_data:
+  item_images_data:
   caddy_data:
   caddy_config:
