@@ -3,6 +3,15 @@
 Alle Änderungen werden hier dokumentiert.
 
 
+## [2.1.3] – 2026-03-31
+
+### Neue Funktionen
+- **Inventur-Aufbewahrungspflicht (§ 257 HGB / § 147 AO)** — Abgeschlossene Inventuren (Status: Finalisiert) können nicht mehr manuell gelöscht werden; das Backend gibt `403 Forbidden` mit Hinweis auf die gesetzliche Grundlage zurück
+- **Automatische Löschung nach 10 Jahren** — Täglicher Cron-Job (03:00 Uhr) löscht finalisierte Inventuren automatisch sobald die gesetzliche Aufbewahrungsfrist abgelaufen ist; Löschvorgang wird im System-Log protokolliert
+- **Löschdatum in der Inventur-Liste** — Finalisierte Inventuren zeigen nun einen Info-Chip mit dem errechneten automatischen Löschdatum (Finalisierungsdatum + 10 Jahre); Tooltip erläutert die gesetzliche Grundlage
+
+---
+
 ## [2.1.2] – 2026-03-30
 
 ### Bugfixes

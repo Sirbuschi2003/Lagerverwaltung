@@ -1,4 +1,5 @@
-﻿import { Injectable, NotFoundException, ConflictException, BadRequestException } from "@nestjs/common";
+﻿import { Injectable, NotFoundException, ConflictException, BadRequestException, ForbiddenException, Logger } from "@nestjs/common";
+import { Cron, CronExpression } from "@nestjs/schedule";
 import { ConfigService } from "@nestjs/config";
 import { InjectRepository } from "@nestjs/typeorm";
 import { Repository } from "typeorm";
@@ -231,8 +232,41 @@ export class InventoryService {
     if (!session) {
       throw new NotFoundException("Inventory session not found");
     }
+    if (session.status === InventorySessionStatus.FINALIZED) {
+      throw new ForbiddenException(
+        "Abgeschlossene Inventuren unterliegen der gesetzlichen Aufbewahrungspflicht (§ 257 HGB, § 147 AO) " +
+        "und können nicht manuell gelöscht werden. Die automatische Löschung erfolgt nach 10 Jahren.",
+      );
+    }
     await this.sessionsRepository.remove(session);
     return { success: true };
+  }
+
+  /**
+   * Löscht abgeschlossene (FINALIZED) Inventuren automatisch nach Ablauf der
+   * gesetzlichen Aufbewahrungsfrist von 10 Jahren (§ 257 HGB, § 147 AO).
+   * Läuft täglich um 03:00 Uhr.
+   */
+  private readonly logger = new Logger(InventoryService.name);
+
+  @Cron(CronExpression.EVERY_DAY_AT_3AM)
+  async deleteExpiredInventorySessions() {
+    const cutoff = new Date();
+    cutoff.setFullYear(cutoff.getFullYear() - 10);
+
+    const expired = await this.sessionsRepository
+      .createQueryBuilder("s")
+      .where("s.status = :status", { status: InventorySessionStatus.FINALIZED })
+      .andWhere("s.finalizedAt < :cutoff", { cutoff })
+      .getMany();
+
+    if (expired.length === 0) return;
+
+    await this.sessionsRepository.remove(expired);
+    this.logger.log(
+      `Aufbewahrungsfrist abgelaufen: ${expired.length} Inventur(en) automatisch gelöscht ` +
+      `(finalizedAt < ${cutoff.toISOString().slice(0, 10)}).`,
+    );
   }
   /**
    * Entfernt einen Artikel komplett aus dem Fahrzeugbestand (l�scht InventoryLine f�r vehicleId+itemId)

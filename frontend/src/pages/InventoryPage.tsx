@@ -1589,7 +1589,21 @@ const InventoryPage = () => {
                         color="default"
                       />
                     )}
-                    {canManageInventoryNonTech && (
+                    {session.status === 'FINALIZED' && session.finalizedAt && (() => {
+                      const deletionDate = new Date(session.finalizedAt);
+                      deletionDate.setFullYear(deletionDate.getFullYear() + 10);
+                      return (
+                        <Tooltip title={`Gesetzliche Aufbewahrungspflicht (§ 257 HGB): Automatische Löschung am ${deletionDate.toLocaleDateString('de-DE')}`}>
+                          <Chip
+                            label={`Löschung: ${deletionDate.toLocaleDateString('de-DE')}`}
+                            size="small"
+                            variant="outlined"
+                            color="info"
+                          />
+                        </Tooltip>
+                      );
+                    })()}
+                    {canManageInventoryNonTech && session.status !== 'FINALIZED' && (
                       <IconButton
                         size="small"
                         color="error"

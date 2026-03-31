@@ -3,6 +3,7 @@ import { APP_GUARD } from "@nestjs/core";
 import { ConfigModule } from "@nestjs/config";
 import { TypeOrmModule } from "@nestjs/typeorm";
 import { ThrottlerModule, ThrottlerGuard } from "@nestjs/throttler";
+import { ScheduleModule } from "@nestjs/schedule";
 import { AppController } from "./app.controller";
 import configuration from "./config/configuration";
 import { DatabaseConfigService } from "./config/database-config.service";
@@ -35,6 +36,7 @@ import { MaintenanceModule } from "./modules/maintenance/maintenance.module";
     }),
     // Globales Rate-Limiting: 100 Anfragen pro Minute (ueberschreibbar per @Throttle())
     ThrottlerModule.forRoot([{ ttl: 60000, limit: 100 }]),
+    ScheduleModule.forRoot(),
     TypeOrmModule.forRootAsync({
       useClass: DatabaseConfigService,
     }),
