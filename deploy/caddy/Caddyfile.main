@@ -2,21 +2,21 @@
     default_sni {$APP_HOST}
 }
 
-# Proxy-Snippet: Root-CA-Download + API + Frontend
+# Proxy-Snippet: Zertifikat-Download + API + Frontend
 (app_proxy) {
     encode zstd gzip
 
-    # Root-CA-Zertifikat herunterladen (fuer Handy-Installation, PWA-Trust)
-    @rootcert path /rootCA-local.crt /rootCA-local.cer
+    # Zertifikat zum Herunterladen anbieten (fuer Geraete-Installation)
+    @rootcert path /rootCA-local.crt /rootCA-local.cer /server.crt /server.cer
     handle @rootcert {
         header {
             Content-Type "application/x-x509-ca-cert"
-            Content-Disposition "attachment; filename=\"rootCA-local.cer\""
+            Content-Disposition "attachment; filename=\"lagerverwaltung.cer\""
             X-Content-Type-Options "nosniff"
             Cache-Control "no-store"
         }
-        root * /data/caddy/pki/authorities/local
-        rewrite * /root.crt
+        root * /certs
+        rewrite * /server.crt
         file_server
     }
 
@@ -30,26 +30,26 @@
     }
 }
 
-# HTTP: Root-CA-Download erlauben, alles andere auf HTTPS weiterleiten
+# HTTP: Zertifikat-Download erlauben, alles andere auf HTTPS weiterleiten
 http://{$APP_HOST} {
-    @rootcert path /rootCA-local.crt /rootCA-local.cer
+    @rootcert path /rootCA-local.crt /rootCA-local.cer /server.crt /server.cer
     handle @rootcert {
         header {
             Content-Type "application/x-x509-ca-cert"
-            Content-Disposition "attachment; filename=\"rootCA-local.cer\""
+            Content-Disposition "attachment; filename=\"lagerverwaltung.cer\""
             X-Content-Type-Options "nosniff"
             Cache-Control "no-store"
         }
-        root * /data/caddy/pki/authorities/local
-        rewrite * /root.crt
+        root * /certs
+        rewrite * /server.crt
         file_server
     }
     redir https://{$APP_HOST}{uri} permanent
 }
 
-# HTTPS: Caddy interne CA (selbst signiert, lokal vertrauenswuerdig nach CA-Installation)
+# HTTPS: Festes selbst-signiertes Zertifikat (einmalig generiert, aendert sich nie)
 https://{$APP_HOST} {
-    tls internal
+    tls /certs/server.crt /certs/server.key
 
     header {
         Strict-Transport-Security "max-age=31536000; includeSubDomains"

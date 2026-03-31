@@ -106,9 +106,9 @@ services:
       APP_HOST: ${APP_HOST:-localhost}
     volumes:
       - ./deploy/caddy/Caddyfile.main:/etc/caddy/Caddyfile:ro
+      - ./deploy/caddy:/certs:ro
       - caddy_data:/data
       - caddy_config:/config
-      - ./caddy-pki:/data/caddy/pki/authorities/local:rw
     networks:
       lagerverwaltung:
       lan02:

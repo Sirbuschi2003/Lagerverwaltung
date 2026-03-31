@@ -6,6 +6,16 @@ Alle Änderungen werden hier dokumentiert.
 
 ## 2026-03-31
 
+### [2.2.3] – Zertifikat-Fix: Stabiles selbst-signiertes Zertifikat
+
+#### Neue Funktionen
+- **Einmaliges selbst-signiertes Zertifikat (`gen-cert.sh`)** — Zertifikat wird einmalig auf der NAS generiert (`sh deploy/caddy/gen-cert.sh`) und ist 10 Jahre gültig. Ändert sich nie mehr, solange `gen-cert.sh` nicht erneut ausgeführt wird. Auf allen Geräten einmalig installieren.
+- **Caddy: festes Zertifikat statt `tls internal`** — Caddy verwendet jetzt `tls /certs/server.crt /certs/server.key` (eingebundene Dateien) statt der automatisch verwalteten internen CA. Kein CA-Neugenerierung mehr nach Updates.
+- **Zertifikats-Download weiterhin verfügbar** — `https://<IP>/rootCA-local.crt` und `/server.crt` liefern das Zertifikat zum Installieren auf Geräten.
+
+#### Bugfixes
+- **Zertifikat ändert sich nach jedem Update** — Caddy's `tls internal` speicherte die CA im `caddy_data`-Volume. Bei Updates konnte das Volume neu erstellt werden → neue CA → alle Geräte mussten das Zertifikat neu installieren. Mit dem festen Zertifikat passiert das nicht mehr.
+
 ### [2.2.2] – Update-Mechanismus komplett überarbeitet
 
 #### Neue Funktionen

@@ -3,11 +3,15 @@
 .env.local
 .env.*.local
 
-# Zertifikate & Schlüssel
+# Zertifikate & Schlüssel (global ignorieren, aber deploy/caddy/ explizit erlauben)
 *.crt
 *.cer
 *.key
 *.pem
+!deploy/caddy/*.crt
+!deploy/caddy/*.cer
+!deploy/caddy/*.key
+!deploy/caddy/*.pem
 caddy-pki/
 
 # Datenbankdaten & Backups
