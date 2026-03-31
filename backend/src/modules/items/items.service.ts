@@ -3,7 +3,7 @@ import { InjectRepository } from "@nestjs/typeorm";
 import { In, Repository } from "typeorm";
 import * as fs from "fs/promises";
 import * as path from "path";
-import * as sharp from "sharp";
+import sharp from "sharp";
 
 import { CreateItemDto } from "./dto/create-item.dto";
 import { UpdateItemDto } from "./dto/update-item.dto";
@@ -860,7 +860,7 @@ export class ItemsService {
     const filename = `${id}.jpg`;
     const filepath = path.join(this.imageDir, filename);
 
-    await (sharp as any)(file.buffer)
+    await sharp(file.buffer)
       .resize(800, 800, { fit: "inside", withoutEnlargement: true })
       .jpeg({ quality: 82 })
       .toFile(filepath);
