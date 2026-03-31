@@ -15,11 +15,13 @@ import {
 import type { MovementDto } from "../../utils/api";
 import { fetchMovementHistory } from "../../utils/api";
 import useAuthStore from "../../store/useAuthStore";
+import useOfflineQueue from "../../store/useOfflineQueue";
 
 const DashboardRecentMovementsWidget: React.FC = () => {
   const userId = useAuthStore((state) => state.user?.id);
   const [movements, setMovements] = useState<MovementDto[]>([]);
   const [loading, setLoading] = useState(false);
+  const pendingMovements = useOfflineQueue((state) => state.movements);
 
   useEffect(() => {
     if (!userId) return;
@@ -53,13 +55,15 @@ const DashboardRecentMovementsWidget: React.FC = () => {
       .finally(() => setLoading(false));
   }, [userId]);
 
+  const pendingForUser = pendingMovements.filter((m) => !userId || !m.userId || m.userId === userId);
+
   return (
     <Paper sx={{ p: 2 }}>
       <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", mb: 1.5 }}>
         <Typography variant="h6">Letzte Buchungen</Typography>
         {loading && <CircularProgress size={18} />}
       </Box>
-      {movements.length === 0 && !loading ? (
+      {movements.length === 0 && pendingForUser.length === 0 && !loading ? (
         <Typography variant="body2" color="text.secondary">
           Noch keine Buchungen vorhanden.
         </Typography>
@@ -75,6 +79,35 @@ const DashboardRecentMovementsWidget: React.FC = () => {
               </TableRow>
             </TableHead>
             <TableBody>
+              {pendingForUser.map((m) => (
+                <TableRow key={`pending-${m.timestamp}`} sx={{ bgcolor: "action.hover" }}>
+                  <TableCell>
+                    <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                      {m.code}
+                    </Typography>
+                    <Chip label="Ausstehend" size="small" color="warning" variant="outlined" sx={{ mt: 0.5, height: 16, fontSize: 10 }} />
+                  </TableCell>
+                  <TableCell>
+                    <Chip
+                      label={m.type === "CHECKIN" ? "Eingang" : "Ausgang"}
+                      color={m.type === "CHECKIN" ? "success" : "error"}
+                      size="small"
+                      variant="outlined"
+                    />
+                  </TableCell>
+                  <TableCell align="right">{m.quantity}</TableCell>
+                  <TableCell>
+                    <Typography variant="caption">
+                      {new Date(m.timestamp).toLocaleDateString("de-DE", {
+                        day: "2-digit",
+                        month: "2-digit",
+                        hour: "2-digit",
+                        minute: "2-digit",
+                      })}
+                    </Typography>
+                  </TableCell>
+                </TableRow>
+              ))}
               {movements.map((m) => (
                 <TableRow key={m.id}>
                   <TableCell>
