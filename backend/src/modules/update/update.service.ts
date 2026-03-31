@@ -221,14 +221,21 @@ export class UpdateService {
   /**
    * Führt einen Docker-Compose-Befehl aus. Erkennt automatisch ob
    * 'docker compose' (v2) oder 'docker-compose' (v1) verfügbar ist.
+   * composeFile: Pfad zur Compose-Datei INNERHALB des Containers (z.B. /workspace/docker-compose.main.yml)
    */
   private runCompose(
     projectPath: string,
     projectName: string,
     args: string[],
     onLog?: (line: string) => void,
+    composeFile?: string,
   ): Promise<boolean> {
     return new Promise((resolve) => {
+      // Compose-Datei: bevorzuge Container-internen Pfad (COMPOSE_FILE_PATH), Fallback auf Host-Pfad
+      const resolvedComposeFile = composeFile
+        || process.env.COMPOSE_FILE_PATH
+        || `/workspace/docker-compose.main.yml`;
+
       // Prüfe welche Compose-Variante verfügbar ist
       const detectCmd = `
         if docker compose version >/dev/null 2>&1; then
@@ -238,7 +245,7 @@ export class UpdateService {
         else
           echo "KEIN_COMPOSE" && exit 1
         fi
-        $DC -p "${projectName}" -f "${projectPath}/docker-compose.main.yml" --project-directory "${projectPath}" ${args.join(" ")} 2>&1
+        $DC -p "${projectName}" -f "${resolvedComposeFile}" --project-directory "${projectPath}" ${args.join(" ")} 2>&1
       `;
 
       const child = spawn("sh", ["-c", detectCmd], { stdio: ["ignore", "pipe", "pipe"] });
