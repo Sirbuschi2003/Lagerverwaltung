@@ -5,6 +5,9 @@ Alle Änderungen werden hier dokumentiert.
 
 ## [2.1.5] – 2026-03-31
 
+### Bugfixes
+- **In-App Update: Caddy startet nach Update nicht** — Root Cause: Der Helper-Container mountete das Projektverzeichnis als `/workspace`, docker-compose löste relative Pfade (`./deploy/caddy/Caddyfile.main`) daher zu `/workspace/...` auf. Auf dem Host existiert `/workspace` nicht → Caddy-Container blieb im Status "Created" hängen. Fix: Volume wird jetzt am echten Host-Pfad gemountet (`/volume1/docker/Lagerverwaltung:/volume1/docker/Lagerverwaltung`) und docker-compose mit diesem Pfad als Compose-File aufgerufen.
+
 ### Änderungen
 - **Update-Benachrichtigung im Header entfernt** — Der Chip "Update verfügbar" und der Badge-Punkt auf dem Avatar-Icon wurden entfernt. Updates werden weiterhin auf der Wartungsseite angezeigt und können dort eingespielt werden.
 

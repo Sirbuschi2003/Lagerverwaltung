@@ -196,16 +196,18 @@ export class UpdateService {
         // Alten Helper-Container entfernen falls vorhanden (verhindert Namenskonflikt)
         spawn("sh", ["-c", "docker rm -f lager-update-helper 2>/dev/null || true"], { stdio: "ignore" });
 
-        // Helper-Container startet als Sibling-Container unabhängig vom Backend.
-        // Wenn der Backend-Container neu gestartet wird, stirbt unser Prozess –
-        // der Helper läuft in einem eigenen Container weiter und führt up -d aus.
+        // Wichtig: Das Volume wird am GLEICHEN Pfad wie auf dem Host gemountet
+        // (z.B. /volume1/docker/Lagerverwaltung:/volume1/docker/Lagerverwaltung).
+        // Nur so löst docker-compose relative Pfade (./deploy/caddy/...) korrekt zu
+        // Host-Pfaden auf. Bei /workspace:/workspace würden die erzeugten Container
+        // /workspace/... als Host-Pfad bekommen, das auf dem Host nicht existiert.
         const helperCmd = [
           "docker run --rm -d",
           "-v /var/run/docker.sock:/var/run/docker.sock",
-          `-v ${hostProjectPath}:/workspace:ro`,  // HOST-Pfad → korrekt für Sibling-Container
+          `-v ${hostProjectPath}:${hostProjectPath}:ro`,
           "--name lager-update-helper",
           backendImage,
-          `sh -c "sleep 10 && docker-compose -p ${projectName} -f /workspace/docker-compose.main.yml up -d"`,
+          `sh -c "sleep 10 && docker-compose -p ${projectName} -f ${hostProjectPath}/docker-compose.main.yml up -d"`,
         ].join(" ");
 
         const helperChild = spawn("sh", ["-c", helperCmd], {
@@ -222,7 +224,7 @@ export class UpdateService {
             this.addLog("Versuche direkten Neustart (detached)…");
             const upChild = spawn(
               "sh",
-              ["-c", `docker-compose -p ${projectName} -f ${composeFile} up -d`],
+              ["-c", `docker-compose -p ${projectName} -f ${composeFile} --project-directory ${hostProjectPath} up -d`],
               { detached: true, stdio: "ignore" },
             );
             upChild.unref();
