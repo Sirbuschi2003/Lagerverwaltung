@@ -186,7 +186,7 @@ export class ItemsController {
 
   @Post(":id/image")
   @Permissions("items.edit")
-  @UseInterceptors(FileInterceptor("image", { storage: memoryStorage(), limits: { fileSize: 8 * 1024 * 1024 } }))
+  @UseInterceptors(FileInterceptor("image", { storage: memoryStorage(), limits: { fileSize: 25 * 1024 * 1024 } }))
   async uploadImage(@Param("id") id: string, @UploadedFile() file: Express.Multer.File) {
     if (!file) throw new BadRequestException("Keine Datei angegeben");
     const allowed = ["image/jpeg", "image/png", "image/webp", "image/gif"];
