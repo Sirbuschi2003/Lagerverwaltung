@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, NotFoundException, Param, Patch, Post, Query, Req, UseGuards, InternalServerErrorException, BadRequestException, Logger, Res, UseInterceptors, UploadedFile } from "@nestjs/common";
+import { Body, Controller, Delete, Get, NotFoundException, Param, Patch, Post, Query, Req, UseGuards, InternalServerErrorException, BadRequestException, Logger, Res, UseInterceptors, UploadedFile, Header } from "@nestjs/common";
 import { FileInterceptor } from "@nestjs/platform-express";
 import { memoryStorage } from "multer";
 import { plainToInstance } from "class-transformer";
@@ -15,6 +15,7 @@ import { Item } from "./entities/item.entity";
 import { JwtAuthGuard } from "../auth/guards/jwt-auth.guard";
 import { Permissions } from "../access-control/decorators/permissions.decorator";
 import { PermissionsGuard } from "../access-control/guards/permissions.guard";
+import { Public } from "../auth/decorators/public.decorator";
 import { SkipThrottle } from "@nestjs/throttler";
 
 @SkipThrottle()
@@ -216,7 +217,8 @@ export class ItemsController {
   }
 
   @Get(":id/image")
-  @Permissions("items.view")
+  @Public()
+  @Header("Cache-Control", "public, max-age=86400")
   async getImage(@Param("id") id: string, @Res() res: Response) {
     const item = await this.itemsService.findOne(id);
     if (!item?.imagePath) throw new NotFoundException("Kein Bild vorhanden");

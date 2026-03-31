@@ -2793,9 +2793,11 @@ Import erfolgreich! Die Artikel sind jetzt verfügbar.`;
                             if (!file || !editingId) return;
                             setImageUploading(true);
                             try {
-                              await uploadItemImage(editingId, file);
+                              const updated = await uploadItemImage(editingId, file);
+                              useItemsStore.setState((s: any) => ({
+                                items: s.items.map((it: any) => it.id === editingId ? { ...it, imagePath: updated.imagePath } : it),
+                              }));
                               setImageKey((k) => k + 1);
-                              await loadItems({ force: true });
                             } catch {
                               setError("Bild konnte nicht hochgeladen werden.");
                             } finally {
@@ -2816,8 +2818,10 @@ Import erfolgreich! Die Artikel sind jetzt verfügbar.`;
                             setImageUploading(true);
                             try {
                               await deleteItemImage(editingId);
+                              useItemsStore.setState((s: any) => ({
+                                items: s.items.map((it: any) => it.id === editingId ? { ...it, imagePath: null } : it),
+                              }));
                               setImageKey((k) => k + 1);
-                              await loadItems({ force: true });
                             } catch {
                               setError("Bild konnte nicht gelöscht werden.");
                             } finally {
