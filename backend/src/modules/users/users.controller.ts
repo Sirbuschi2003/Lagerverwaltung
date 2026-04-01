@@ -1,4 +1,9 @@
-﻿import { Body, Controller, Delete, Get, Param, Patch, Post, Put, UseGuards, ForbiddenException, BadRequestException } from "@nestjs/common";
+﻿import { Body, Controller, Delete, Get, Param, Patch, Post, Put, Req, UseGuards, ForbiddenException, BadRequestException } from "@nestjs/common";
+import type { Request } from "express";
+
+interface UsersRequest extends Request {
+  user?: { id?: string; role?: string; branchId?: string | null };
+}
 
 import { CurrentUser } from "../auth/decorators/current-user.decorator";
 import { Roles } from "../auth/decorators/roles.decorator";
@@ -25,8 +30,8 @@ export class UsersController {
   @Get()
   @Roles("MANAGER")
   @Permissions("users.view")
-  findAll() {
-    return this.usersService.findAll();
+  findAll(@Req() req: UsersRequest) {
+    return this.usersService.findAll(req.user?.branchId);
   }
 
   @Get("me")
@@ -46,8 +51,8 @@ export class UsersController {
 
   @Get("technicians")
   @Roles("WAREHOUSE", "MANAGER")
-  findTechnicians() {
-    return this.usersService.findTechnicians();
+  findTechnicians(@Req() req: UsersRequest) {
+    return this.usersService.findTechnicians(req.user?.branchId);
   }
 
   @Get(":id")

@@ -17,6 +17,10 @@ import {
 import { FileInterceptor } from "@nestjs/platform-express";
 import { Request } from "express";
 
+interface InventoryRequest extends Request {
+  user?: { id?: string; role?: string; username?: string; vehicleId?: string | null; branchId?: string | null };
+}
+
 import { Roles } from "../auth/decorators/roles.decorator";
 import { JwtAuthGuard } from "../auth/guards/jwt-auth.guard";
 import { RolesGuard } from "../auth/guards/roles.guard";
@@ -49,14 +53,14 @@ export class InventoryController {
 
   @Get()
   @Roles("MANAGER", "WAREHOUSE", "TECHNICIAN")
-  findSessions() {
-    return this.inventoryService.findSessions();
+  findSessions(@Req() req: InventoryRequest) {
+    return this.inventoryService.findSessions(req.user?.branchId);
   }
 
   @Post("start")
   @Roles("MANAGER")
-  startSession(@Body() dto: StartInventoryDto) {
-    return this.inventoryService.startSession(dto);
+  startSession(@Body() dto: StartInventoryDto, @Req() req: InventoryRequest) {
+    return this.inventoryService.startSession({ ...dto, branchId: req.user?.branchId });
   }
 
   @Post("line")

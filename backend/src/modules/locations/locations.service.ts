@@ -18,10 +18,14 @@ export class LocationsService {
     private readonly repository: Repository<Location>,
   ) {}
 
-  async findAll(params?: { type?: string; parentId?: string | null; includeVehicles?: boolean }) {
+  async findAll(params?: { type?: string; parentId?: string | null; includeVehicles?: boolean; branchId?: string | null }) {
     const qb = this.repository.createQueryBuilder("location")
       .leftJoinAndSelect("location.parent", "parent")
       .leftJoinAndSelect("location.vehicle", "vehicle");
+
+    if (params?.branchId) {
+      qb.andWhere("location.branchId = :branchId", { branchId: params.branchId });
+    }
 
     if (params?.type) {
       qb.andWhere("location.type = :type", { type: params.type });
@@ -52,7 +56,7 @@ export class LocationsService {
     return location;
   }
 
-  async create(data: { type: string; code?: string; name?: string; parentId?: string }) {
+  async create(data: { type: string; code?: string; name?: string; parentId?: string; branchId?: string | null }) {
     if (data.type === "VEHICLE") {
       throw new BadRequestException("Vehicle locations are managed by the system.");
     }
@@ -82,6 +86,7 @@ export class LocationsService {
       name: data.name?.trim() || null,
       parent,
       vehicle: null,
+      branchId: data.branchId ?? null,
     });
     return this.repository.save(entity);
   }
@@ -216,6 +221,7 @@ export class LocationsService {
       code: vehicle.licensePlate?.trim() || vehicle.id,
       name: vehicle.description?.trim() || null,
       vehicle,
+      branchId: vehicle.branchId ?? null,
     });
     return this.repository.save(entity);
   }

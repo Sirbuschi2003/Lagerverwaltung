@@ -109,6 +109,7 @@ export class AuthService {
       username: user.username,
       role: user.role,
       displayName: user.displayName,
+      branchId: user.branchId ?? null,
     };
 
     const refreshPayload = { ...payload, tokenType: "refresh" };
@@ -146,6 +147,7 @@ export class AuthService {
         username: user.username,
         role: user.role,
         displayName: user.displayName,
+        branchId: user.branchId ?? null,
       };
       const refreshPayload = { ...payload, tokenType: "refresh" };
       const refreshExpiresIn =
@@ -343,6 +345,7 @@ export class AuthService {
       role: user.role,
       email: user.email ?? null,
       vehicleId: user.vehicleId ?? null,
+      branchId: user.branchId ?? null,
       permissions: permissionBundle.permissions,
       permissionOverrides: permissionBundle.overrides,
       permissionDenials: permissionBundle.denials,

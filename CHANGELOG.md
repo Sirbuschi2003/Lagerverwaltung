@@ -6,6 +6,19 @@ Alle Änderungen werden hier dokumentiert.
 
 ## 2026-04-01
 
+### [2.2.13] – Niederlassungen (Multi-Branch)
+
+#### Neue Funktionen
+- **Niederlassungs-Architektur** — Das System unterstützt jetzt mehrere Niederlassungen (Standorte). Jede Niederlassung hat vollständig isolierte Daten: eigene Artikel, Fahrzeuge, Lagerorte, Lieferanten, Benutzer, Bestellungen und Inventuren.
+- **Niederlassungsnummer** — Jede Niederlassung kann eine externe Kennung (z.B. `400` für Hannover, `100` für Essen) erhalten, um die Integration mit anderen Systemen zu ermöglichen.
+- **Automatische Datentrennung** — Alle API-Abfragen werden automatisch auf die eigene Niederlassung des angemeldeten Benutzers beschränkt. Ein Techniker aus Hannover sieht nur Hannoveraner Daten.
+- **SUPER_ADMIN sieht alle Niederlassungen** — Benutzer ohne zugewiesene Niederlassung (`branchId = null`) haben Zugriff auf alle Daten aller Niederlassungen.
+- **Verwaltungsseite** — Manager können unter Einstellungen → Niederlassungen neue Standorte anlegen, bearbeiten und deaktivieren.
+- **JWT enthält branchId** — Das Login-Token trägt die Niederlassungs-ID des Benutzers, sodass jede API-Anfrage korrekt gefiltert wird.
+- **Migration mit Standardniederlassung** — Alle bestehenden Datensätze werden automatisch der „Hauptniederlassung" zugeordnet. Keine Datenverluste beim Update.
+
+---
+
 ### [2.2.12] – Kamera-Scanner: kein Mehrfachscan bei langem Halten
 
 #### Bugfixes

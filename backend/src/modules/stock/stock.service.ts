@@ -150,23 +150,32 @@ export class StockService {
 
   private filterStockLevelsByUser(
     levels: StockLevel[],
-    user?: { role?: string; vehicleId?: string | null },
+    user?: { role?: string; vehicleId?: string | null; branchId?: string | null },
   ): StockLevel[] {
-    if (!user?.role) return levels;
+    let filtered = levels;
+    // Branch-Filter: Nur Bestände der eigenen Niederlassung (via item.branchId oder vehicle.branchId)
+    if (user?.branchId) {
+      filtered = filtered.filter((l) => {
+        const itemBranch = (l.item as any)?.branchId ?? null;
+        const vehicleBranch = (l.vehicle as any)?.branchId ?? null;
+        return itemBranch === user.branchId || vehicleBranch === user.branchId;
+      });
+    }
+    if (!user?.role) return filtered;
     if (user.role === "TECHNICIAN") {
       if (!user.vehicleId) return [];
-      return levels.filter((l) => l.vehicle?.id === user.vehicleId);
+      return filtered.filter((l) => l.vehicle?.id === user.vehicleId);
     }
     if (user.role === "WAREHOUSE") {
-      return levels.filter((l) => l.vehicle === null);
+      return filtered.filter((l) => l.vehicle === null);
     }
-    return levels;
+    return filtered;
   }
 
-  async findDashboardSnapshot(user?: { role?: string; vehicleId?: string | null }) {
+  async findDashboardSnapshot(user?: { role?: string; vehicleId?: string | null; branchId?: string | null }) {
     try {
       const [allStockLevels, totalItems, openInventorySessions] = await Promise.all([
-        this.stockLevelsRepository.find(),
+        this.stockLevelsRepository.find({ relations: ["item", "vehicle"] }),
         this.itemsService.countItems(),
         this.inventorySessionRepository.count({
           where: [
@@ -192,10 +201,10 @@ export class StockService {
     }
   }
 
-  async findBelowTargetItems(user?: { role?: string; vehicleId?: string | null }) {
+  async findBelowTargetItems(user?: { role?: string; vehicleId?: string | null; branchId?: string | null }) {
     try {
       const allStockLevels = await this.stockLevelsRepository.find({
-        relations: ["vehicle", "location"],
+        relations: ["item", "vehicle", "location"],
       });
 
       const stockLevels = this.filterStockLevelsByUser(allStockLevels, user);

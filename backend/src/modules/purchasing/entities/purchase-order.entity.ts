@@ -2,6 +2,7 @@ import {
   Column,
   CreateDateColumn,
   Entity,
+  JoinColumn,
   ManyToOne,
   OneToMany,
   PrimaryGeneratedColumn,
@@ -10,6 +11,7 @@ import {
 
 import { Supplier } from "../../suppliers/entities/supplier.entity";
 import { PurchaseOrderLine } from "./purchase-order-line.entity";
+import { Branch } from "../../branches/entities/branch.entity";
 
 export const PURCHASE_ORDER_STATUSES = ["DRAFT", "ORDERED", "RECEIVED", "CANCELLED", "ARCHIVED"] as const;
 export type PurchaseOrderStatus = (typeof PURCHASE_ORDER_STATUSES)[number];
@@ -39,6 +41,13 @@ export class PurchaseOrder {
 
   @OneToMany(() => PurchaseOrderLine, (line) => line.order, { cascade: true, eager: true })
   lines!: PurchaseOrderLine[];
+
+  @Column({ type: "char", length: 36, nullable: true })
+  branchId!: string | null;
+
+  @ManyToOne(() => Branch, { nullable: true, onDelete: "RESTRICT", eager: false })
+  @JoinColumn({ name: "branchId" })
+  branch!: Branch | null;
 
   @CreateDateColumn()
   createdAt!: Date;

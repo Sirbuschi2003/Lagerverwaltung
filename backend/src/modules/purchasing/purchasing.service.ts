@@ -75,7 +75,7 @@ export class PurchasingService {
     this.suggestionsCache = null;
   }
 
-  async findAll(params?: PurchaseOrderQueryParams) {
+  async findAll(params?: PurchaseOrderQueryParams & { branchId?: string | null }) {
     const sortBy = params?.sortBy ?? "createdAt";
     const sortDir = params?.sortDir === "ASC" ? "ASC" : "DESC";
 
@@ -84,6 +84,10 @@ export class PurchasingService {
       .leftJoinAndSelect("order.supplier", "supplier")
       .leftJoinAndSelect("order.lines", "line")
       .leftJoinAndSelect("line.item", "item");
+
+    if (params?.branchId) {
+      qb.andWhere("order.branchId = :branchId", { branchId: params.branchId });
+    }
 
     if (params?.status) {
       qb.andWhere("order.status = :status", { status: params.status });
@@ -129,6 +133,7 @@ export class PurchasingService {
     orderNumber?: string;
     note?: string;
     lines: Array<{ itemId: string; quantity: number; packSize?: number }>;
+    branchId?: string | null;
   }) {
     const supplier = await this.supplierRepository.findOne({ where: { id: payload.supplierId } });
     if (!supplier) {
@@ -168,6 +173,7 @@ export class PurchasingService {
       receivedAt: null,
       note: payload.note?.trim() || null,
       lines,
+      branchId: payload.branchId ?? null,
     });
 
     const saved = await this.ordersRepository.save(order);

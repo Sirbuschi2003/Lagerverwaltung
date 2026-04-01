@@ -113,14 +113,14 @@ export class ItemsService {
     private readonly loggingService: LoggingService,
   ) {}
 
-  async findAll(params?: { page?: number; limit?: number; search?: string; manufacturer?: string; productGroup?: string }) {
+  async findAll(params?: { page?: number; limit?: number; search?: string; manufacturer?: string; productGroup?: string; branchId?: string | null }) {
     try {
       const page = Math.max(1, Number(params?.page) || 1);
       // Höheres Limit zulassen, damit Offline-Sync den kompletten Artikelstamm holen kann
       const limit = Math.min(Math.max(1, Number(params?.limit) || 50), 200000);
-      
+
       this.logger.debug(`findAll called with page=${page}, limit=${limit}, search=${params?.search}`);
-      
+
       const qb = this.repository.createQueryBuilder("item")
         .leftJoinAndSelect("item.codes", "code")
         .leftJoinAndSelect("item.storageLocation", "storageLocation")
@@ -129,6 +129,10 @@ export class ItemsService {
         .orderBy("item.manufacturer", "ASC")
         .addOrderBy("item.productGroup", "ASC")
         .addOrderBy("item.description", "ASC");
+
+      if (params?.branchId) {
+        qb.andWhere("item.branchId = :branchId", { branchId: params.branchId });
+      }
 
       if (params?.search) {
         const term = params.search.trim();
@@ -336,8 +340,8 @@ export class ItemsService {
     }
   }
 
-  async create(dto: CreateItemDto): Promise<Item> {
-    const { alternateCodes, storageLocationId, supplierId, price, packSize, orderQuantity, currentQuantity: _currentQuantity, ...rest } = dto;
+  async create(dto: CreateItemDto & { branchId?: string | null }): Promise<Item> {
+    const { alternateCodes, storageLocationId, supplierId, price, packSize, orderQuantity, currentQuantity: _currentQuantity, branchId, ...rest } = dto;
     const exists = await this.repository.findOne({ where: { code: rest.code } });
     if (exists) {
       throw new Error('Artikelnummer/QR-Code bereits vergeben');
@@ -354,6 +358,7 @@ export class ItemsService {
       price: normalizedPrice,
       packSize: packSize !== undefined ? packSize : null,
       orderQuantity: orderQuantity !== undefined && Number(orderQuantity) > 0 ? orderQuantity : null,
+      branchId: branchId ?? null,
     });
     const codes = sanitizeCodes(alternateCodes);
     if (codes.length > 0) {

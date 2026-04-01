@@ -3,6 +3,7 @@ import {
   CreateDateColumn,
   Entity,
   Index,
+  JoinColumn,
   ManyToOne,
   OneToMany,
   PrimaryGeneratedColumn,
@@ -13,6 +14,7 @@ import { Transform } from "class-transformer";
 import { ItemCode } from "./item-code.entity";
 import { Location } from "../../locations/entities/location.entity";
 import { Supplier } from "../../suppliers/entities/supplier.entity";
+import { Branch } from "../../branches/entities/branch.entity";
 
 @Entity({ name: "items" })
 export class Item {
@@ -26,9 +28,16 @@ export class Item {
   })
   codes!: ItemCode[];
 
-  @Index({ unique: true })
+  // Unique pro Niederlassung (Index wird per Migration gesetzt)
   @Column({ type: "varchar", length: 120 })
   code!: string;
+
+  @Column({ type: "char", length: 36, nullable: true })
+  branchId!: string | null;
+
+  @ManyToOne(() => Branch, { nullable: true, onDelete: "RESTRICT", eager: false })
+  @JoinColumn({ name: "branchId" })
+  branch!: Branch | null;
 
   @Column({ type: "varchar", length: 255 })
   description!: string;

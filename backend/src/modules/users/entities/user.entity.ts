@@ -1,4 +1,5 @@
-import { Column, Entity, Index, PrimaryGeneratedColumn } from "typeorm";
+import { Column, Entity, Index, JoinColumn, ManyToOne, PrimaryGeneratedColumn } from "typeorm";
+import { Branch } from "../../branches/entities/branch.entity";
 
 // Legacy: kept for backward compatibility but not enforced
 export const USER_ROLES = ["TECHNICIAN", "WAREHOUSE", "MANAGER"] as const;
@@ -27,6 +28,14 @@ export class User {
 
   @Column({ type: "char", length: 36, nullable: true })
   vehicleId!: string | null;
+
+  @Column({ type: "char", length: 36, nullable: true })
+  branchId!: string | null;
+
+  @ManyToOne(() => Branch, { nullable: true, onDelete: "RESTRICT", eager: false })
+  @JoinColumn({ name: "branchId" })
+  branch!: Branch | null;
+
   @Column({ type: "int", nullable: true, default: 15 })
   refreshInterval!: number | null;
 

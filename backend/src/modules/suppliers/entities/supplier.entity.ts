@@ -2,19 +2,28 @@ import {
   Column,
   CreateDateColumn,
   Entity,
-  Index,
+  JoinColumn,
+  ManyToOne,
   PrimaryGeneratedColumn,
   UpdateDateColumn,
 } from "typeorm";
+import { Branch } from "../../branches/entities/branch.entity";
 
 @Entity({ name: "suppliers" })
 export class Supplier {
   @PrimaryGeneratedColumn("uuid")
   id!: string;
 
-  @Index({ unique: true })
+  // Unique pro Niederlassung (Index wird per Migration gesetzt)
   @Column({ type: "varchar", length: 255 })
   name!: string;
+
+  @Column({ type: "char", length: 36, nullable: true })
+  branchId!: string | null;
+
+  @ManyToOne(() => Branch, { nullable: true, onDelete: "RESTRICT", eager: false })
+  @JoinColumn({ name: "branchId" })
+  branch!: Branch | null;
 
   @Column({ type: "varchar", length: 255, nullable: true })
   addressLine1!: string | null;

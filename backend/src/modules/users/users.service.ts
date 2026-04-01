@@ -14,15 +14,15 @@ export class UsersService {
     private readonly repository: Repository<User>,
   ) {}
 
-  findAll(): Promise<User[]> {
-    return this.repository.find({ order: { displayName: "ASC" } });
+  findAll(branchId?: string | null): Promise<User[]> {
+    const where = branchId ? { branchId } : {};
+    return this.repository.find({ where, order: { displayName: "ASC" } });
   }
 
-  async findTechnicians(): Promise<Array<{ id: string; displayName: string; vehicleId: string | null }>> {
-    const technicians = await this.repository.find({
-      where: { role: "TECHNICIAN" },
-      order: { displayName: "ASC" },
-    });
+  async findTechnicians(branchId?: string | null): Promise<Array<{ id: string; displayName: string; vehicleId: string | null }>> {
+    const where: any = { role: "TECHNICIAN" };
+    if (branchId) where.branchId = branchId;
+    const technicians = await this.repository.find({ where, order: { displayName: "ASC" } });
     return technicians.map(t => ({
       id: t.id,
       displayName: t.displayName,
@@ -55,18 +55,21 @@ export class UsersService {
       email: dto.email ?? null,
       role: dto.role,
       vehicleId: dto.vehicleId ?? null,
+      branchId: dto.branchId ?? null,
     });
     return this.repository.save(entity);
   }
 
   async update(id: string, dto: UpdateUserDto): Promise<User> {
-    const entity = await this.repository.preload({
+    const updateData: any = {
       id,
       displayName: dto.displayName,
       email: dto.email ?? null,
       role: dto.role,
       vehicleId: dto.vehicleId ?? null,
-    });
+    };
+    if (dto.branchId !== undefined) updateData.branchId = dto.branchId;
+    const entity = await this.repository.preload(updateData);
 
     if (!entity) {
       throw new NotFoundException("User not found");

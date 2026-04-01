@@ -1,4 +1,9 @@
-﻿import { Body, Controller, Delete, Get, Param, Patch, Post, UseGuards } from "@nestjs/common";
+import { Body, Controller, Delete, Get, Param, Patch, Post, Req, UseGuards } from "@nestjs/common";
+import type { Request } from "express";
+
+interface VehiclesRequest extends Request {
+  user?: { id?: string; role?: string; branchId?: string | null };
+}
 
 import { Vehicle } from "./entities/vehicle.entity";
 import { VehiclesService } from "./vehicles.service";
@@ -13,8 +18,8 @@ export class VehiclesController {
 
   @Get()
   @Permissions("vehicles.view")
-  findAll(): Promise<Vehicle[]> {
-    return this.vehiclesService.findAll();
+  findAll(@Req() req: VehiclesRequest): Promise<Vehicle[]> {
+    return this.vehiclesService.findAll(req.user?.branchId);
   }
 
   @Get(":id")
@@ -25,8 +30,8 @@ export class VehiclesController {
 
   @Post()
   @Permissions("vehicles.create")
-  create(@Body() data: Pick<Vehicle, "licensePlate" | "description">) {
-    return this.vehiclesService.create(data);
+  create(@Body() data: Pick<Vehicle, "licensePlate" | "description">, @Req() req: VehiclesRequest) {
+    return this.vehiclesService.create(data, req.user?.branchId);
   }
 
   @Patch(":id")
@@ -41,4 +46,3 @@ export class VehiclesController {
     return this.vehiclesService.remove(id);
   }
 }
-

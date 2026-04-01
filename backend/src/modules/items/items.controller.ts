@@ -5,7 +5,7 @@ import { plainToInstance } from "class-transformer";
 import type { Request, Response } from "express";
 
 interface ItemsRequest extends Request {
-  user?: { id?: string; username?: string; role?: string };
+  user?: { id?: string; username?: string; role?: string; branchId?: string | null };
 }
 
 import { CreateItemDto } from "./dto/create-item.dto";
@@ -29,6 +29,7 @@ export class ItemsController {
   @Get()
   @Permissions("items.view")
   async findAll(
+    @Req() req: ItemsRequest,
     @Query("page") page?: string,
     @Query("limit") limit?: string,
     @Query("search") search?: string,
@@ -52,6 +53,7 @@ export class ItemsController {
         search,
         manufacturer,
         productGroup,
+        branchId: req.user?.branchId,
       });
 
       return {
@@ -80,10 +82,10 @@ export class ItemsController {
 
   @Post()
   @Permissions("items.create")
-  async create(@Body() dto: CreateItemDto) {
+  async create(@Body() dto: CreateItemDto, @Req() req: ItemsRequest) {
     try {
       this.logger.debug(`Erstelle neuen Artikel: ${dto.code}`);
-      return await this.itemsService.create(dto);
+      return await this.itemsService.create({ ...dto, branchId: req.user?.branchId });
     } catch (error) {
       this.logger.error(`Fehler beim Erstellen des Artikels: ${error instanceof Error ? error.message : String(error)}`);
       if (error instanceof Error && error.message.includes('bereits vergeben')) {

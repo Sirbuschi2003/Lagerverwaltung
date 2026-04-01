@@ -65,8 +65,10 @@ export class InventoryService {
     this.hmacSecret = `inventory-checksum-v1:${secret}`;
   }
 
-  findSessions() {
+  findSessions(branchId?: string | null) {
+    const where = branchId ? { branchId } : {};
     return this.sessionsRepository.find({
+      where,
       relations: ["lines", "vehicleStatuses", "vehicleStatuses.vehicle"],
       order: { startedAt: "DESC" },
     });
@@ -139,7 +141,7 @@ export class InventoryService {
     };
   }
 
-  async startSession(dto: StartInventoryDto) {
+  async startSession(dto: StartInventoryDto & { branchId?: string | null }) {
     const session = this.sessionsRepository.create({
       name: dto.name,
       createdBy: dto.createdBy,
@@ -147,6 +149,7 @@ export class InventoryService {
       startedAt: dto.startedAt ? new Date(dto.startedAt) : new Date(),
       completedAt: null,
       status: InventorySessionStatus.DRAFT,
+      branchId: dto.branchId ?? null,
     });
     return this.sessionsRepository.save(session);
   }

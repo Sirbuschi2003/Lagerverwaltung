@@ -1,4 +1,4 @@
-﻿import { Injectable, NotFoundException } from "@nestjs/common";
+import { Injectable, NotFoundException } from "@nestjs/common";
 import { InjectRepository } from "@nestjs/typeorm";
 import { Repository } from "typeorm";
 
@@ -13,20 +13,22 @@ export class VehiclesService {
     private readonly locationsService: LocationsService,
   ) {}
 
-  findAll(): Promise<Vehicle[]> {
-    return this.repository.find({ order: { licensePlate: "ASC" } });
+  findAll(branchId?: string | null): Promise<Vehicle[]> {
+    const where = branchId ? { branchId } : {};
+    return this.repository.find({ where, order: { licensePlate: "ASC" } });
   }
 
   findOne(id: string): Promise<Vehicle | null> {
     return this.repository.findOne({ where: { id } });
   }
 
-  async create(data: Pick<Vehicle, "licensePlate" | "description">): Promise<Vehicle> {
-    const exists = await this.repository.findOne({ where: { licensePlate: data.licensePlate } });
+  async create(data: Pick<Vehicle, "licensePlate" | "description">, branchId?: string | null): Promise<Vehicle> {
+    const where = branchId ? { licensePlate: data.licensePlate, branchId } : { licensePlate: data.licensePlate };
+    const exists = await this.repository.findOne({ where });
     if (exists) {
       throw new Error('Kennzeichen bereits vergeben');
     }
-    const entity = this.repository.create(data);
+    const entity = this.repository.create({ ...data, branchId: branchId ?? null });
     const saved = await this.repository.save(entity);
     await this.locationsService.ensureVehicleLocation(saved);
     return saved;

@@ -1,4 +1,9 @@
-import { Body, Controller, Delete, Get, Param, Patch, Post, UseGuards } from "@nestjs/common";
+import { Body, Controller, Delete, Get, Param, Patch, Post, Req, UseGuards } from "@nestjs/common";
+import type { Request } from "express";
+
+interface SuppliersRequest extends Request {
+  user?: { id?: string; role?: string; branchId?: string | null };
+}
 
 import { JwtAuthGuard } from "../auth/guards/jwt-auth.guard";
 import { Permissions } from "../access-control/decorators/permissions.decorator";
@@ -14,8 +19,8 @@ export class SuppliersController {
 
   @Get()
   @Permissions("suppliers.view")
-  findAll() {
-    return this.suppliersService.findAll();
+  findAll(@Req() req: SuppliersRequest) {
+    return this.suppliersService.findAll(req.user?.branchId);
   }
 
   @Get(":id")
@@ -26,8 +31,8 @@ export class SuppliersController {
 
   @Post()
   @Permissions("suppliers.create")
-  create(@Body() dto: CreateSupplierDto) {
-    return this.suppliersService.create(dto);
+  create(@Body() dto: CreateSupplierDto, @Req() req: SuppliersRequest) {
+    return this.suppliersService.create(dto, req.user?.branchId);
   }
 
   @Patch(":id")

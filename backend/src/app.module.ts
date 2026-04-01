@@ -26,6 +26,7 @@ import { SuppliersModule } from "./modules/suppliers/suppliers.module";
 import { PurchasingModule } from "./modules/purchasing/purchasing.module";
 import { UpdateModule } from "./modules/update/update.module";
 import { MaintenanceModule } from "./modules/maintenance/maintenance.module";
+import { BranchesModule } from "./modules/branches/branches.module";
 
 @Module({
   imports: [
@@ -59,6 +60,7 @@ import { MaintenanceModule } from "./modules/maintenance/maintenance.module";
     PurchasingModule,
     UpdateModule,
     MaintenanceModule,
+    BranchesModule,
   ],
   controllers: [AppController],
   providers: [

@@ -22,6 +22,7 @@ interface StockRequestUser {
   username?: string;
   role?: string;
   vehicleId?: string | null;
+  branchId?: string | null;
 }
 
 interface StockRequest extends Request {

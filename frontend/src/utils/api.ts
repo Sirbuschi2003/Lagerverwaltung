@@ -104,9 +104,20 @@ export interface AuthProfileDto {
   role: string;
   email?: string | null;
   vehicleId?: string | null;
+  branchId?: string | null;
   refreshInterval?: number;
   permissions: string[];
   permissionOverrides?: string[];
+}
+
+export interface BranchDto {
+  id: string;
+  externalCode?: string | null;
+  name: string;
+  address?: string | null;
+  active: boolean;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface AuthResponse {
@@ -486,6 +497,34 @@ export const updateVehicle = async (
 
 export const deleteVehicle = async (id: string): Promise<void> => {
   await api.delete(`/vehicles/${id}`);
+};
+
+// ── Branches ─────────────────────────────────────────────────────────────────
+export const fetchBranches = async (): Promise<BranchDto[]> => {
+  const response = await api.get<BranchDto[]>("/branches");
+  return response.data;
+};
+
+export const createBranch = async (payload: {
+  name: string;
+  externalCode?: string | null;
+  address?: string | null;
+  active?: boolean;
+}): Promise<BranchDto> => {
+  const response = await api.post<BranchDto>("/branches", payload);
+  return response.data;
+};
+
+export const updateBranch = async (
+  id: string,
+  payload: Partial<{ name: string; externalCode: string | null; address: string | null; active: boolean }>,
+): Promise<BranchDto> => {
+  const response = await api.patch<BranchDto>(`/branches/${id}`, payload);
+  return response.data;
+};
+
+export const deleteBranch = async (id: string): Promise<void> => {
+  await api.delete(`/branches/${id}`);
 };
 
 export default api;

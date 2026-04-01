@@ -11,15 +11,16 @@ export class SuppliersService {
     private readonly repository: Repository<Supplier>,
   ) {}
 
-  findAll(): Promise<Supplier[]> {
-    return this.repository.find({ order: { name: "ASC" } });
+  findAll(branchId?: string | null): Promise<Supplier[]> {
+    const where = branchId ? { branchId } : {};
+    return this.repository.find({ where, order: { name: "ASC" } });
   }
 
   findOne(id: string): Promise<Supplier | null> {
     return this.repository.findOne({ where: { id } });
   }
 
-  async create(data: Partial<Supplier>): Promise<Supplier> {
+  async create(data: Partial<Supplier>, branchId?: string | null): Promise<Supplier> {
     const entity = this.repository.create({
       name: data.name?.trim(),
       addressLine1: data.addressLine1?.trim() || null,
@@ -32,6 +33,7 @@ export class SuppliersService {
       customerNumber: data.customerNumber?.trim() || null,
       phone: data.phone?.trim() || null,
       notes: data.notes?.trim() || null,
+      branchId: branchId ?? null,
     });
     return this.repository.save(entity);
   }

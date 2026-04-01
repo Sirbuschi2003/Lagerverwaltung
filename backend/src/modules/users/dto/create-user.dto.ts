@@ -26,6 +26,11 @@ export class CreateUserDto {
   @IsOptional()
   @IsString()
   vehicleId?: string;
+
+  @IsOptional()
+  @IsString()
+  branchId?: string | null;
+
   @IsOptional()
   refreshInterval?: number;
 }

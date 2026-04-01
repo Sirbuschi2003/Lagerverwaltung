@@ -2,7 +2,7 @@ import { Body, Controller, Delete, Get, Param, Patch, Post, Query, Req, Streamab
 import type { Request } from "express";
 
 interface PurchasingRequest extends Request {
-  user?: { id?: string; role?: string; vehicleId?: string | null };
+  user?: { id?: string; role?: string; vehicleId?: string | null; branchId?: string | null };
 }
 
 import { JwtAuthGuard } from "../auth/guards/jwt-auth.guard";
@@ -28,6 +28,7 @@ export class PurchasingController {
   @Get()
   @Permissions("orders.view")
   findAll(
+    @Req() req: PurchasingRequest,
     @Query("status") status?: string,
     @Query("year") year?: string,
     @Query("supplierId") supplierId?: string,
@@ -41,6 +42,7 @@ export class PurchasingController {
       supplierId: supplierId?.trim() || undefined,
       sortBy: sortBy as any,
       sortDir: sortDir as any,
+      branchId: req.user?.branchId,
     });
   }
 
@@ -75,8 +77,8 @@ export class PurchasingController {
 
   @Post()
   @Permissions("orders.create")
-  create(@Body() dto: CreatePurchaseOrderDto) {
-    return this.purchasingService.create(dto);
+  create(@Body() dto: CreatePurchaseOrderDto, @Req() req: PurchasingRequest) {
+    return this.purchasingService.create({ ...dto, branchId: req.user?.branchId });
   }
 
   @Patch(":id")

@@ -1,4 +1,9 @@
-import { Body, Controller, Delete, Get, Param, Patch, Post, Query, UseGuards } from "@nestjs/common";
+import { Body, Controller, Delete, Get, Param, Patch, Post, Query, Req, UseGuards } from "@nestjs/common";
+import type { Request } from "express";
+
+interface LocationsRequest extends Request {
+  user?: { id?: string; role?: string; branchId?: string | null };
+}
 
 import { JwtAuthGuard } from "../auth/guards/jwt-auth.guard";
 import { Permissions } from "../access-control/decorators/permissions.decorator";
@@ -15,6 +20,7 @@ export class LocationsController {
   @Get()
   @Permissions("locations.view")
   findAll(
+    @Req() req: LocationsRequest,
     @Query("type") type?: string,
     @Query("parentId") parentId?: string,
     @Query("includeVehicles") includeVehicles?: string,
@@ -23,6 +29,7 @@ export class LocationsController {
       type,
       parentId,
       includeVehicles: includeVehicles === "true",
+      branchId: req.user?.branchId,
     });
   }
 
@@ -34,8 +41,8 @@ export class LocationsController {
 
   @Post()
   @Permissions("locations.create")
-  create(@Body() dto: CreateLocationDto) {
-    return this.locationsService.create(dto);
+  create(@Body() dto: CreateLocationDto, @Req() req: LocationsRequest) {
+    return this.locationsService.create({ ...dto, branchId: req.user?.branchId });
   }
 
   @Patch(":id")

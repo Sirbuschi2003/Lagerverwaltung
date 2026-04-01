@@ -3,6 +3,7 @@ import {
   CreateDateColumn,
   Entity,
   Index,
+  JoinColumn,
   ManyToOne,
   OneToMany,
   PrimaryGeneratedColumn,
@@ -10,6 +11,7 @@ import {
 } from "typeorm";
 
 import { Vehicle } from "../../vehicles/entities/vehicle.entity";
+import { Branch } from "../../branches/entities/branch.entity";
 
 export const LOCATION_TYPES = ["WAREHOUSE", "SHELF", "BIN", "VEHICLE"] as const;
 export type LocationType = (typeof LOCATION_TYPES)[number];
@@ -38,6 +40,13 @@ export class Location {
   @Index({ unique: true })
   @ManyToOne(() => Vehicle, { nullable: true, onDelete: "CASCADE" })
   vehicle!: Vehicle | null;
+
+  @Column({ type: "char", length: 36, nullable: true })
+  branchId!: string | null;
+
+  @ManyToOne(() => Branch, { nullable: true, onDelete: "RESTRICT", eager: false })
+  @JoinColumn({ name: "branchId" })
+  branch!: Branch | null;
 
   @CreateDateColumn()
   createdAt!: Date;

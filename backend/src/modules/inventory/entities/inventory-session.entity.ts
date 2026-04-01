@@ -2,12 +2,15 @@
   Column,
   CreateDateColumn,
   Entity,
+  JoinColumn,
+  ManyToOne,
   OneToMany,
   PrimaryGeneratedColumn,
 } from "typeorm";
 
 import { InventoryLine } from "./inventory-line.entity";
 import { InventoryVehicleStatus } from "./inventory-vehicle-status.entity";
+import { Branch } from "../../branches/entities/branch.entity";
 
 export enum InventorySessionStatus {
   DRAFT = "DRAFT",
@@ -69,6 +72,13 @@ export class InventorySession {
 
   @OneToMany(() => InventoryVehicleStatus, (vs) => vs.session, { cascade: true })
   vehicleStatuses?: InventoryVehicleStatus[];
+
+  @Column({ type: "char", length: 36, nullable: true })
+  branchId!: string | null;
+
+  @ManyToOne(() => Branch, { nullable: true, onDelete: "RESTRICT", eager: false })
+  @JoinColumn({ name: "branchId" })
+  branch!: Branch | null;
 
   @CreateDateColumn()
   createdAt!: Date;
