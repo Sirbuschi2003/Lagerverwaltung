@@ -6,7 +6,7 @@ Alle Änderungen werden hier dokumentiert.
 
 ## 2026-04-01
 
-### [2.2.13] – Niederlassungen (Multi-Branch)
+### [3.0.0] – Niederlassungen (Multi-Branch)
 
 #### Neue Funktionen
 - **Niederlassungs-Architektur** — Das System unterstützt jetzt mehrere Niederlassungen (Standorte). Jede Niederlassung hat vollständig isolierte Daten: eigene Artikel, Fahrzeuge, Lagerorte, Lieferanten, Benutzer, Bestellungen und Inventuren.
