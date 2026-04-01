@@ -6,6 +6,21 @@ Alle Änderungen werden hier dokumentiert.
 
 ## 2026-04-01
 
+### [2.2.11] – Kamera-Scanner Schnellbuchung komplett überarbeitet
+
+#### Bugfixes
+- **Feedback zeigte immer grün, auch bei Fehlern** — Der "Gescannt"-Hinweis wurde bisher vor dem Artikel-Lookup gesetzt, daher erschien er auch wenn der Artikel nicht gefunden wurde. Fehlermeldungen ("Artikel nicht gefunden") waren hinter dem Dialog unsichtbar.
+- **Doppel-Scan nicht erkennbar** — Beim zweiten Scan desselben Artikels gab es kein Feedback, ob ein neuer Eintrag erstellt oder die Menge erhöht wurde.
+- **Gleichzeitige Scan-Verarbeitung möglich** — Bei schnellen Folge-Scans (z.B. API langsamer als Cooldown) konnten zwei handleScan-Aufrufe gleichzeitig laufen. Jetzt durch `busyRef` abgesichert.
+- **Fadenkreuz-Overlay entfernt** — Das weiße Fadenkreuz im Kamera-Dialog war irritierend und wurde entfernt.
+
+#### Verbesserungen
+- **Echtes Ergebnis-Feedback im Kamera-Dialog**: Grün = zur Liste hinzugefügt / Direkt gebucht, Blau = bereits in Liste (Menge erhöht auf X), Rot = Artikel nicht gefunden
+- **Fertig-Button zeigt Anzahl** — "Fertig (3 Artikel)" zeigt wie viele Positionen in der Liste warten
+- **`bookingListRef`** — Duplicate-Erkennung liest aktuellen Listenstand via Ref statt stale closure
+
+---
+
 ### [2.2.10] – Wareneingang User-Tracking + Unter-Sollbestand Fix
 
 #### Bugfixes

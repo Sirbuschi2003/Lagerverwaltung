@@ -52,6 +52,11 @@ interface BookingEntry {
   reference?: string;
 }
 
+interface CameraScanFeedback {
+  type: "success" | "duplicate" | "error";
+  text: string;
+}
+
 const QuickBookingPage: React.FC = () => {
   const { items, loadItems } = useItemsStore();
   const { user } = useAuthStore();
@@ -69,9 +74,14 @@ const QuickBookingPage: React.FC = () => {
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [cameraOpen, setCameraOpen] = useState(false);
-  const [lastCameraScanned, setLastCameraScanned] = useState<string | null>(null);
+  const [cameraScanFeedback, setCameraScanFeedback] = useState<CameraScanFeedback | null>(null);
 
   const barcodeRef = useRef<HTMLInputElement>(null);
+  // Ref damit handleScan immer den aktuellen Inhalt der Liste sieht (stale-closure-safe)
+  const bookingListRef = useRef<BookingEntry[]>([]);
+  useEffect(() => { bookingListRef.current = bookingList; }, [bookingList]);
+  // Verhindert gleichzeitige Scan-Verarbeitungen (z.B. schnelle Folge-Scans)
+  const busyRef = useRef(false);
 
   useEffect(() => {
     void loadItems();
@@ -87,6 +97,11 @@ const QuickBookingPage: React.FC = () => {
   const showError = (msg: string) => {
     setErrorMsg(msg);
     setTimeout(() => setErrorMsg(null), 3000);
+  };
+
+  const closeCameraDialog = () => {
+    setCameraOpen(false);
+    setCameraScanFeedback(null);
   };
 
   const lookupItem = async (code: string): Promise<ItemDto | null> => {
@@ -119,6 +134,9 @@ const QuickBookingPage: React.FC = () => {
 
   const handleScan = async (code: string) => {
     if (!code.trim()) return;
+    // Verhindert parallele Verarbeitung falls Cooldown kürzer als API-Antwortzeit
+    if (busyRef.current) return;
+    busyRef.current = true;
     setBusy(true);
     setItemNotFound(false);
 
@@ -129,6 +147,8 @@ const QuickBookingPage: React.FC = () => {
       playError();
       setItemNotFound(true);
       setCurrentItem(null);
+      setCameraScanFeedback({ type: "error", text: `"${code.trim()}" – Artikel nicht gefunden` });
+      busyRef.current = false;
       setBusy(false);
       refocusBarcode();
       return;
@@ -154,13 +174,25 @@ const QuickBookingPage: React.FC = () => {
       const ok = await bookEntry(entry);
       if (ok) {
         showSuccess(`${found.code} – ${quantity}x ${mode === "CHECKIN" ? "eingebucht" : "ausgebucht"}`);
+        setCameraScanFeedback({ type: "success", text: `${found.code} – direkt gebucht (${quantity}×)` });
       } else {
         showError(`Fehler beim Buchen von ${found.code}`);
+        setCameraScanFeedback({ type: "error", text: `Fehler beim Buchen von ${found.code}` });
       }
     } else {
+      // Ref nutzen statt bookingList direkt (stale closure im useCallback vermeiden)
+      const existing = bookingListRef.current.find((e) => e.itemId === found.id && e.mode === mode);
+      if (existing) {
+        setCameraScanFeedback({
+          type: "duplicate",
+          text: `${found.code} – bereits in Liste, Menge jetzt: ${existing.quantity + quantity}`,
+        });
+      } else {
+        setCameraScanFeedback({ type: "success", text: `${found.code} – zur Liste hinzugefügt` });
+      }
       setBookingList((prev) => {
-        const existing = prev.find((e) => e.itemId === found.id && e.mode === mode);
-        if (existing) {
+        const ex = prev.find((e) => e.itemId === found.id && e.mode === mode);
+        if (ex) {
           return prev.map((e) =>
             e.itemId === found.id && e.mode === mode
               ? { ...e, quantity: e.quantity + quantity }
@@ -171,6 +203,7 @@ const QuickBookingPage: React.FC = () => {
       });
     }
 
+    busyRef.current = false;
     setBusy(false);
     refocusBarcode();
   };
@@ -178,7 +211,7 @@ const QuickBookingPage: React.FC = () => {
   // Kamera-Scanner: bleibt offen nach jedem Scan für den nächsten Code
   const handleCameraDetected = useCallback(
     (code: string) => {
-      setLastCameraScanned(code);
+      setCameraScanFeedback(null); // kurz zurücksetzen während Lookup läuft
       void handleScan(code);
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -277,7 +310,7 @@ const QuickBookingPage: React.FC = () => {
                     <Tooltip title="Kamera-Scanner öffnen">
                       <IconButton
                         size="small"
-                        onClick={() => setCameraOpen(true)}
+                        onClick={() => { setCameraOpen(true); setCameraScanFeedback(null); }}
                         edge="end"
                         color="primary"
                       >
@@ -331,7 +364,7 @@ const QuickBookingPage: React.FC = () => {
             fullWidth
             size="large"
             startIcon={<QrCodeScannerIcon />}
-            onClick={() => setCameraOpen(true)}
+            onClick={() => { setCameraOpen(true); setCameraScanFeedback(null); }}
             disabled={busy}
           >
             QR-Code / Barcode scannen
@@ -639,7 +672,7 @@ const QuickBookingPage: React.FC = () => {
       {/* ── Kamera-Scanner Dialog ── */}
       <Dialog
         open={cameraOpen}
-        onClose={() => { setCameraOpen(false); setLastCameraScanned(null); }}
+        onClose={closeCameraDialog}
         fullWidth
         maxWidth="sm"
         sx={{
@@ -654,7 +687,7 @@ const QuickBookingPage: React.FC = () => {
             <QrCodeScannerIcon />
             <span>QR-Code / Barcode scannen</span>
           </Stack>
-          <IconButton size="small" onClick={() => { setCameraOpen(false); setLastCameraScanned(null); }}>
+          <IconButton size="small" onClick={closeCameraDialog}>
             <CloseIcon />
           </IconButton>
         </DialogTitle>
@@ -684,35 +717,32 @@ const QuickBookingPage: React.FC = () => {
               muted
               playsInline
             />
-            {/* Fadenkreuz */}
-            <Box
-              sx={{
-                position: "absolute",
-                top: "50%",
-                left: "50%",
-                transform: "translate(-50%, -50%)",
-                width: 200,
-                height: 200,
-                border: "2px solid rgba(255,255,255,0.7)",
-                borderRadius: 1,
-                pointerEvents: "none",
-                "&::before, &::after": {
-                  content: '""',
-                  position: "absolute",
-                  background: "rgba(255,255,255,0.7)",
-                },
-                "&::before": { top: "50%", left: 0, right: 0, height: 1 },
-                "&::after": { left: "50%", top: 0, bottom: 0, width: 1 },
-              }}
-            />
           </Box>
-          {lastCameraScanned ? (
-            <Alert severity="success" sx={{ mt: 1 }} icon={<CheckIcon fontSize="inherit" />}>
-              Gescannt: <strong>{lastCameraScanned}</strong> — nächsten Code scannen…
+
+          {/* Scan-Feedback: zeigt tatsächliches Ergebnis nach dem Lookup */}
+          {cameraScanFeedback ? (
+            <Alert
+              severity={
+                cameraScanFeedback.type === "error"
+                  ? "error"
+                  : cameraScanFeedback.type === "duplicate"
+                  ? "info"
+                  : "success"
+              }
+              sx={{ mt: 1 }}
+            >
+              {cameraScanFeedback.text}
             </Alert>
           ) : (
             <Typography variant="caption" color="text.secondary" sx={{ display: "block", textAlign: "center", mt: 1 }}>
               Halte den Code in den markierten Bereich
+            </Typography>
+          )}
+
+          {/* Anzeige wie viele Artikel bereits in der Liste sind */}
+          {!sofortBuchen && bookingList.length > 0 && (
+            <Typography variant="caption" color="text.secondary" sx={{ display: "block", textAlign: "center", mt: 0.5 }}>
+              {bookingList.length} Artikel in der Liste
             </Typography>
           )}
         </DialogContent>
@@ -721,9 +751,11 @@ const QuickBookingPage: React.FC = () => {
             variant="contained"
             fullWidth
             size="large"
-            onClick={() => { setCameraOpen(false); setLastCameraScanned(null); }}
+            onClick={closeCameraDialog}
           >
-            Fertig
+            {!sofortBuchen && bookingList.length > 0
+              ? `Fertig (${bookingList.length} Artikel)`
+              : "Fertig"}
           </Button>
         </Box>
       </Dialog>
