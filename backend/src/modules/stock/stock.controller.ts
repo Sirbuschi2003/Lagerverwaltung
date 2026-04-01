@@ -40,13 +40,13 @@ export class StockController {
   ) {}
 
   @Get("dashboard")
-  getDashboardSnapshot() {
-    return this.stockService.findDashboardSnapshot();
+  getDashboardSnapshot(@Req() req: StockRequest) {
+    return this.stockService.findDashboardSnapshot(req.user);
   }
 
   @Get("dashboard/below-target")
-  getBelowTargetItems() {
-    return this.stockService.findBelowTargetItems();
+  getBelowTargetItems(@Req() req: StockRequest) {
+    return this.stockService.findBelowTargetItems(req.user);
   }
 
   @Get("movements")

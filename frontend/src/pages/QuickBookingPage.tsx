@@ -225,7 +225,7 @@ const QuickBookingPage: React.FC = () => {
     <Box sx={{ width: "100%" }}>
       {/* ── Kopfzeile: Buchungsart + Barcode + Menge + Vorgang ── */}
       <Paper sx={{ p: 2, mb: 1 }}>
-        <Stack direction="row" spacing={2} alignItems="flex-start" flexWrap="wrap">
+        <Stack direction={{ xs: "column", sm: "row" }} spacing={2} alignItems={{ xs: "stretch", sm: "flex-start" }}>
           {/* Buchungsart */}
           <Box sx={{ minWidth: 150 }}>
             <Typography variant="caption" sx={{ fontWeight: 700, display: "block", mb: 0.5 }}>
@@ -315,6 +315,7 @@ const QuickBookingPage: React.FC = () => {
               value={quantity}
               onChange={(e) => setQuantity(Math.max(1, parseInt(e.target.value) || 1))}
               size="small"
+              fullWidth
               inputProps={{ min: 1, style: { textAlign: "right" } }}
               helperText=" "
             />
@@ -554,41 +555,83 @@ const QuickBookingPage: React.FC = () => {
         <Divider />
 
         {/* Aktionsleiste */}
-        <Stack direction="row" spacing={2} alignItems="center" sx={{ p: 1.5 }}>
-          <Button
-            variant="outlined"
-            color="error"
-            startIcon={<DeleteIcon />}
-            onClick={handleLoschen}
-            disabled={busy}
-          >
-            Löschen
-          </Button>
-
-          <Box sx={{ flex: 1 }} />
-
-          <FormControlLabel
-            control={
-              <Checkbox
-                checked={sofortBuchen}
-                onChange={(e) => setSofortBuchen(e.target.checked)}
-                size="small"
+        <Box sx={{ p: 1.5 }}>
+          {/* Mobile */}
+          <Box sx={{ display: { xs: "block", sm: "none" } }}>
+            <Stack spacing={1}>
+              <FormControlLabel
+                control={
+                  <Checkbox
+                    checked={sofortBuchen}
+                    onChange={(e) => setSofortBuchen(e.target.checked)}
+                    size="small"
+                  />
+                }
+                label="Sofort buchen"
               />
-            }
-            label="Sofort buchen"
-          />
-
-          <Button
-            variant="contained"
-            color="success"
-            startIcon={<CheckIcon />}
-            disabled={bookingList.length === 0 || busy}
-            onClick={() => void handleUebernehmen()}
-            sx={{ minWidth: 140 }}
+              <Stack direction="row" spacing={1}>
+                <Button
+                  variant="outlined"
+                  color="error"
+                  startIcon={<DeleteIcon />}
+                  onClick={handleLoschen}
+                  disabled={busy}
+                  sx={{ flex: 1 }}
+                >
+                  Löschen
+                </Button>
+                <Button
+                  variant="contained"
+                  color="success"
+                  startIcon={<CheckIcon />}
+                  disabled={bookingList.length === 0 || busy}
+                  onClick={() => void handleUebernehmen()}
+                  sx={{ flex: 2 }}
+                >
+                  {busy ? "Buche…" : "Übernehmen"}
+                </Button>
+              </Stack>
+            </Stack>
+          </Box>
+          {/* Desktop */}
+          <Stack
+            direction="row"
+            spacing={2}
+            alignItems="center"
+            sx={{ display: { xs: "none", sm: "flex" } }}
           >
-            {busy ? "Buche…" : "Übernehmen"}
-          </Button>
-        </Stack>
+            <Button
+              variant="outlined"
+              color="error"
+              startIcon={<DeleteIcon />}
+              onClick={handleLoschen}
+              disabled={busy}
+            >
+              Löschen
+            </Button>
+            <Box sx={{ flex: 1 }} />
+            <FormControlLabel
+              control={
+                <Checkbox
+                  checked={sofortBuchen}
+                  onChange={(e) => setSofortBuchen(e.target.checked)}
+                  size="small"
+                />
+              }
+              label="Sofort buchen"
+            />
+            <Button
+              variant="contained"
+              color="success"
+              startIcon={<CheckIcon />}
+              disabled={bookingList.length === 0 || busy}
+              onClick={() => void handleUebernehmen()}
+              sx={{ minWidth: 140 }}
+            >
+              {busy ? "Buche…" : "Übernehmen"}
+            </Button>
+          </Stack>
+        </Box>
       </Paper>
 
       {/* ── Kamera-Scanner Dialog ── */}

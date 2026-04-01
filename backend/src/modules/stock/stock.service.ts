@@ -148,9 +148,24 @@ export class StockService {
     private readonly loggingService: LoggingService,
   ) {}
 
-  async findDashboardSnapshot() {
+  private filterStockLevelsByUser(
+    levels: StockLevel[],
+    user?: { role?: string; vehicleId?: string | null },
+  ): StockLevel[] {
+    if (!user?.role) return levels;
+    if (user.role === "TECHNICIAN") {
+      if (!user.vehicleId) return [];
+      return levels.filter((l) => l.vehicle?.id === user.vehicleId);
+    }
+    if (user.role === "WAREHOUSE") {
+      return levels.filter((l) => l.vehicle === null);
+    }
+    return levels;
+  }
+
+  async findDashboardSnapshot(user?: { role?: string; vehicleId?: string | null }) {
     try {
-      const [stockLevels, totalItems, openInventorySessions] = await Promise.all([
+      const [allStockLevels, totalItems, openInventorySessions] = await Promise.all([
         this.stockLevelsRepository.find(),
         this.itemsService.countItems(),
         this.inventorySessionRepository.count({
@@ -160,6 +175,8 @@ export class StockService {
           ],
         }),
       ]);
+
+      const stockLevels = this.filterStockLevelsByUser(allStockLevels, user);
 
       const belowTarget = stockLevels.filter(
         (level) =>
@@ -174,11 +191,13 @@ export class StockService {
     }
   }
 
-  async findBelowTargetItems() {
+  async findBelowTargetItems(user?: { role?: string; vehicleId?: string | null }) {
     try {
-      const stockLevels = await this.stockLevelsRepository.find({
+      const allStockLevels = await this.stockLevelsRepository.find({
         relations: ["vehicle", "location"],
       });
+
+      const stockLevels = this.filterStockLevelsByUser(allStockLevels, user);
 
       const belowLevels = stockLevels.filter(
         (level) =>
