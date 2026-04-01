@@ -4,6 +4,9 @@ import { BrowserMultiFormatReader } from "@zxing/browser";
 interface UseBarcodeScannerProps {
   onDetected: (code: string) => void;
   enabled?: boolean;
+  /** Nach einer Erkennung wird für diese Dauer (ms) nicht nochmals ausgelöst.
+   *  Bei 0 (Standard) stoppt der Scanner nach der ersten Erkennung. */
+  cooldownMs?: number;
 }
 
 const PREFERRED_DEVICE_KEY = "kfz-app-preferred-camera";
@@ -41,7 +44,7 @@ const BASE_CONSTRAINTS: MediaTrackConstraints = {
 };
 
 
-const useBarcodeScanner = ({ onDetected, enabled = true }: UseBarcodeScannerProps) => {
+const useBarcodeScanner = ({ onDetected, enabled = true, cooldownMs = 0 }: UseBarcodeScannerProps) => {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const [isSupported, setIsSupported] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -607,6 +610,7 @@ const useBarcodeScanner = ({ onDetected, enabled = true }: UseBarcodeScannerProp
 
     const startScanLoop = (video: HTMLVideoElement, barcodeDetector: BarcodeDetector) => {
       let lastScanTs = 0;
+      let lastDetectionTime = 0;
 
       const loop = async (timestamp: number) => {
         if (cancelled) {
@@ -628,8 +632,17 @@ const useBarcodeScanner = ({ onDetected, enabled = true }: UseBarcodeScannerProp
           try {
             const results = await barcodeDetector.detect(video);
             if (results.length > 0) {
+              const now = Date.now();
+              if (cooldownMs > 0 && now - lastDetectionTime < cooldownMs) {
+                // Noch in Cooldown – ignorieren und weiter scannen
+                rafId = requestAnimationFrame(loop);
+                return;
+              }
+              lastDetectionTime = now;
               onDetected(results[0].rawValue);
-              return;
+              if (cooldownMs <= 0) {
+                return; // bisheriges Verhalten: nach Erkennung stoppen
+              }
             }
           } catch (err) {
             console.warn("[Scanner] detect error:", err);
@@ -688,13 +701,21 @@ const useBarcodeScanner = ({ onDetected, enabled = true }: UseBarcodeScannerProp
             fallbackReader = new BrowserMultiFormatReader();
             setIsSupported(true);
             setError(null);
+            let lastFallbackDetectionTime = 0;
             fallbackReader.decodeFromVideoElementContinuously(video, (result: any, err: any) => {
               if (cancelled || !fallbackReader) {
                 return;
               }
               if (result) {
+                const now = Date.now();
+                if (cooldownMs > 0 && now - lastFallbackDetectionTime < cooldownMs) {
+                  return; // Cooldown – ignorieren
+                }
+                lastFallbackDetectionTime = now;
                 onDetected(result.getText());
-                stopFallbackLoop();
+                if (cooldownMs <= 0) {
+                  stopFallbackLoop();
+                }
                 return;
               }
               if (err && err.name && err.name != 'NotFoundException') {

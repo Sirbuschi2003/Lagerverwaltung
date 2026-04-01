@@ -69,6 +69,7 @@ const QuickBookingPage: React.FC = () => {
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [cameraOpen, setCameraOpen] = useState(false);
+  const [lastCameraScanned, setLastCameraScanned] = useState<string | null>(null);
 
   const barcodeRef = useRef<HTMLInputElement>(null);
 
@@ -174,10 +175,10 @@ const QuickBookingPage: React.FC = () => {
     refocusBarcode();
   };
 
-  // Kamera-Scanner: wird nur aufgerufen wenn Dialog offen
+  // Kamera-Scanner: bleibt offen nach jedem Scan für den nächsten Code
   const handleCameraDetected = useCallback(
     (code: string) => {
-      setCameraOpen(false);
+      setLastCameraScanned(code);
       void handleScan(code);
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -187,6 +188,7 @@ const QuickBookingPage: React.FC = () => {
   const { videoRef, isSupported, error: scannerError } = useBarcodeScanner({
     onDetected: handleCameraDetected,
     enabled: cameraOpen,
+    cooldownMs: 1500,
   });
 
   const handleUebernehmen = async () => {
@@ -637,7 +639,7 @@ const QuickBookingPage: React.FC = () => {
       {/* ── Kamera-Scanner Dialog ── */}
       <Dialog
         open={cameraOpen}
-        onClose={() => setCameraOpen(false)}
+        onClose={() => { setCameraOpen(false); setLastCameraScanned(null); }}
         fullWidth
         maxWidth="sm"
         sx={{
@@ -652,7 +654,7 @@ const QuickBookingPage: React.FC = () => {
             <QrCodeScannerIcon />
             <span>QR-Code / Barcode scannen</span>
           </Stack>
-          <IconButton size="small" onClick={() => setCameraOpen(false)}>
+          <IconButton size="small" onClick={() => { setCameraOpen(false); setLastCameraScanned(null); }}>
             <CloseIcon />
           </IconButton>
         </DialogTitle>
@@ -704,10 +706,26 @@ const QuickBookingPage: React.FC = () => {
               }}
             />
           </Box>
-          <Typography variant="caption" color="text.secondary" sx={{ display: "block", textAlign: "center", mt: 1 }}>
-            Halte den Code in den markierten Bereich
-          </Typography>
+          {lastCameraScanned ? (
+            <Alert severity="success" sx={{ mt: 1 }} icon={<CheckIcon fontSize="inherit" />}>
+              Gescannt: <strong>{lastCameraScanned}</strong> — nächsten Code scannen…
+            </Alert>
+          ) : (
+            <Typography variant="caption" color="text.secondary" sx={{ display: "block", textAlign: "center", mt: 1 }}>
+              Halte den Code in den markierten Bereich
+            </Typography>
+          )}
         </DialogContent>
+        <Box sx={{ p: 1.5, pt: 0 }}>
+          <Button
+            variant="contained"
+            fullWidth
+            size="large"
+            onClick={() => { setCameraOpen(false); setLastCameraScanned(null); }}
+          >
+            Fertig
+          </Button>
+        </Box>
       </Dialog>
     </Box>
   );

@@ -6,6 +6,16 @@ Alle Änderungen werden hier dokumentiert.
 
 ## 2026-04-01
 
+### [2.2.9] – Schnellbuchung Dauerscann + Fehlmenge-Fix
+
+#### Verbesserungen
+- **Schnellbuchung: Kamera bleibt nach Scan offen** — Der Kamera-Scanner schließt sich nicht mehr nach jeder Erkennung. Nach dem Scannen eines Codes wird 1,5 Sekunden gewartet (Cooldown), dann ist der Scanner direkt bereit für den nächsten Code. Der zuletzt gescannte Code wird im Dialog angezeigt. Ein "Fertig"-Button schließt die Kamera bewusst.
+
+#### Bugfixes
+- **Fehlmenge berücksichtigt jetzt Mindestbestand** — Artikel die in der "Unter Sollbestand"-Liste erscheinen weil ihr Bestand unter dem Mindestbestand liegt (aber ≥ Sollbestand), zeigen jetzt korrekt eine Fehlmenge (Differenz zum Mindestbestand) statt "0".
+
+---
+
 ### [2.2.8] – Fehlmenge-Berechnung korrigiert
 
 #### Bugfixes
