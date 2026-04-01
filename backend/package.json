@@ -1,6 +1,6 @@
 {
   "name": "kfz-parts-backend",
-  "version": "2.2.6",
+  "version": "2.2.7",
   "description": "Fleet spare parts inventory backend (NestJS)",
   "license": "MIT",
   "scripts": {

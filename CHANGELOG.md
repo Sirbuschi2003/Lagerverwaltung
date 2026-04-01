@@ -6,6 +6,13 @@ Alle Änderungen werden hier dokumentiert.
 
 ## 2026-04-01
 
+### [2.2.7] – Fehlmenge-Berechnung korrigiert
+
+#### Bugfixes
+- **Fehlmenge zeigte "-0" für viele Artikel** — Artikel, die nur wegen des Mindestbestands in der Liste "Unter Sollbestand" erschienen (Bestand = Sollbestand, aber < Mindestbestand), zeigten fälschlicherweise "-0" als Fehlmenge. Die Fehlmenge wird jetzt korrekt als das Maximum aus Sollbestand-Unterschreitung und Mindestbestand-Unterschreitung berechnet.
+
+---
+
 ### [2.2.6] – Dashboard rollenbasiert + Mobile Schnellbuchung Fix
 
 #### Verbesserungen

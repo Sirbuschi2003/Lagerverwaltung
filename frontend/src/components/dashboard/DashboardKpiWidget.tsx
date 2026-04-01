@@ -154,7 +154,7 @@ const BelowTargetDialog: React.FC<{ open: boolean; onClose: () => void }> = ({ o
                       <TableCell align="right">{item.quantity}</TableCell>
                       <TableCell align="right">{item.targetQuantity}</TableCell>
                       <TableCell align="right" sx={{ color: "warning.main", fontWeight: 700 }}>
-                        -{item.shortage}
+                        {item.shortage > 0 ? `-${item.shortage}` : "0"}
                       </TableCell>
                     </TableRow>
                   ))
