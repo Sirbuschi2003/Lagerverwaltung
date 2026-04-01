@@ -19,9 +19,13 @@ export class BranchIdNotNull1741000000001 implements MigrationInterface {
   public async up(queryRunner: QueryRunner): Promise<void> {
     const tables = ["users", "vehicles", "items", "locations", "suppliers", "purchase_orders", "inventory_sessions"];
 
-    // 1. branchId NOT NULL machen
+    // 1. FK droppen, branchId NOT NULL machen, FK neu anlegen
     for (const table of tables) {
+      await queryRunner.query(`ALTER TABLE \`${table}\` DROP FOREIGN KEY \`FK_${table}_branch\``);
       await queryRunner.query(`ALTER TABLE \`${table}\` MODIFY \`branchId\` char(36) NOT NULL`);
+      await queryRunner.query(
+        `ALTER TABLE \`${table}\` ADD CONSTRAINT \`FK_${table}_branch\` FOREIGN KEY (\`branchId\`) REFERENCES \`branches\`(\`id\`) ON DELETE RESTRICT`,
+      );
     }
 
     // 2. items.code: globaler Unique → (branchId, code) per Branch
@@ -58,7 +62,11 @@ export class BranchIdNotNull1741000000001 implements MigrationInterface {
 
     const tables = ["users", "vehicles", "items", "locations", "suppliers", "purchase_orders", "inventory_sessions"];
     for (const table of tables) {
+      await queryRunner.query(`ALTER TABLE \`${table}\` DROP FOREIGN KEY \`FK_${table}_branch\``);
       await queryRunner.query(`ALTER TABLE \`${table}\` MODIFY \`branchId\` char(36) NULL DEFAULT NULL`);
+      await queryRunner.query(
+        `ALTER TABLE \`${table}\` ADD CONSTRAINT \`FK_${table}_branch\` FOREIGN KEY (\`branchId\`) REFERENCES \`branches\`(\`id\`) ON DELETE RESTRICT`,
+      );
     }
   }
 }
