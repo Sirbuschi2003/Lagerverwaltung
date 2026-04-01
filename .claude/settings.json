@@ -7,7 +7,8 @@
       "Bash(ls c:/Users/Thomas.Busche/Desktop/Code/Lagerverwaltung/*.yml c:/Users/Thomas.Busche/Desktop/Code/Lagerverwaltung/*.sh)",
       "Bash(ls c:/Users/Thomas.Busche/Desktop/Code/Lagerverwaltung/*.crt c:/Users/Thomas.Busche/Desktop/Code/Lagerverwaltung/*.cer)",
       "Bash(gh --version)",
-      "Bash(find c:UsersThomas.BuscheDesktopCodeLagerverwaltung -name *system-config* -type f)"
+      "Bash(find c:UsersThomas.BuscheDesktopCodeLagerverwaltung -name *system-config* -type f)",
+      "Bash(grep '\"\"version\"\"' frontend/package.json backend/package.json)"
     ],
     "additionalDirectories": [
       "c:\\Users\\Thomas.Busche\\.claude\\projects\\c--Users-Thomas-Busche-Desktop-Code-Lagerverwaltung\\memory",
