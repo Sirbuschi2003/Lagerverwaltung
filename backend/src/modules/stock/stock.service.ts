@@ -178,11 +178,12 @@ export class StockService {
 
       const stockLevels = this.filterStockLevelsByUser(allStockLevels, user);
 
-      const belowTarget = stockLevels.filter(
-        (level) =>
-          (level.targetQuantity > 0 && level.quantity < level.targetQuantity) ||
-          (level.item?.minimumStock != null && level.item.minimumStock > 0 && level.quantity < level.item.minimumStock),
-      ).length;
+      const belowTarget = stockLevels.filter((level) => {
+        if (level.targetQuantity > 0 && level.quantity < level.targetQuantity) return true;
+        // Mindestbestand (globaler Artikelwert) nur für Lager-Bestände, nicht für Fahrzeuge
+        if (!level.vehicle && level.item?.minimumStock != null && level.item.minimumStock > 0 && level.quantity < level.item.minimumStock) return true;
+        return false;
+      }).length;
 
       return { totalItems, belowTarget, openInventorySessions };
     } catch (error) {
@@ -199,27 +200,32 @@ export class StockService {
 
       const stockLevels = this.filterStockLevelsByUser(allStockLevels, user);
 
-      const belowLevels = stockLevels.filter(
-        (level) =>
-          (level.targetQuantity > 0 && level.quantity < level.targetQuantity) ||
-          (level.item?.minimumStock != null && level.item.minimumStock > 0 && level.quantity < level.item.minimumStock),
-      );
+      const belowLevels = stockLevels.filter((level) => {
+        if (level.targetQuantity > 0 && level.quantity < level.targetQuantity) return true;
+        // Mindestbestand (globaler Artikelwert) nur für Lager-Bestände, nicht für Fahrzeuge
+        if (!level.vehicle && level.item?.minimumStock != null && level.item.minimumStock > 0 && level.quantity < level.item.minimumStock) return true;
+        return false;
+      });
 
-      return belowLevels.map((level) => ({
-        stockLevelId: level.id,
-        itemId: level.item.id,
-        itemCode: level.item.code,
-        itemDescription: level.item.description,
-        locationLabel: level.vehicle
-          ? (level.vehicle.licensePlate || level.vehicle.id)
-          : level.location
-            ? level.location.name
-            : "Lager",
-        quantity: level.quantity,
-        targetQuantity: level.targetQuantity,
-        minimumStock: level.item.minimumStock ?? null,
-        shortage: Math.max(0, level.targetQuantity - level.quantity, (level.item.minimumStock ?? 0) - level.quantity),
-      }));
+      return belowLevels.map((level) => {
+        const isWarehouse = !level.vehicle;
+        const minStock = isWarehouse ? (level.item.minimumStock ?? 0) : 0;
+        return {
+          stockLevelId: level.id,
+          itemId: level.item.id,
+          itemCode: level.item.code,
+          itemDescription: level.item.description,
+          locationLabel: level.vehicle
+            ? (level.vehicle.licensePlate || level.vehicle.id)
+            : level.location
+              ? level.location.name
+              : "Lager",
+          quantity: level.quantity,
+          targetQuantity: level.targetQuantity,
+          minimumStock: level.item.minimumStock ?? null,
+          shortage: Math.max(0, level.targetQuantity - level.quantity, minStock - level.quantity),
+        };
+      });
     } catch (error) {
       this.logger.error("Fehler beim Laden der Unterbestand-Artikel:", error);
       throw error;

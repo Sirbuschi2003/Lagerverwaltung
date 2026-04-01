@@ -1,4 +1,9 @@
-import { Body, Controller, Delete, Get, Param, Patch, Post, Query, StreamableFile, UseGuards } from "@nestjs/common";
+import { Body, Controller, Delete, Get, Param, Patch, Post, Query, Req, StreamableFile, UseGuards } from "@nestjs/common";
+import type { Request } from "express";
+
+interface PurchasingRequest extends Request {
+  user?: { id?: string; role?: string; vehicleId?: string | null };
+}
 
 import { JwtAuthGuard } from "../auth/guards/jwt-auth.guard";
 import { Permissions } from "../access-control/decorators/permissions.decorator";
@@ -102,8 +107,8 @@ export class PurchasingController {
 
   @Post(":id/receive")
   @Permissions("orders.receive")
-  receive(@Param("id") id: string, @Body() dto: ReceivePurchaseOrderDto) {
-    return this.purchasingService.receiveOrder(id, dto);
+  receive(@Req() req: PurchasingRequest, @Param("id") id: string, @Body() dto: ReceivePurchaseOrderDto) {
+    return this.purchasingService.receiveOrder(id, dto, req.user?.id);
   }
 
   @Get(":id/pdf")

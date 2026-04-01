@@ -242,6 +242,7 @@ export class PurchasingService {
   async receiveOrder(
     id: string,
     payload: { lines: Array<{ lineId: string; receivedQuantity?: number }> },
+    userId?: string,
   ) {
     const order = await this.findOne(id);
     if (order.status === "CANCELLED" || order.status === "ARCHIVED") {
@@ -280,6 +281,7 @@ export class PurchasingService {
       await this.stockService.recordMovement({
         itemId: line.item.id,
         locationId,
+        userId,
         type: "CHECKIN",
         quantity: toReceive,
         occurredAt: new Date().toISOString(),

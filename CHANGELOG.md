@@ -6,6 +6,14 @@ Alle Änderungen werden hier dokumentiert.
 
 ## 2026-04-01
 
+### [2.2.10] – Wareneingang User-Tracking + Unter-Sollbestand Fix
+
+#### Bugfixes
+- **Wareneingang bucht jetzt mit dem angemeldeten User** — Beim Buchen eines Wareneingangs aus einer Bestellung wurde bisher kein Benutzer in der Bewegung gespeichert. Die Bewegungshistorie zeigt nun welcher User den Eingang gebucht hat.
+- **Unter Sollbestand: Mindestbestand nur noch für Lagerpositionen** — Der globale Mindestbestand aus den Artikelstammdaten wurde fälschlicherweise auch für Fahrzeug-Bestände als Filter-Kriterium verwendet. Techniker sahen dadurch Artikel als "unter Sollbestand", obwohl der fahrzeugspezifische Sollbestand korrekt war. Der Mindestbestand-Filter greift jetzt nur noch bei Lagerpositionen (ohne Fahrzeug).
+
+---
+
 ### [2.2.9] – Schnellbuchung Dauerscann + Fehlmenge-Fix
 
 #### Verbesserungen
