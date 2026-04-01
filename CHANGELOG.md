@@ -6,6 +6,13 @@ Alle Änderungen werden hier dokumentiert.
 
 ## 2026-04-01
 
+### [2.2.12] – Kamera-Scanner: kein Mehrfachscan bei langem Halten
+
+#### Bugfixes
+- **Gleicher Code wurde bei langem Halten mehrfach gescannt** — Der zeitbasierte Cooldown hat denselben Code nach 1,5s erneut ausgelöst, auch wenn die Kamera nie wegbewegt wurde. Jetzt wird ein Code erst wieder erkannt wenn die Kamera mindestens `cooldownMs` (1,5s) vom Code wegbewegt wurde — genau wie bei einem echten Barcode-Scanner. Ein anderer Code kann jederzeit sofort gescannt werden.
+
+---
+
 ### [2.2.11] – Kamera-Scanner Schnellbuchung komplett überarbeitet
 
 #### Bugfixes

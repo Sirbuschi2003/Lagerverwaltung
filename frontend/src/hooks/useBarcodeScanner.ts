@@ -610,7 +610,10 @@ const useBarcodeScanner = ({ onDetected, enabled = true, cooldownMs = 0 }: UseBa
 
     const startScanLoop = (video: HTMLVideoElement, barcodeDetector: BarcodeDetector) => {
       let lastScanTs = 0;
-      let lastDetectionTime = 0;
+      // Gleicher Code wird geblockt bis die Kamera kurz wegbewegt wurde (wie echter Scanner)
+      let blockedCode = "";
+      let noCodeAccumMs = 0; // akkumulierte ms ohne sichtbaren Code
+      let lastFrameTs = 0;
 
       const loop = async (timestamp: number) => {
         if (cancelled) {
@@ -626,22 +629,35 @@ const useBarcodeScanner = ({ onDetected, enabled = true, cooldownMs = 0 }: UseBa
           rafId = requestAnimationFrame(loop);
           return;
         }
+        const frameDelta = lastFrameTs > 0 ? timestamp - lastFrameTs : SCAN_INTERVAL_MS;
+        lastFrameTs = timestamp;
         lastScanTs = timestamp;
 
         if (video.readyState === 4) {
           try {
             const results = await barcodeDetector.detect(video);
             if (results.length > 0) {
-              const now = Date.now();
-              if (cooldownMs > 0 && now - lastDetectionTime < cooldownMs) {
-                // Noch in Cooldown – ignorieren und weiter scannen
+              const code = results[0].rawValue;
+              noCodeAccumMs = 0; // Code sichtbar – Reset des "kein Code"-Timers
+
+              if (cooldownMs > 0 && code === blockedCode) {
+                // Gleicher Code noch gesperrt – weiter scannen ohne auslösen
                 rafId = requestAnimationFrame(loop);
                 return;
               }
-              lastDetectionTime = now;
-              onDetected(results[0].rawValue);
+
+              blockedCode = cooldownMs > 0 ? code : "";
+              onDetected(code);
               if (cooldownMs <= 0) {
                 return; // bisheriges Verhalten: nach Erkennung stoppen
+              }
+            } else {
+              // Kein Code im Bild – Zeit akkumulieren
+              if (cooldownMs > 0) {
+                noCodeAccumMs += frameDelta;
+                if (noCodeAccumMs >= cooldownMs) {
+                  blockedCode = ""; // Sperre aufheben: Kamera war lang genug weg
+                }
               }
             }
           } catch (err) {
@@ -701,24 +717,36 @@ const useBarcodeScanner = ({ onDetected, enabled = true, cooldownMs = 0 }: UseBa
             fallbackReader = new BrowserMultiFormatReader();
             setIsSupported(true);
             setError(null);
-            let lastFallbackDetectionTime = 0;
+            let fallbackBlockedCode = "";
+            let fallbackNoCodeSince: number | null = null;
             fallbackReader.decodeFromVideoElementContinuously(video, (result: any, err: any) => {
               if (cancelled || !fallbackReader) {
                 return;
               }
               if (result) {
-                const now = Date.now();
-                if (cooldownMs > 0 && now - lastFallbackDetectionTime < cooldownMs) {
-                  return; // Cooldown – ignorieren
+                fallbackNoCodeSince = null;
+                const code = result.getText();
+                if (cooldownMs > 0 && code === fallbackBlockedCode) {
+                  return; // Gleicher Code noch gesperrt
                 }
-                lastFallbackDetectionTime = now;
-                onDetected(result.getText());
+                fallbackBlockedCode = cooldownMs > 0 ? code : "";
+                onDetected(code);
                 if (cooldownMs <= 0) {
                   stopFallbackLoop();
                 }
                 return;
               }
-              if (err && err.name && err.name != 'NotFoundException') {
+              if (err && err.name === 'NotFoundException') {
+                // Kein Code sichtbar – Sperre nach cooldownMs aufheben
+                if (cooldownMs > 0 && fallbackBlockedCode) {
+                  const now = Date.now();
+                  if (fallbackNoCodeSince === null) fallbackNoCodeSince = now;
+                  if (now - fallbackNoCodeSince >= cooldownMs) {
+                    fallbackBlockedCode = "";
+                    fallbackNoCodeSince = null;
+                  }
+                }
+              } else if (err && err.name && err.name !== 'NotFoundException') {
                 console.warn('[Scanner] ZXing error:', err);
               }
             });
