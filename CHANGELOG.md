@@ -4,6 +4,16 @@ Alle Änderungen werden hier dokumentiert.
 
 ---
 
+## 2026-04-01
+
+### [2.2.6] – Dashboard rollenbasiert + Mobile Schnellbuchung Fix
+
+#### Verbesserungen
+- **Dashboard rollenbasiert gefiltert** — Techniker sehen im Dashboard-KPI "Unter Sollbestand" nur Artikel ihres eigenen Fahrzeugs. Lagermitarbeiter sehen nur den Lagerbestand (ohne Fahrzeuge). Manager sehen weiterhin alles.
+- **Schnellbuchung: Horizontaler Scroll auf Handy behoben** — Die Aktionsleiste (Löschen / Sofort buchen / Übernehmen) war zu breit für schmale Handybildschirme und verursachte horizontales Scrollen. Auf dem Handy werden die Elemente jetzt untereinander angezeigt. Auch die Eingabefelder oben stapeln sich vertikal.
+
+---
+
 ## 2026-03-31
 
 ### [2.2.5] – Mobile Schnellbuchung verbessert
