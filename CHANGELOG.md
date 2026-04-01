@@ -6,6 +6,20 @@ Alle Änderungen werden hier dokumentiert.
 
 ## 2026-04-01
 
+### [3.0.1] – Multi-Branch Fixes & SUPER_ADMIN
+
+#### Bugfixes
+- **Migration 1741000000001**: MySQL erlaubt kein `MODIFY` auf FK-Spalten — FK wird jetzt vor der NOT-NULL-Änderung gedroppt und danach neu angelegt.
+- **BranchesModule**: `AccessControlModule` fehlte im Import → `PermissionsGuard` konnte nicht aufgelöst werden → Backend startete nicht.
+- **403 beim Anlegen von Niederlassungen**: Alle MANAGER-Benutzer wurden durch die initiale Migration der Hauptniederlassung zugeordnet. Sie haben damit als "Branch-MANAGER" keinen Zugriff auf die Niederlassungsverwaltung. Migration 1741000000003 setzt MANAGER-Benutzer der Hauptniederlassung zurück auf `branchId = NULL` (SUPER_ADMIN).
+
+#### Neue Funktionen
+- **SUPER_ADMIN-Bypass im PermissionsGuard**: Benutzer mit `branchId = null` haben automatisch alle Rechte — kein DB-Lookup nötig.
+- **User-Erstellung erbt branchId**: Branch-Manager erstellen neue User automatisch in ihrer eigenen Niederlassung. SUPER_ADMIN kann die Niederlassung frei wählen.
+- **Niederlassung im User-Dialog**: SUPER_ADMIN sieht beim Anlegen/Bearbeiten eines Benutzers ein Niederlassungs-Dropdown. Tabellenspalte "Niederlassung" zeigt Branch-Name oder "Super-Admin"-Badge.
+
+---
+
 ### [3.0.0] – Niederlassungen (Multi-Branch)
 
 #### Neue Funktionen

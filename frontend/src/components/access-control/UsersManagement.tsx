@@ -4,6 +4,7 @@ import {
   Alert,
   Box,
   Button,
+  Chip,
   Dialog,
   DialogActions,
   DialogContent,
@@ -26,8 +27,9 @@ import {
 } from "@mui/material";
 import DeleteIcon from "@mui/icons-material/Delete";
 import EditIcon from "@mui/icons-material/Edit";
-import type { CreateUserRequest, UpdateUserRequest, UserDto, VehicleDto, RolePermissionsDto } from "../../utils/api";
-import { createUser, updateUser, deleteUser, fetchUsers, fetchVehicles, fetchRolesList } from "../../utils/api";
+import type { CreateUserRequest, UpdateUserRequest, UserDto, VehicleDto, RolePermissionsDto, BranchDto } from "../../utils/api";
+import { createUser, updateUser, deleteUser, fetchUsers, fetchVehicles, fetchRolesList, fetchBranches } from "../../utils/api";
+import useAuthStore from "../../store/useAuthStore";
 
 const initialForm: CreateUserRequest = {
   username: "",
@@ -36,12 +38,14 @@ const initialForm: CreateUserRequest = {
   email: "",
   role: "",
   vehicleId: undefined,
+  branchId: undefined,
 };
 
 const UsersManagement: React.FC = () => {
   const [users, setUsers] = useState<UserDto[]>([]);
   const [roles, setRoles] = useState<RolePermissionsDto[]>([]);
   const [vehicles, setVehicles] = useState<VehicleDto[]>([]);
+  const [branches, setBranches] = useState<BranchDto[]>([]);
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState<CreateUserRequest>(initialForm);
   const [editingUser, setEditingUser] = useState<UserDto | null>(null);
@@ -50,6 +54,9 @@ const UsersManagement: React.FC = () => {
   const [deleteTarget, setDeleteTarget] = useState<UserDto | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
+  const currentUser = useAuthStore((s) => s.user);
+  const isSuperAdmin = currentUser?.branchId === null || currentUser?.branchId === undefined;
+
   useEffect(() => {
     void loadData();
   }, []);
@@ -57,14 +64,16 @@ const UsersManagement: React.FC = () => {
   const loadData = async () => {
     setIsLoading(true);
     try {
-      const [usersData, rolesData, vehiclesData] = await Promise.all([
+      const [usersData, rolesData, vehiclesData, branchesData] = await Promise.all([
         fetchUsers(),
         fetchRolesList(),
         fetchVehicles(),
+        fetchBranches().catch(() => [] as BranchDto[]),
       ]);
       setUsers(usersData);
       setRoles(rolesData);
       setVehicles(vehiclesData);
+      setBranches(branchesData);
     } catch (err: any) {
       setError(err.response?.data?.message || "Daten konnten nicht geladen werden.");
     } finally {
@@ -79,6 +88,11 @@ const UsersManagement: React.FC = () => {
       ),
     [users],
   );
+
+  const getBranchName = (branchId?: string | null) => {
+    if (!branchId) return null;
+    return branches.find((b) => b.id === branchId)?.name ?? branchId;
+  };
 
   const handleOpenCreate = () => {
     setForm({ ...initialForm, role: roles.length > 0 ? roles[0].name : "" });
@@ -96,6 +110,7 @@ const UsersManagement: React.FC = () => {
       email: user.email ?? "",
       role: user.role,
       vehicleId: user.vehicleId ?? undefined,
+      branchId: user.branchId,
     });
     setError(null);
     setOpen(true);
@@ -120,6 +135,11 @@ const UsersManagement: React.FC = () => {
   const handleVehicleChange = (event: SelectChangeEvent<string>) => {
     const value = event.target.value;
     setForm((prev: any) => ({ ...prev, vehicleId: value === "none" ? undefined : value }));
+  };
+
+  const handleBranchChange = (event: SelectChangeEvent<string>) => {
+    const value = event.target.value;
+    setForm((prev: any) => ({ ...prev, branchId: value === "super" ? null : value }));
   };
 
   const validate = () => {
@@ -150,6 +170,9 @@ const UsersManagement: React.FC = () => {
           role: form.role,
           vehicleId: form.vehicleId ?? null,
         };
+        if (isSuperAdmin) {
+          payload.branchId = form.branchId ?? null;
+        }
         if (form.password.trim()) {
           payload.password = form.password.trim();
         }
@@ -163,6 +186,9 @@ const UsersManagement: React.FC = () => {
           role: form.role,
           vehicleId: form.vehicleId,
         };
+        if (isSuperAdmin) {
+          payload.branchId = form.branchId ?? null;
+        }
         await createUser(payload);
       }
       await loadData();
@@ -227,6 +253,9 @@ const UsersManagement: React.FC = () => {
                 <TableCell sx={{ fontWeight: 600, color: "#fff" }}>Name</TableCell>
                 <TableCell sx={{ fontWeight: 600, color: "#fff" }}>Benutzername</TableCell>
                 <TableCell sx={{ fontWeight: 600, color: "#fff" }}>Rolle</TableCell>
+                {isSuperAdmin && (
+                  <TableCell sx={{ fontWeight: 600, color: "#fff" }}>Niederlassung</TableCell>
+                )}
                 <TableCell sx={{ fontWeight: 600, color: "#fff" }}>Fahrzeug</TableCell>
                 <TableCell sx={{ fontWeight: 600, color: "#fff" }} align="right">
                   Aktionen
@@ -236,11 +265,21 @@ const UsersManagement: React.FC = () => {
             <TableBody>
               {sortedUsers.map((user: UserDto) => {
                 const vehicle = vehicles.find((v: VehicleDto) => v.id === user.vehicleId);
+                const branchName = getBranchName(user.branchId);
                 return (
                   <TableRow key={user.id} hover>
                     <TableCell>{user.displayName}</TableCell>
                     <TableCell>{user.username}</TableCell>
                     <TableCell>{user.role}</TableCell>
+                    {isSuperAdmin && (
+                      <TableCell>
+                        {branchName ? (
+                          <Chip label={branchName} size="small" variant="outlined" />
+                        ) : (
+                          <Chip label="Super-Admin" size="small" color="primary" />
+                        )}
+                      </TableCell>
+                    )}
                     <TableCell>
                       {vehicle ? `${vehicle.licensePlate} - ${vehicle.description}` : "-"}
                     </TableCell>
@@ -322,7 +361,7 @@ const UsersManagement: React.FC = () => {
                   required={!editingUser}
                 />
               </Grid>
-              <Grid item xs={12} sm={6}>
+              <Grid item xs={12} sm={isSuperAdmin && branches.length > 0 ? 6 : 6}>
                 <FormControl fullWidth>
                   <InputLabel>Rolle</InputLabel>
                   <Select
@@ -340,6 +379,25 @@ const UsersManagement: React.FC = () => {
                   </Select>
                 </FormControl>
               </Grid>
+              {isSuperAdmin && branches.length > 0 && (
+                <Grid item xs={12} sm={6}>
+                  <FormControl fullWidth>
+                    <InputLabel>Niederlassung</InputLabel>
+                    <Select
+                      value={form.branchId === null || form.branchId === undefined ? "super" : form.branchId}
+                      label="Niederlassung"
+                      onChange={handleBranchChange}
+                    >
+                      <MenuItem value="super">— Super-Admin (alle) —</MenuItem>
+                      {branches.filter((b) => b.active).map((branch) => (
+                        <MenuItem key={branch.id} value={branch.id}>
+                          {branch.name}{branch.externalCode ? ` (${branch.externalCode})` : ""}
+                        </MenuItem>
+                      ))}
+                    </Select>
+                  </FormControl>
+                </Grid>
+              )}
               <Grid item xs={12} sm={6}>
                 <FormControl fullWidth>
                   <InputLabel>Fahrzeug (optional)</InputLabel>

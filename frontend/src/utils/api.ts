@@ -550,6 +550,7 @@ export interface UserDto {
   email?: string | null;
   role: string;
   vehicleId?: string | null;
+  branchId?: string | null;
   refreshInterval?: number;
 }
 
@@ -560,6 +561,7 @@ export interface CreateUserRequest {
   email?: string;
   role: string;
   vehicleId?: string;
+  branchId?: string | null;
   refreshInterval?: number;
 }
 
@@ -574,6 +576,7 @@ export interface UpdateUserRequest {
   email?: string;
   role?: string;
   vehicleId?: string | null;
+  branchId?: string | null;
   refreshInterval?: number;
 }
 

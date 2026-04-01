@@ -65,8 +65,14 @@ export class UsersController {
   @Post()
   @Roles("MANAGER")
   @Permissions("users.create")
-  create(@Body() dto: CreateUserDto) {
-    return this.usersService.create(dto);
+  create(@Body() dto: CreateUserDto, @CurrentUser() currentUser: User) {
+    // Branch-Manager: neue User bekommen automatisch die eigene branchId,
+    // sofern nicht explizit eine andere angegeben wurde.
+    // SUPER_ADMIN (branchId = null): branchId aus DTO übernehmen (kann null sein).
+    const branchId = currentUser.branchId !== null
+      ? (dto.branchId !== undefined ? dto.branchId : currentUser.branchId)
+      : (dto.branchId !== undefined ? dto.branchId : null);
+    return this.usersService.create({ ...dto, branchId });
   }
 
   @Patch(":id")
