@@ -10,7 +10,9 @@
       "Bash(find c:UsersThomas.BuscheDesktopCodeLagerverwaltung -name *system-config* -type f)",
       "Bash(grep '\"\"version\"\"' frontend/package.json backend/package.json)",
       "Bash(sed -i 's/\"version\": \"2.2.12\"/\"version\": \"2.2.13\"/' backend/package.json)",
-      "Bash(sed -i 's/\"version\": \"2.2.12\"/\"version\": \"2.2.13\"/' frontend/package.json)"
+      "Bash(sed -i 's/\"version\": \"2.2.12\"/\"version\": \"2.2.13\"/' frontend/package.json)",
+      "Bash(sed -i 's/\"version\": \"2.2.13\"/\"version\": \"3.0.0\"/' backend/package.json)",
+      "Bash(sed -i 's/\"version\": \"2.2.13\"/\"version\": \"3.0.0\"/' frontend/package.json)"
     ],
     "additionalDirectories": [
       "c:\\Users\\Thomas.Busche\\.claude\\projects\\c--Users-Thomas-Busche-Desktop-Code-Lagerverwaltung\\memory",
