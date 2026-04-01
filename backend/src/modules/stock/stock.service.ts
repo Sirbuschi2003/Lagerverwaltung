@@ -218,7 +218,7 @@ export class StockService {
         quantity: level.quantity,
         targetQuantity: level.targetQuantity,
         minimumStock: level.item.minimumStock ?? null,
-        shortage: Math.max(0, level.targetQuantity - level.quantity, (level.item.minimumStock ?? 0) - level.quantity),
+        shortage: Math.max(0, level.targetQuantity - level.quantity),
       }));
     } catch (error) {
       this.logger.error("Fehler beim Laden der Unterbestand-Artikel:", error);

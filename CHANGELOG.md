@@ -6,10 +6,14 @@ Alle Änderungen werden hier dokumentiert.
 
 ## 2026-04-01
 
-### [2.2.7] – Fehlmenge-Berechnung korrigiert
+### [2.2.8] – Fehlmenge-Berechnung korrigiert
 
 #### Bugfixes
-- **Fehlmenge zeigte "-0" für viele Artikel** — Artikel, die nur wegen des Mindestbestands in der Liste "Unter Sollbestand" erschienen (Bestand = Sollbestand, aber < Mindestbestand), zeigten fälschlicherweise "-0" als Fehlmenge. Die Fehlmenge wird jetzt korrekt als das Maximum aus Sollbestand-Unterschreitung und Mindestbestand-Unterschreitung berechnet.
+- **Fehlmenge zeigte falsche Werte** — Fehlmenge basiert wieder korrekt nur auf `Sollbestand - Bestand`. Der Mindestbestand ist nur ein Filter-Kriterium (Artikel erscheint in der Liste wenn Bestand unter Mindestbestand), beeinflusst aber nicht die angezeigte Fehlmenge. Artikel bei denen Bestand = Sollbestand aber < Mindestbestand zeigen Fehlmenge "0".
+
+---
+
+### [2.2.7] – (zurückgezogen)
 
 ---
 
