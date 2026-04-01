@@ -4,9 +4,10 @@ import { TypeOrmModule } from "@nestjs/typeorm";
 import { Branch } from "./entities/branch.entity";
 import { BranchesService } from "./branches.service";
 import { BranchesController } from "./branches.controller";
+import { AccessControlModule } from "../access-control/access-control.module";
 
 @Module({
-  imports: [TypeOrmModule.forFeature([Branch])],
+  imports: [TypeOrmModule.forFeature([Branch]), AccessControlModule],
   controllers: [BranchesController],
   providers: [BranchesService],
   exports: [BranchesService],
