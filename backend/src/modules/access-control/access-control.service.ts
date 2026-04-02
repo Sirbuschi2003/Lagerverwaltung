@@ -88,6 +88,10 @@ const DEFAULT_PERMISSIONS: Array<{ key: string; description: string }> = [
   { key: "backup.access", description: "Backups erstellen/verwenden" },
   { key: "logs.view", description: "Systemprotokolle ansehen" },
   { key: "access.manage", description: "Rollen- und Rechteverwaltung" },
+
+  // Niederlassungen
+  { key: "branches.view", description: "Niederlassungen ansehen" },
+  { key: "branches.manage", description: "Niederlassungen anlegen/bearbeiten/loeschen" },
 ];
 
 // Permissions, die nur für bestimmte Rollen gelten sollen (werden beim Bootstrap gesäubert)
