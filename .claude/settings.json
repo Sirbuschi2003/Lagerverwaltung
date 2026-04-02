@@ -16,7 +16,8 @@
       "Bash(gh run:*)",
       "Read(//c/Users/Thomas.Busche/.github/workflows/**)",
       "Bash(npx tsc:*)",
-      "Bash(node_modules/.bin/tsc --noEmit)"
+      "Bash(node_modules/.bin/tsc --noEmit)",
+      "Read(//c/Users/Thomas.Busche/Desktop/Code/Lagerverwaltung/backend/src/modules/**)"
     ],
     "additionalDirectories": [
       "c:\\Users\\Thomas.Busche\\.claude\\projects\\c--Users-Thomas-Busche-Desktop-Code-Lagerverwaltung\\memory",
