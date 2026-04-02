@@ -1,4 +1,4 @@
-﻿import { Controller, Get, Query, Res, UseGuards, Req, ForbiddenException } from "@nestjs/common";
+﻿import { Controller, Get, Query, Res, UseGuards, Req, ForbiddenException, Request } from "@nestjs/common";
 import { Response } from 'express';
 
 import { Roles } from "../auth/decorators/roles.decorator";
@@ -20,22 +20,23 @@ export class ReportsController {
 
   @Get("consumption")
   @Roles("MANAGER", "WAREHOUSE")
-  async consumption(@Query("from") from: string, @Query("to") to: string) {
+  async consumption(@Req() req: any, @Query("from") from: string, @Query("to") to: string) {
     const fallbackTo = new Date();
     const end = to ? new Date(to) : fallbackTo;
     const start = from ? new Date(from) : new Date(end.getTime() - 1000 * 60 * 60 * 24 * 30);
-    return this.reportsService.consumptionReport(start, end);
+    return this.reportsService.consumptionReport(start, end, req.user?.branchId);
   }
 
   @Get("stock-status")
   @Roles("MANAGER", "WAREHOUSE")
-  stockStatus() {
-    return this.reportsService.stockStatusSummary();
+  stockStatus(@Req() req: any) {
+    return this.reportsService.stockStatusSummary(req.user?.branchId);
   }
 
   @Get("consumption/export")
   @Roles("MANAGER", "WAREHOUSE")
   async exportConsumption(
+    @Req() req: any,
     @Query("from") from: string,
     @Query("to") to: string,
     @Query("format") format: 'csv' | 'pdf' = 'csv',
@@ -44,8 +45,8 @@ export class ReportsController {
     const fallbackTo = new Date();
     const end = to ? new Date(to) : fallbackTo;
     const start = from ? new Date(from) : new Date(end.getTime() - 1000 * 60 * 60 * 24 * 30);
-    
-    const movements = await this.reportsService.consumptionReport(start, end);
+
+    const movements = await this.reportsService.consumptionReport(start, end, req.user?.branchId);
     
     if (format === 'csv') {
       const csvBuffer = await this.exportService.exportMovementsToCsv(movements);
@@ -63,10 +64,11 @@ export class ReportsController {
   @Get("stock-status/export")
   @Roles("MANAGER", "WAREHOUSE")
   async exportStockStatus(
+    @Req() req: any,
     @Query("format") format: 'csv' | 'pdf' = 'csv',
     @Res() res: Response,
   ) {
-    const stockLevels = await this.reportsService.stockStatusSummary();
+    const stockLevels = await this.reportsService.stockStatusSummary(req.user?.branchId);
     
     if (format === 'csv') {
       const csvBuffer = await this.exportService.exportStockToCsv(stockLevels);
@@ -88,6 +90,7 @@ export class ReportsController {
   @Get("items/qr-catalog")
   @Roles("MANAGER")
   async exportItemsQrCatalog(
+    @Req() req: any,
     @Res() res: Response,
     @Query("search") search?: string,
     @Query("manufacturer") manufacturer?: string,
@@ -98,6 +101,7 @@ export class ReportsController {
       search,
       manufacturer,
       productGroup,
+      branchId: req.user?.branchId,
     });
     const pdfBuffer = await this.exportService.exportItemsQrCatalogToPdf(items);
     res.setHeader('Content-Type', 'application/pdf');

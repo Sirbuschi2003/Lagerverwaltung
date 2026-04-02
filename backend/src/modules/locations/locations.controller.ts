@@ -35,8 +35,8 @@ export class LocationsController {
 
   @Get(":id")
   @Permissions("locations.view")
-  findOne(@Param("id") id: string) {
-    return this.locationsService.findOne(id);
+  findOne(@Req() req: LocationsRequest, @Param("id") id: string) {
+    return this.locationsService.findOne(id, req.user?.branchId);
   }
 
   @Post()

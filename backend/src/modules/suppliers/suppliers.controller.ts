@@ -25,8 +25,8 @@ export class SuppliersController {
 
   @Get(":id")
   @Permissions("suppliers.view")
-  findOne(@Param("id") id: string) {
-    return this.suppliersService.findOne(id);
+  findOne(@Req() req: SuppliersRequest, @Param("id") id: string) {
+    return this.suppliersService.findOne(id, req.user?.branchId);
   }
 
   @Post()
@@ -37,13 +37,13 @@ export class SuppliersController {
 
   @Patch(":id")
   @Permissions("suppliers.edit")
-  update(@Param("id") id: string, @Body() dto: UpdateSupplierDto) {
-    return this.suppliersService.update(id, dto);
+  update(@Req() req: SuppliersRequest, @Param("id") id: string, @Body() dto: UpdateSupplierDto) {
+    return this.suppliersService.update(id, dto, req.user?.branchId);
   }
 
   @Delete(":id")
   @Permissions("suppliers.delete")
-  remove(@Param("id") id: string) {
-    return this.suppliersService.remove(id);
+  remove(@Req() req: SuppliersRequest, @Param("id") id: string) {
+    return this.suppliersService.remove(id, req.user?.branchId);
   }
 }

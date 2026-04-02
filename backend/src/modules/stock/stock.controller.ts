@@ -51,9 +51,9 @@ export class StockController {
   }
 
   @Get("movements")
-  findMovements(@Query("limit") limit?: string) {
+  findMovements(@Req() req: StockRequest, @Query("limit") limit?: string) {
     const parsed = limit ? Number(limit) : undefined;
-    return this.stockService.findMovements(parsed);
+    return this.stockService.findMovements(parsed, req.user?.branchId);
   }
 
   @Get("vehicle/:vehicleId")
@@ -73,13 +73,13 @@ export class StockController {
   getFleetOverview(@Req() req: StockRequest, @Query("vehicleId") vehicleId?: string, @Query("search") search?: string): Promise<FleetOverviewResult[]> {
     const user = req.user;
     this.logger.debug(`getFleetOverview vehicleId=${vehicleId} search=${search} user=${user?.username} userVehicleId=${user?.vehicleId} role=${user?.role}`);
-    return this.stockService.getFleetOverview({ vehicleId, search });
+    return this.stockService.getFleetOverview({ vehicleId, search, branchId: user?.branchId });
   }
 
   @Get("shortages")
-  getRestockOverview(@Query("status") status?: string) {
+  getRestockOverview(@Req() req: StockRequest, @Query("status") status?: string) {
     this.logger.debug(`getRestockOverview status=${status}`);
-    return this.stockService.getRestockOverview({ status: this.parseRestockStatus(status) });
+    return this.stockService.getRestockOverview({ status: this.parseRestockStatus(status) }, req.user?.branchId);
   }
 
   @Patch("vehicle/:vehicleId/target")

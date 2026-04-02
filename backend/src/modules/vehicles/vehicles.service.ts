@@ -18,8 +18,10 @@ export class VehiclesService {
     return this.repository.find({ where, order: { licensePlate: "ASC" } });
   }
 
-  findOne(id: string): Promise<Vehicle | null> {
-    return this.repository.findOne({ where: { id } });
+  findOne(id: string, branchId?: string | null): Promise<Vehicle | null> {
+    const where: Record<string, unknown> = { id };
+    if (branchId) where.branchId = branchId;
+    return this.repository.findOne({ where });
   }
 
   async create(data: Pick<Vehicle, "licensePlate" | "description">, branchId?: string | null): Promise<Vehicle> {
@@ -34,17 +36,22 @@ export class VehiclesService {
     return saved;
   }
 
-  async update(id: string, data: Partial<Vehicle>): Promise<Vehicle> {
-    const entity = await this.repository.preload({ id, ...data });
-    if (!entity) {
-      throw new NotFoundException("Vehicle not found");
-    }
+  async update(id: string, data: Partial<Vehicle>, branchId?: string | null): Promise<Vehicle> {
+    const where: Record<string, unknown> = { id };
+    if (branchId) where.branchId = branchId;
+    const entity = await this.repository.findOne({ where });
+    if (!entity) throw new NotFoundException("Vehicle not found");
+    Object.assign(entity, data);
     const saved = await this.repository.save(entity);
     await this.locationsService.ensureVehicleLocation(saved);
     return saved;
   }
 
-  async remove(id: string): Promise<void> {
+  async remove(id: string, branchId?: string | null): Promise<void> {
+    if (branchId) {
+      const entity = await this.repository.findOne({ where: { id, branchId } as any });
+      if (!entity) throw new NotFoundException("Vehicle not found");
+    }
     await this.repository.delete(id);
   }
 }

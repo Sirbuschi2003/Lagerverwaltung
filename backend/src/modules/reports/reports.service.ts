@@ -1,4 +1,4 @@
-﻿import { Injectable } from "@nestjs/common";
+import { Injectable } from "@nestjs/common";
 import { InjectRepository } from "@nestjs/typeorm";
 import { Between, Repository } from "typeorm";
 
@@ -14,19 +14,34 @@ export class ReportsService {
     private readonly stockLevelsRepository: Repository<StockLevel>,
   ) {}
 
-  async consumptionReport(from: Date, to: Date) {
-    const movements = await this.movementsRepository.find({
-      where: { occurredAt: Between(from, to) },
-      order: { occurredAt: "ASC" },
-    });
-
-    return movements;
+  async consumptionReport(from: Date, to: Date, branchId?: string | null) {
+    if (!branchId) {
+      return this.movementsRepository.find({
+        where: { occurredAt: Between(from, to) },
+        order: { occurredAt: "ASC" },
+      });
+    }
+    return this.movementsRepository
+      .createQueryBuilder("movement")
+      .leftJoin("movement.item", "item")
+      .where("movement.occurredAt BETWEEN :from AND :to", { from, to })
+      .andWhere("item.branchId = :branchId", { branchId })
+      .orderBy("movement.occurredAt", "ASC")
+      .getMany();
   }
 
-  async stockStatusSummary() {
-    return this.stockLevelsRepository.find({
-      order: { vehicle: { licensePlate: "ASC" } },
-    });
+  async stockStatusSummary(branchId?: string | null) {
+    if (!branchId) {
+      return this.stockLevelsRepository.find({
+        order: { vehicle: { licensePlate: "ASC" } },
+      });
+    }
+    return this.stockLevelsRepository
+      .createQueryBuilder("level")
+      .leftJoin("level.item", "item")
+      .where("item.branchId = :branchId", { branchId })
+      .orderBy("level.vehicleId", "ASC")
+      .getMany();
   }
 
   async getVehicleStockLevels(vehicleId: string) {
@@ -39,4 +54,3 @@ export class ReportsService {
     });
   }
 }
-

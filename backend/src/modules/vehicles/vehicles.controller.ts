@@ -24,8 +24,8 @@ export class VehiclesController {
 
   @Get(":id")
   @Permissions("vehicles.view")
-  findOne(@Param("id") id: string): Promise<Vehicle | null> {
-    return this.vehiclesService.findOne(id);
+  findOne(@Req() req: VehiclesRequest, @Param("id") id: string): Promise<Vehicle | null> {
+    return this.vehiclesService.findOne(id, req.user?.branchId);
   }
 
   @Post()
@@ -36,13 +36,13 @@ export class VehiclesController {
 
   @Patch(":id")
   @Permissions("vehicles.edit")
-  update(@Param("id") id: string, @Body() data: Partial<Vehicle>) {
-    return this.vehiclesService.update(id, data);
+  update(@Req() req: VehiclesRequest, @Param("id") id: string, @Body() data: Partial<Vehicle>) {
+    return this.vehiclesService.update(id, data, req.user?.branchId);
   }
 
   @Delete(":id")
   @Permissions("vehicles.delete")
-  remove(@Param("id") id: string) {
-    return this.vehiclesService.remove(id);
+  remove(@Req() req: VehiclesRequest, @Param("id") id: string) {
+    return this.vehiclesService.remove(id, req.user?.branchId);
   }
 }

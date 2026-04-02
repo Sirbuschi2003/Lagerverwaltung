@@ -144,6 +144,7 @@ export class ItemsController {
   @Get("export/csv")
   @Permissions("items.view")
   async exportCsv(
+    @Req() req: ItemsRequest,
     @Res() res: Response,
     @Query("search") search?: string,
     @Query("manufacturer") manufacturer?: string,
@@ -154,6 +155,7 @@ export class ItemsController {
         search,
         manufacturer,
         productGroup,
+        branchId: req.user?.branchId,
       });
       const date = new Date().toISOString().split("T")[0];
       res.setHeader("Content-Type", "text/csv; charset=utf-8");
@@ -167,10 +169,10 @@ export class ItemsController {
 
   @Get("by-code/:code")
   @Permissions("items.view")
-  async findByCode(@Param("code") code: string) {
+  async findByCode(@Req() req: ItemsRequest, @Param("code") code: string) {
     try {
       this.logger.debug(`Suche Artikel nach Code: ${code}`);
-      const item = await this.itemsService.findOneByAnyCode(code);
+      const item = await this.itemsService.findOneByAnyCode(code, req.user?.branchId);
       if (!item) {
         throw new NotFoundException('Item not found');
       }
@@ -234,10 +236,10 @@ export class ItemsController {
 
   @Get(":id")
   @Permissions("items.view")
-  async findOne(@Param("id") id: string) {
+  async findOne(@Req() req: ItemsRequest, @Param("id") id: string) {
     try {
       this.logger.debug(`Suche Artikel nach ID: ${id}`);
-      const item = await this.itemsService.findOne(id);
+      const item = await this.itemsService.findOne(id, req.user?.branchId);
       if (!item) {
         throw new NotFoundException('Item not found');
       }
@@ -268,10 +270,10 @@ export class ItemsController {
 
   @Patch(":id")
   @Permissions("items.edit")
-  async update(@Param("id") id: string, @Body() dto: UpdateItemDto) {
+  async update(@Req() req: ItemsRequest, @Param("id") id: string, @Body() dto: UpdateItemDto) {
     try {
       this.logger.debug(`Aktualisiere Artikel ${id}`);
-      const item = await this.itemsService.update(id, dto);
+      const item = await this.itemsService.update(id, dto, req.user?.branchId);
       return {
         ...item,
         alternateCodes: item.codes ? item.codes.map(code => code.code) : []
@@ -292,7 +294,7 @@ export class ItemsController {
   @Permissions("items.delete")
   async remove(@Req() req: ItemsRequest, @Param("id") id: string) {
     try {
-      await this.itemsService.remove(id, req.user?.id);
+      await this.itemsService.remove(id, req.user?.id, req.user?.branchId);
     } catch (error) {
       this.logger.error(`Fehler beim Loeschen: ${error instanceof Error ? error.message : String(error)}`);
       throw new InternalServerErrorException('Artikel konnte nicht geloescht werden');

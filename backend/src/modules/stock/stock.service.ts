@@ -241,12 +241,21 @@ export class StockService {
     }
   }
 
-  async findMovements(limit = 100) {
+  async findMovements(limit = 100, branchId?: string | null) {
     try {
-      return await this.movementsRepository.find({
-        order: { occurredAt: "DESC" },
-        take: limit,
-      });
+      if (!branchId) {
+        return this.movementsRepository.find({
+          order: { occurredAt: "DESC" },
+          take: limit,
+        });
+      }
+      return this.movementsRepository
+        .createQueryBuilder("movement")
+        .leftJoin("movement.item", "item")
+        .where("item.branchId = :branchId", { branchId })
+        .orderBy("movement.occurredAt", "DESC")
+        .take(limit)
+        .getMany();
     } catch (error) {
       this.logger.error("Fehler beim Laden der Bewegungen:", error);
       throw error;
@@ -547,13 +556,21 @@ export class StockService {
     return requests.map((request: RestockRequest) => this.mapRestockRequest(request, warehouseAvailability));
   }
 
-  async getRestockOverview(params: { status?: RestockRequestStatus | "OPEN" }): Promise<RestockRequestView[]> {
+  async getRestockOverview(params: { status?: RestockRequestStatus | "OPEN" }, branchId?: string | null): Promise<RestockRequestView[]> {
     // Erledigte Requests aelter als 5 Stunden bereinigen
     const fiveHoursAgo = new Date(Date.now() - 5 * 60 * 60 * 1000);
     await this.restockRepository.delete({ status: "FULFILLED", fulfilledAt: LessThan(fiveHoursAgo) });
 
-    // Alle StockLevels laden und Fehlbestaende synchronisieren
-    const allStockLevels = await this.stockLevelsRepository.find({ relations: { item: true, vehicle: true, location: true } });
+    // Alle StockLevels laden und Fehlbestaende synchronisieren (nach Branch filtern)
+    const stockLevelsQb = this.stockLevelsRepository
+      .createQueryBuilder("level")
+      .leftJoinAndSelect("level.item", "item")
+      .leftJoinAndSelect("level.vehicle", "vehicle")
+      .leftJoinAndSelect("level.location", "location");
+    if (branchId) {
+      stockLevelsQb.andWhere("vehicle.branchId = :branchId", { branchId });
+    }
+    const allStockLevels = await stockLevelsQb.getMany();
 
     // Nur die relevanten Stock-Levels bestimmen (Performance: nicht alle einzeln abfragen)
     const levelsWithShortage = allStockLevels.filter(
@@ -563,17 +580,27 @@ export class StockService {
     // Parallel synchronisieren (jeder Level ist unabhaengig voneinander)
     await Promise.all(levelsWithShortage.map((level) => this.syncRestockRequest(level.id)));
 
-    const where = params.status
-      ? params.status === "OPEN"
-        ? { status: Not<RestockRequestStatus>("FULFILLED") }
-        : { status: params.status }
-      : {};
+    const requestsQb = this.restockRepository
+      .createQueryBuilder("request")
+      .leftJoinAndSelect("request.item", "item")
+      .leftJoinAndSelect("request.vehicle", "vehicle")
+      .leftJoinAndSelect("request.location", "location")
+      .leftJoinAndSelect("location.parent", "locationParent")
+      .orderBy("request.status", "ASC")
+      .addOrderBy("request.createdAt", "ASC");
 
-    const requests = await this.restockRepository.find({
-      where,
-      relations: ["location", "location.parent"],
-      order: { status: "ASC", createdAt: "ASC" },
-    });
+    if (params.status) {
+      if (params.status === "OPEN") {
+        requestsQb.andWhere("request.status != :fulfilled", { fulfilled: "FULFILLED" });
+      } else {
+        requestsQb.andWhere("request.status = :status", { status: params.status });
+      }
+    }
+    if (branchId) {
+      requestsQb.andWhere("vehicle.branchId = :branchId", { branchId });
+    }
+
+    const requests = await requestsQb.getMany();
     const warehouseAvailability = await this.getWarehouseAvailabilityByItemIds(
       requests.map((request) => request.item.id),
     );
@@ -1029,13 +1056,17 @@ export class StockService {
     };
   }
 
-  async getFleetOverview(params: { vehicleId?: string; search?: string }) {
+  async getFleetOverview(params: { vehicleId?: string; search?: string; branchId?: string | null }) {
     const qb = this.stockLevelsRepository
       .createQueryBuilder('stock')
       .leftJoinAndSelect('stock.vehicle', 'vehicle')
       .leftJoinAndSelect('stock.item', 'item');
 
     qb.andWhere('vehicle.id IS NOT NULL');
+
+    if (params.branchId) {
+      qb.andWhere('vehicle.branchId = :branchId', { branchId: params.branchId });
+    }
 
     if (params.vehicleId) {
       qb.andWhere('vehicle.id = :vehicleId', { vehicleId: params.vehicleId });
@@ -1054,7 +1085,7 @@ export class StockService {
     const levels = await qb.getMany();
 
     // Techniker-Mapping aufbauen: vehicleId -> displayName
-    const allUsers = await this.usersService.findAll();
+    const allUsers = await this.usersService.findAll(params.branchId);
     const vehicleTechnicianMap = new Map<string, string>();
     for (const u of allUsers) {
       if (u.vehicleId && u.displayName) {

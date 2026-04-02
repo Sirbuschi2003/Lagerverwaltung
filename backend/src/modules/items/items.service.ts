@@ -230,12 +230,13 @@ export class ItemsService {
     return this.repository.count({ where: branchId ? { branchId } : undefined });
   }
 
-  async exportItemsCsv(params?: { search?: string; manufacturer?: string; productGroup?: string }): Promise<Buffer> {
+  async exportItemsCsv(params?: { search?: string; manufacturer?: string; productGroup?: string; branchId?: string | null }): Promise<Buffer> {
     const { items } = await this.findAll({
       limit: 200000,
       search: params?.search,
       manufacturer: params?.manufacturer,
       productGroup: params?.productGroup,
+      branchId: params?.branchId,
     });
 
     const headers = [
@@ -289,11 +290,13 @@ export class ItemsService {
     return Buffer.from(`\uFEFF${csv}`, "utf8");
   }
 
-  async findOne(id: string): Promise<Item | null> {
+  async findOne(id: string, branchId?: string | null): Promise<Item | null> {
     try {
       this.logger.debug(`Suche Artikel mit ID: ${id}`);
-      const item = await this.repository.findOne({ 
-        where: { id },
+      const where: Record<string, unknown> = { id };
+      if (branchId) where.branchId = branchId;
+      const item = await this.repository.findOne({
+        where,
         relations: ['codes', 'storageLocation', 'supplier']
       });
       return item || null;
@@ -303,37 +306,46 @@ export class ItemsService {
     }
   }
 
-  async findOneByCode(code: string): Promise<Item | null> {
+  async findOneByCode(code: string, branchId?: string | null): Promise<Item | null> {
     try {
-      return await this.repository.findOne({ where: { code } });
+      const where: Record<string, unknown> = { code };
+      if (branchId) where.branchId = branchId;
+      return await this.repository.findOne({ where });
     } catch (error) {
       this.logger.error(`Fehler beim Abrufen des Artikels nach Code ${code}: ${error instanceof Error ? error.message : String(error)}`);
       throw error;
     }
   }
 
-  async findOneByAnyCode(code: string): Promise<Item | null> {
+  async findOneByAnyCode(code: string, branchId?: string | null): Promise<Item | null> {
     try {
       const normalized = code.trim();
       if (!normalized) {
         return null;
       }
-      
+
       // Prüfe Hauptcode zuerst
-      const direct = await this.repository.findOne({ 
-        where: { code: normalized },
+      const directWhere: Record<string, unknown> = { code: normalized };
+      if (branchId) directWhere.branchId = branchId;
+      const direct = await this.repository.findOne({
+        where: directWhere,
         relations: ['codes', 'storageLocation', 'supplier']
       });
       if (direct) {
         return direct;
       }
-      
+
       // Prüfe alternative Codes
-      const alias = await this.codesRepository.findOne({ 
-        where: { code: normalized }, 
-        relations: ["item", "item.codes", "item.storageLocation", "item.supplier"] 
+      const alias = await this.codesRepository.findOne({
+        where: { code: normalized },
+        relations: ["item", "item.codes", "item.storageLocation", "item.supplier"]
       });
-      return alias?.item ?? null;
+      const item = alias?.item ?? null;
+      // Prüfe ob gefundener Artikel zur Niederlassung gehört
+      if (item && branchId && item.branchId !== branchId) {
+        return null;
+      }
+      return item;
     } catch (error) {
       this.logger.error(`Fehler beim Abrufen des Artikels nach Code ${code}: ${error instanceof Error ? error.message : String(error)}`);
       throw error;
@@ -697,9 +709,11 @@ export class ItemsService {
     return result;
   }
 
-  async update(id: string, dto: UpdateItemDto): Promise<Item> {
-    const entity = await this.repository.findOne({ 
-      where: { id },
+  async update(id: string, dto: UpdateItemDto, branchId?: string | null): Promise<Item> {
+    const where: Record<string, unknown> = { id };
+    if (branchId) where.branchId = branchId;
+    const entity = await this.repository.findOne({
+      where,
       relations: ['codes', 'storageLocation', 'supplier']
     });
     if (!entity) {
@@ -811,8 +825,11 @@ export class ItemsService {
     await this.stockLevelsRepository.save(source);
   }
 
-  async remove(id: string, actorId?: string): Promise<void> {
-    const item = await this.repository.findOne({ where: { id } });
+  async remove(id: string, actorId?: string, branchId?: string | null): Promise<void> {
+    const where: Record<string, unknown> = { id };
+    if (branchId) where.branchId = branchId;
+    const item = await this.repository.findOne({ where });
+    if (!item) throw new NotFoundException("Item not found");
     await this.repository.delete(id);
 
     // Audit-Log: Loeschvorgang protokollieren

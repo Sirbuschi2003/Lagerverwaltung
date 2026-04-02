@@ -13,7 +13,10 @@
       "Bash(sed -i 's/\"version\": \"2.2.12\"/\"version\": \"2.2.13\"/' frontend/package.json)",
       "Bash(sed -i 's/\"version\": \"2.2.13\"/\"version\": \"3.0.0\"/' backend/package.json)",
       "Bash(sed -i 's/\"version\": \"2.2.13\"/\"version\": \"3.0.0\"/' frontend/package.json)",
-      "Bash(gh run:*)"
+      "Bash(gh run:*)",
+      "Read(//c/Users/Thomas.Busche/.github/workflows/**)",
+      "Bash(npx tsc:*)",
+      "Bash(node_modules/.bin/tsc --noEmit)"
     ],
     "additionalDirectories": [
       "c:\\Users\\Thomas.Busche\\.claude\\projects\\c--Users-Thomas-Busche-Desktop-Code-Lagerverwaltung\\memory",

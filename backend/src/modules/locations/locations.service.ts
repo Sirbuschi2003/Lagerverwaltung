@@ -45,9 +45,11 @@ export class LocationsService {
     return qb.getMany();
   }
 
-  async findOne(id: string): Promise<Location> {
+  async findOne(id: string, branchId?: string | null): Promise<Location> {
+    const where: Record<string, unknown> = { id };
+    if (branchId) where.branchId = branchId;
     const location = await this.repository.findOne({
-      where: { id },
+      where,
       relations: ["parent", "vehicle"],
     });
     if (!location) {

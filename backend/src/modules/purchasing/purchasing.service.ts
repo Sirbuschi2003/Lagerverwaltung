@@ -124,8 +124,10 @@ export class PurchasingService {
     return qb.getMany();
   }
 
-  async findOne(id: string) {
-    const order = await this.ordersRepository.findOne({ where: { id } });
+  async findOne(id: string, branchId?: string | null) {
+    const where: Record<string, unknown> = { id };
+    if (branchId) where.branchId = branchId;
+    const order = await this.ordersRepository.findOne({ where });
     if (!order) {
       throw new NotFoundException("Purchase order not found");
     }
@@ -192,8 +194,8 @@ export class PurchasingService {
     return saved;
   }
 
-  async update(id: string, payload: { status?: PurchaseOrderStatus; orderNumber?: string; note?: string }) {
-    const order = await this.findOne(id);
+  async update(id: string, payload: { status?: PurchaseOrderStatus; orderNumber?: string; note?: string }, branchId?: string | null) {
+    const order = await this.findOne(id, branchId);
     const oldStatus = order.status;
 
     if (payload.status) {
@@ -253,8 +255,9 @@ export class PurchasingService {
     id: string,
     payload: { lines: Array<{ lineId: string; receivedQuantity?: number }> },
     userId?: string,
+    branchId?: string | null,
   ) {
-    const order = await this.findOne(id);
+    const order = await this.findOne(id, branchId);
     if (order.status === "CANCELLED" || order.status === "ARCHIVED") {
       throw new BadRequestException("Cancelled orders cannot be received");
     }
@@ -324,22 +327,23 @@ export class PurchasingService {
     return savedOrder;
   }
 
-  async remove(id: string): Promise<void> {
-    const order = await this.findOne(id);
+  async remove(id: string, branchId?: string | null): Promise<void> {
+    const order = await this.findOne(id, branchId);
     await this.ordersRepository.remove(order);
     this.invalidateSuggestionsCache();
   }
 
-  async previewPurgeOldOrders(years = 10): Promise<{ count: number; oldestDate: string | null; cutoffDate: string }> {
+  async previewPurgeOldOrders(years = 10, branchId?: string | null): Promise<{ count: number; oldestDate: string | null; cutoffDate: string }> {
     const cutoff = new Date();
     cutoff.setFullYear(cutoff.getFullYear() - years);
 
-    const orders = await this.ordersRepository
+    const qb = this.ordersRepository
       .createQueryBuilder("order")
       .where("order.status IN (:...statuses)", { statuses: ["RECEIVED", "ARCHIVED", "CANCELLED"] })
       .andWhere("COALESCE(order.orderedAt, order.createdAt) < :cutoff", { cutoff })
-      .orderBy("COALESCE(order.orderedAt, order.createdAt)", "ASC")
-      .getMany();
+      .orderBy("COALESCE(order.orderedAt, order.createdAt)", "ASC");
+    if (branchId) qb.andWhere("order.branchId = :branchId", { branchId });
+    const orders = await qb.getMany();
 
     const oldest = orders.length > 0
       ? (orders[0].orderedAt ?? orders[0].createdAt ?? null)
@@ -352,16 +356,17 @@ export class PurchasingService {
     };
   }
 
-  async purgeOldOrders(years = 10): Promise<{ deleted: number }> {
+  async purgeOldOrders(years = 10, branchId?: string | null): Promise<{ deleted: number }> {
     const cutoff = new Date();
     cutoff.setFullYear(cutoff.getFullYear() - years);
 
-    const orders = await this.ordersRepository
+    const qb = this.ordersRepository
       .createQueryBuilder("order")
       .leftJoinAndSelect("order.lines", "line")
       .where("order.status IN (:...statuses)", { statuses: ["RECEIVED", "ARCHIVED", "CANCELLED"] })
-      .andWhere("COALESCE(order.orderedAt, order.createdAt) < :cutoff", { cutoff })
-      .getMany();
+      .andWhere("COALESCE(order.orderedAt, order.createdAt) < :cutoff", { cutoff });
+    if (branchId) qb.andWhere("order.branchId = :branchId", { branchId });
+    const orders = await qb.getMany();
 
     if (orders.length === 0) return { deleted: 0 };
 
@@ -391,8 +396,8 @@ export class PurchasingService {
     return { deleted: orders.length };
   }
 
-  async getOrderPdf(id: string): Promise<{ filename: string; buffer: Buffer }> {
-    const order = await this.findOne(id);
+  async getOrderPdf(id: string, branchId?: string | null): Promise<{ filename: string; buffer: Buffer }> {
+    const order = await this.findOne(id, branchId);
     const buffer = await this.buildOrderPdf(order);
     await this.saveOrderPdfToStorage(order, buffer);
     const safeNumber = (order.orderNumber || order.id).replace(/[^a-zA-Z0-9_-]/g, "_");
@@ -402,8 +407,9 @@ export class PurchasingService {
   async sendOrderEmail(
     id: string,
     payload?: { to?: string; subject?: string; message?: string },
+    branchId?: string | null,
   ): Promise<void> {
-    const order = await this.findOne(id);
+    const order = await this.findOne(id, branchId);
     const recipient = payload?.to?.trim() || order.supplier?.email;
     
     // Log: E-Mail-Versand gestartet
@@ -794,7 +800,7 @@ export class PurchasingService {
     return result;
   }
 
-  async listOrderDocuments(params?: OrderDocumentQueryParams): Promise<StoredOrderDocumentEntry[]> {
+  async listOrderDocuments(params?: OrderDocumentQueryParams, branchId?: string | null): Promise<StoredOrderDocumentEntry[]> {
     const storagePath = this.getPurchaseOrderStoragePath();
     try {
       await fs.access(storagePath);
@@ -807,7 +813,7 @@ export class PurchasingService {
     try {
 
     const fileToSupplier = new Map<string, { supplierId: string | null; supplierName: string | null }>();
-    const allOrders = await this.ordersRepository.find();
+    const allOrders = await this.ordersRepository.find({ where: branchId ? { branchId } : undefined });
     allOrders.forEach((order) => {
       const year = this.getOrderDocumentYear(order);
       const filename = this.buildStoredOrderFilename(order);
@@ -875,12 +881,25 @@ export class PurchasingService {
     }
   }
 
-  async getOrderDocument(year: string, filename: string): Promise<{ filename: string; buffer: Buffer }> {
+  async getOrderDocument(year: string, filename: string, branchId?: string | null): Promise<{ filename: string; buffer: Buffer }> {
     if (!/^\d{4}$/.test(year)) {
       throw new BadRequestException("Ungueltiges Jahr.");
     }
     if (!this.isValidOrderDocumentFilename(filename)) {
       throw new BadRequestException("Ungueltiger Dateiname.");
+    }
+
+    // Niederlassungs-Isolation: prüfen ob die Datei zur eigenen NL gehört
+    if (branchId) {
+      const branchOrders = await this.ordersRepository.find({ where: { branchId } });
+      const isOwned = branchOrders.some((order) => {
+        const orderYear = this.getOrderDocumentYear(order);
+        const orderFilename = this.buildStoredOrderFilename(order);
+        return orderYear === year && orderFilename === filename;
+      });
+      if (!isOwned) {
+        throw new NotFoundException("Dokument nicht gefunden.");
+      }
     }
 
     const storagePath = this.getPurchaseOrderStoragePath();

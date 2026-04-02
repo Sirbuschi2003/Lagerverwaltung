@@ -52,20 +52,24 @@ export class PurchasingController {
   @Get("documents")
   @Permissions("orders.view")
   listDocuments(
+    @Req() req: PurchasingRequest,
     @Query("year") year?: string,
     @Query("supplierId") supplierId?: string,
   ) {
     const parsedYear = year ? Number.parseInt(year, 10) : undefined;
-    return this.purchasingService.listOrderDocuments({
-      year: Number.isFinite(parsedYear) ? parsedYear : undefined,
-      supplierId: supplierId?.trim() || undefined,
-    });
+    return this.purchasingService.listOrderDocuments(
+      {
+        year: Number.isFinite(parsedYear) ? parsedYear : undefined,
+        supplierId: supplierId?.trim() || undefined,
+      },
+      req.user?.branchId,
+    );
   }
 
   @Get("documents/download/:year/:filename")
   @Permissions("orders.view")
-  async downloadDocument(@Param("year") year: string, @Param("filename") filename: string) {
-    const result = await this.purchasingService.getOrderDocument(year, filename);
+  async downloadDocument(@Req() req: PurchasingRequest, @Param("year") year: string, @Param("filename") filename: string) {
+    const result = await this.purchasingService.getOrderDocument(year, filename, req.user?.branchId);
     return new StreamableFile(result.buffer, {
       type: "application/pdf",
       disposition: `attachment; filename="${result.filename}"`,
@@ -74,8 +78,8 @@ export class PurchasingController {
 
   @Get(":id")
   @Permissions("orders.view")
-  findOne(@Param("id") id: string) {
-    return this.purchasingService.findOne(id);
+  findOne(@Req() req: PurchasingRequest, @Param("id") id: string) {
+    return this.purchasingService.findOne(id, req.user?.branchId);
   }
 
   @Post()
@@ -86,40 +90,40 @@ export class PurchasingController {
 
   @Patch(":id")
   @Permissions("orders.edit")
-  update(@Param("id") id: string, @Body() dto: UpdatePurchaseOrderDto) {
-    return this.purchasingService.update(id, dto);
+  update(@Req() req: PurchasingRequest, @Param("id") id: string, @Body() dto: UpdatePurchaseOrderDto) {
+    return this.purchasingService.update(id, dto, req.user?.branchId);
   }
 
   @Delete(":id")
   @Permissions("orders.delete")
-  remove(@Param("id") id: string) {
-    return this.purchasingService.remove(id);
+  remove(@Req() req: PurchasingRequest, @Param("id") id: string) {
+    return this.purchasingService.remove(id, req.user?.branchId);
   }
 
   @Get("purge-preview")
   @Permissions("orders.delete")
-  purgePreview(@Query("years") years?: string) {
+  purgePreview(@Req() req: PurchasingRequest, @Query("years") years?: string) {
     const y = years ? Number.parseInt(years, 10) : 10;
-    return this.purchasingService.previewPurgeOldOrders(Number.isFinite(y) && y > 0 ? y : 10);
+    return this.purchasingService.previewPurgeOldOrders(Number.isFinite(y) && y > 0 ? y : 10, req.user?.branchId);
   }
 
   @Delete("purge")
   @Permissions("orders.delete")
-  purge(@Query("years") years?: string) {
+  purge(@Req() req: PurchasingRequest, @Query("years") years?: string) {
     const y = years ? Number.parseInt(years, 10) : 10;
-    return this.purchasingService.purgeOldOrders(Number.isFinite(y) && y > 0 ? y : 10);
+    return this.purchasingService.purgeOldOrders(Number.isFinite(y) && y > 0 ? y : 10, req.user?.branchId);
   }
 
   @Post(":id/receive")
   @Permissions("orders.receive")
   receive(@Req() req: PurchasingRequest, @Param("id") id: string, @Body() dto: ReceivePurchaseOrderDto) {
-    return this.purchasingService.receiveOrder(id, dto, req.user?.id);
+    return this.purchasingService.receiveOrder(id, dto, req.user?.id, req.user?.branchId);
   }
 
   @Get(":id/pdf")
   @Permissions("orders.view")
-  async downloadPdf(@Param("id") id: string) {
-    const result = await this.purchasingService.getOrderPdf(id);
+  async downloadPdf(@Req() req: PurchasingRequest, @Param("id") id: string) {
+    const result = await this.purchasingService.getOrderPdf(id, req.user?.branchId);
     return new StreamableFile(result.buffer, {
       type: "application/pdf",
       disposition: `attachment; filename="${result.filename}"`,
@@ -128,8 +132,8 @@ export class PurchasingController {
 
   @Post(":id/send")
   @Permissions("orders.send")
-  async send(@Param("id") id: string, @Body() dto: SendPurchaseOrderDto) {
-    await this.purchasingService.sendOrderEmail(id, dto);
+  async send(@Req() req: PurchasingRequest, @Param("id") id: string, @Body() dto: SendPurchaseOrderDto) {
+    await this.purchasingService.sendOrderEmail(id, dto, req.user?.branchId);
     return { success: true };
   }
 }

@@ -16,8 +16,10 @@ export class SuppliersService {
     return this.repository.find({ where, order: { name: "ASC" } });
   }
 
-  findOne(id: string): Promise<Supplier | null> {
-    return this.repository.findOne({ where: { id } });
+  findOne(id: string, branchId?: string | null): Promise<Supplier | null> {
+    const where: Record<string, unknown> = { id };
+    if (branchId) where.branchId = branchId;
+    return this.repository.findOne({ where });
   }
 
   async create(data: Partial<Supplier>, branchId?: string | null): Promise<Supplier> {
@@ -38,8 +40,10 @@ export class SuppliersService {
     return this.repository.save(entity);
   }
 
-  async update(id: string, data: Partial<Supplier>): Promise<Supplier> {
-    const entity = await this.repository.findOne({ where: { id } });
+  async update(id: string, data: Partial<Supplier>, branchId?: string | null): Promise<Supplier> {
+    const where: Record<string, unknown> = { id };
+    if (branchId) where.branchId = branchId;
+    const entity = await this.repository.findOne({ where });
     if (!entity) {
       throw new NotFoundException("Supplier not found");
     }
@@ -59,7 +63,11 @@ export class SuppliersService {
     return this.repository.save(entity);
   }
 
-  async remove(id: string): Promise<void> {
+  async remove(id: string, branchId?: string | null): Promise<void> {
+    if (branchId) {
+      const entity = await this.repository.findOne({ where: { id, branchId } as any });
+      if (!entity) throw new NotFoundException("Supplier not found");
+    }
     await this.repository.delete(id);
   }
 }

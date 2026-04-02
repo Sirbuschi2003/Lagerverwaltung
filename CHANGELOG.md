@@ -4,6 +4,28 @@ Alle Änderungen werden hier dokumentiert.
 
 ---
 
+## 2026-04-02 (2)
+
+### [3.2.0] – Vollständige Niederlassungs-Isolation
+
+#### Sicherheit / Datentrennung
+- **Komplette Branch-Isolation für alle Endpunkte** — Bisher konnten Benutzer einer Niederlassung auf Daten anderer Niederlassungen zugreifen wenn die ID bekannt war. Jetzt sind alle Lese-, Schreib- und Löschoperationen auf die eigene Niederlassung beschränkt.
+- **Items** — `GET /items/:id`, `GET /items/by-code/:code`, `PATCH /items/:id`, `DELETE /items/:id`, `GET /items/export/csv` filtern nach branchId. Barcode-Scanner findet nur Artikel der eigenen Niederlassung.
+- **Fahrzeuge** — `GET /vehicles/:id`, `PATCH /vehicles/:id`, `DELETE /vehicles/:id` prüfen branchId.
+- **Lieferanten** — `GET /suppliers/:id`, `PATCH /suppliers/:id`, `DELETE /suppliers/:id` prüfen branchId.
+- **Lagerorte** — `GET /locations/:id` prüft branchId.
+- **Bestellungen** — Alle Einzeloperationen (`GET/:id`, `PATCH/:id`, `DELETE/:id`, Wareneingang, PDF-Download, E-Mail-Versand) prüfen branchId. PDFs anderer Niederlassungen können nicht heruntergeladen werden.
+- **Bestelldokumente** — `GET /purchase-orders/documents` und Download filtern nach branchId. Besitz-Prüfung vor PDF-Download verhindert Enumeration.
+- **Archivbereinigung** — `purgeOldOrders()` löscht nur Bestellungen der eigenen Niederlassung.
+- **Fuhrpark-Übersicht** — `GET /stock/fleet` zeigt nur Fahrzeuge und Bestände der eigenen Niederlassung.
+- **Buchungsverlauf** — `GET /stock/movements` gibt nur Buchungen der eigenen Niederlassung zurück.
+- **Nachbestellanfragen** — `GET /stock/shortages` filtert nach Fahrzeugen der eigenen Niederlassung.
+- **Berichte** — Verbrauchsbericht, Bestandsbericht und QR-Katalog sind niederlassungsspezifisch.
+- **Dashboard** — `GET /stock/dashboard` zählt nur Artikel der eigenen Niederlassung.
+- **SUPER_ADMIN-Bypass** — Alle Filter greifen nur wenn branchId gesetzt ist (branchId = null → kein Filter, SUPER_ADMIN sieht alles).
+
+---
+
 ## 2026-04-02
 
 ### [3.1.0] – Cross-Branch-Verfügbarkeit in Bestellvorschlägen
