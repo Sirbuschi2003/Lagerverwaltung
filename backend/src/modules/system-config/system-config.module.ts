@@ -2,6 +2,7 @@ import { Module } from "@nestjs/common";
 import { TypeOrmModule } from "@nestjs/typeorm";
 
 import { SystemConfig } from "../logging/entities/system-config.entity";
+import { BranchConfig } from "../logging/entities/branch-config.entity";
 import { AccessControlModule } from "../access-control/access-control.module";
 
 import { CompanyController } from "./company.controller";
@@ -14,7 +15,7 @@ import { SystemConfigService } from "./system-config.service";
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([SystemConfig]),
+    TypeOrmModule.forFeature([SystemConfig, BranchConfig]),
     AccessControlModule,
   ],
   controllers: [

@@ -4,6 +4,27 @@ Alle Änderungen werden hier dokumentiert.
 
 ---
 
+## 2026-04-02 (3)
+
+### [3.3.0] – Niederlassungsspezifische Einstellungen
+
+#### Neue Funktionen
+- **Firmendaten pro Niederlassung** — Jede Niederlassung kann eigene Firmendaten (Name, Logo, Adresse, Telefon, E-Mail) hinterlegen. Super-Admin pflegt die globalen Daten, die als Standard-Fallback für alle Niederlassungen dienen.
+- **E-Mail-Einstellungen pro Niederlassung** — Jede Niederlassung kann einen eigenen SMTP-Server konfigurieren. Ist keine eigene Konfiguration hinterlegt, wird automatisch die globale E-Mail-Konfiguration des Super-Admins verwendet.
+- **Lagereinstellungen pro Niederlassung** — QR-Vorlage, PDF-Template (Fahrzeugkatalog), Bestell-PDF-Template, Bestell-PDF-Designer und E-Mail-Vorlagen für Bestellungen sind jetzt niederlassungsspezifisch speicherbar mit globalem Fallback.
+- **Neue Datenbanktabelle `branch_configs`** — Speichert alle niederlassungsspezifischen Konfigurationsüberschreibungen. Lese-Reihenfolge: branch-spezifisch → global. Migration `1742000000000` legt die Tabelle an.
+
+#### Architektur
+- Super-Admin (`branchId = null`) schreibt/liest immer `system_config` (global).
+- Branch-Manager schreibt/liest `branch_configs` für die eigene Niederlassung.
+- Globale Einstellungen dienen als Fallback wenn keine niederlassungsspezifische Konfiguration vorhanden.
+
+#### Navigation (Einschränkungen)
+- **Niederlassungen**, **Datensicherung** und **Wartung & Update** sind nur noch für Super-Admins sichtbar.
+- **Bewegungen-Historie**, **Systemprotokolle** und **Inventursitzungen** sind jetzt niederlassungsbezogen gefiltert.
+
+---
+
 ## 2026-04-02 (2)
 
 ### [3.2.0] – Vollständige Niederlassungs-Isolation

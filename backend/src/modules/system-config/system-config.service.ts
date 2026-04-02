@@ -2,6 +2,7 @@ import { Injectable } from "@nestjs/common";
 import { InjectRepository } from "@nestjs/typeorm";
 import { DataSource, Repository } from "typeorm";
 
+import { BranchConfig } from "../logging/entities/branch-config.entity";
 import { SystemConfig } from "../logging/entities/system-config.entity";
 
 export interface CompanyConfig {
@@ -68,42 +69,27 @@ export class SystemConfigService {
   constructor(
     @InjectRepository(SystemConfig)
     private readonly configRepository: Repository<SystemConfig>,
+    @InjectRepository(BranchConfig)
+    private readonly branchConfigRepo: Repository<BranchConfig>,
     private readonly dataSource: DataSource,
   ) {}
 
-  async getCompanyConfig(): Promise<CompanyConfig> {
-    const [
-      nameConfig,
-      logoConfig,
-      addressLine1Config,
-      addressLine2Config,
-      postalCodeConfig,
-      cityConfig,
-      countryConfig,
-      phoneConfig,
-      emailConfig,
-    ] = await Promise.all([
-      this.configRepository.findOne({ where: { key: "company.name" } }),
-      this.configRepository.findOne({ where: { key: "company.logo" } }),
-      this.configRepository.findOne({ where: { key: "company.addressLine1" } }),
-      this.configRepository.findOne({ where: { key: "company.addressLine2" } }),
-      this.configRepository.findOne({ where: { key: "company.postalCode" } }),
-      this.configRepository.findOne({ where: { key: "company.city" } }),
-      this.configRepository.findOne({ where: { key: "company.country" } }),
-      this.configRepository.findOne({ where: { key: "company.phone" } }),
-      this.configRepository.findOne({ where: { key: "company.email" } }),
-    ]);
-
+  async getCompanyConfig(branchId?: string | null): Promise<CompanyConfig> {
+    const keys = [
+      "company.name", "company.logo", "company.addressLine1", "company.addressLine2",
+      "company.postalCode", "company.city", "company.country", "company.phone", "company.email",
+    ];
+    const values = await Promise.all(keys.map((k) => this.getEffectiveValue(k, branchId)));
     return {
-      name: nameConfig?.value ?? null,
-      logoDataUrl: logoConfig?.value ?? null,
-      addressLine1: addressLine1Config?.value ?? null,
-      addressLine2: addressLine2Config?.value ?? null,
-      postalCode: postalCodeConfig?.value ?? null,
-      city: cityConfig?.value ?? null,
-      country: countryConfig?.value ?? null,
-      phone: phoneConfig?.value ?? null,
-      email: emailConfig?.value ?? null,
+      name: values[0],
+      logoDataUrl: values[1],
+      addressLine1: values[2],
+      addressLine2: values[3],
+      postalCode: values[4],
+      city: values[5],
+      country: values[6],
+      phone: values[7],
+      email: values[8],
     };
   }
 
@@ -118,28 +104,24 @@ export class SystemConfigService {
     country?: string | null;
     phone?: string | null;
     email?: string | null;
-  }): Promise<CompanyConfig> {
+  }, branchId?: string | null): Promise<CompanyConfig> {
     await this.ensureValueColumnIsLongText();
 
-    await this.saveConfig(
-      "company.name",
-      payload.name.trim(),
-      "Firmenname fuer Dokumente und Login-Seite",
-    );
+    await this.saveEffectiveValue("company.name", payload.name.trim(), branchId, "Firmenname fuer Dokumente und Login-Seite");
 
     if (payload.removeLogo) {
-      await this.configRepository.delete({ key: "company.logo" });
+      await this.deleteEffectiveValue("company.logo", branchId);
     } else if (payload.logoDataUrl) {
-      await this.saveConfig("company.logo", payload.logoDataUrl, "Firmenlogo (Data URL)");
+      await this.saveEffectiveValue("company.logo", payload.logoDataUrl, branchId, "Firmenlogo (Data URL)");
     }
 
     const saveOptional = async (key: string, value?: string | null, description?: string) => {
       if (value === undefined) return;
       const trimmed = value?.trim() ?? "";
       if (trimmed) {
-        await this.saveConfig(key, trimmed, description);
+        await this.saveEffectiveValue(key, trimmed, branchId, description);
       } else {
-        await this.configRepository.delete({ key });
+        await this.deleteEffectiveValue(key, branchId);
       }
     };
 
@@ -151,26 +133,26 @@ export class SystemConfigService {
     await saveOptional("company.phone", payload.phone, "Firmen-Telefon");
     await saveOptional("company.email", payload.email, "Firmen-E-Mail");
 
-    return this.getCompanyConfig();
+    return this.getCompanyConfig(branchId);
   }
 
-  async getJsonConfig<T = any>(key: string): Promise<T | null> {
-    const rec = await this.configRepository.findOne({ where: { key } });
-    if (!rec?.value) return null;
+  async getJsonConfig<T = any>(key: string, branchId?: string | null): Promise<T | null> {
+    const val = await this.getEffectiveValue(key, branchId);
+    if (!val) return null;
     try {
-      return JSON.parse(rec.value) as T;
+      return JSON.parse(val) as T;
     } catch {
       return null;
     }
   }
 
-  async setJsonConfig(key: string, value: any, description?: string): Promise<void> {
+  async setJsonConfig(key: string, value: any, branchId?: string | null, description?: string): Promise<void> {
     await this.ensureValueColumnIsLongText();
-    await this.saveConfig(key, JSON.stringify(value ?? {}), description);
+    await this.saveEffectiveValue(key, JSON.stringify(value ?? {}), branchId, description);
   }
 
-  async getVehicleQrTemplateConfig(): Promise<VehicleQrTemplateConfig> {
-    const tpl = await this.getJsonConfig<VehicleQrTemplateConfig>("reports.vehicleQrTemplate");
+  async getVehicleQrTemplateConfig(branchId?: string | null): Promise<VehicleQrTemplateConfig> {
+    const tpl = await this.getJsonConfig<VehicleQrTemplateConfig>("reports.vehicleQrTemplate", branchId);
     return {
       title: tpl?.title ?? null,
       showLogo: tpl?.showLogo ?? true,
@@ -185,80 +167,56 @@ export class SystemConfigService {
     };
   }
 
-  async setVehicleQrTemplateConfig(cfg: VehicleQrTemplateConfig): Promise<VehicleQrTemplateConfig> {
-    await this.setJsonConfig("reports.vehicleQrTemplate", cfg, "Vorlage fuer Wagen-QR-Katalog");
-    return this.getVehicleQrTemplateConfig();
+  async setVehicleQrTemplateConfig(cfg: VehicleQrTemplateConfig, branchId?: string | null): Promise<VehicleQrTemplateConfig> {
+    await this.setJsonConfig("reports.vehicleQrTemplate", cfg, branchId, "Vorlage fuer Wagen-QR-Katalog");
+    return this.getVehicleQrTemplateConfig(branchId);
   }
 
-  async getPdfHtmlTemplate(): Promise<PdfHtmlTemplate> {
-    const tpl = await this.getJsonConfig<PdfHtmlTemplate>("reports.pdfHtmlTemplate");
-    if (tpl?.html && tpl?.css) {
-      return tpl;
-    }
-    // Return default template if not configured
+  async getPdfHtmlTemplate(branchId?: string | null): Promise<PdfHtmlTemplate> {
+    const tpl = await this.getJsonConfig<PdfHtmlTemplate>("reports.pdfHtmlTemplate", branchId);
+    if (tpl?.html && tpl?.css) return tpl;
     return this.getDefaultPdfHtmlTemplate();
   }
 
-  async setPdfHtmlTemplate(template: PdfHtmlTemplate): Promise<PdfHtmlTemplate> {
-    await this.setJsonConfig("reports.pdfHtmlTemplate", template, "HTML/CSS Template fuer PDF-Generierung");
-    return this.getPdfHtmlTemplate();
+  async setPdfHtmlTemplate(template: PdfHtmlTemplate, branchId?: string | null): Promise<PdfHtmlTemplate> {
+    await this.setJsonConfig("reports.pdfHtmlTemplate", template, branchId, "HTML/CSS Template fuer PDF-Generierung");
+    return this.getPdfHtmlTemplate(branchId);
   }
 
-  async getPurchaseOrderPdfTemplate(): Promise<PdfHtmlTemplate> {
-    const tpl = await this.getJsonConfig<PdfHtmlTemplate>("purchaseOrders.pdfTemplate");
-    if (tpl?.html && tpl?.css) {
-      return tpl;
-    }
+  async getPurchaseOrderPdfTemplate(branchId?: string | null): Promise<PdfHtmlTemplate> {
+    const tpl = await this.getJsonConfig<PdfHtmlTemplate>("purchaseOrders.pdfTemplate", branchId);
+    if (tpl?.html && tpl?.css) return tpl;
     return this.getDefaultPurchaseOrderPdfTemplate();
   }
 
-  async setPurchaseOrderPdfTemplate(template: PdfHtmlTemplate): Promise<PdfHtmlTemplate> {
-    await this.setJsonConfig(
-      "purchaseOrders.pdfTemplate",
-      template,
-      "HTML/CSS Template fuer Bestell-PDF",
-    );
-    return this.getPurchaseOrderPdfTemplate();
+  async setPurchaseOrderPdfTemplate(template: PdfHtmlTemplate, branchId?: string | null): Promise<PdfHtmlTemplate> {
+    await this.setJsonConfig("purchaseOrders.pdfTemplate", template, branchId, "HTML/CSS Template fuer Bestell-PDF");
+    return this.getPurchaseOrderPdfTemplate(branchId);
   }
 
-  async getPurchaseOrderPdfDesigner(): Promise<PurchaseOrderDesignerConfig> {
-    const cfg = await this.getJsonConfig<PurchaseOrderDesignerConfig>("purchaseOrders.pdfDesigner");
-    if (cfg?.elements && cfg?.page) {
-      return cfg;
-    }
+  async getPurchaseOrderPdfDesigner(branchId?: string | null): Promise<PurchaseOrderDesignerConfig> {
+    const cfg = await this.getJsonConfig<PurchaseOrderDesignerConfig>("purchaseOrders.pdfDesigner", branchId);
+    if (cfg?.elements && cfg?.page) return cfg;
     return this.getDefaultPurchaseOrderDesigner();
   }
 
-  async setPurchaseOrderPdfDesigner(
-    config: PurchaseOrderDesignerConfig,
-  ): Promise<PurchaseOrderDesignerConfig> {
-    await this.setJsonConfig(
-      "purchaseOrders.pdfDesigner",
-      config,
-      "Designer Konfiguration fuer Bestell-PDF",
-    );
-    return this.getPurchaseOrderPdfDesigner();
+  async setPurchaseOrderPdfDesigner(config: PurchaseOrderDesignerConfig, branchId?: string | null): Promise<PurchaseOrderDesignerConfig> {
+    await this.setJsonConfig("purchaseOrders.pdfDesigner", config, branchId, "Designer Konfiguration fuer Bestell-PDF");
+    return this.getPurchaseOrderPdfDesigner(branchId);
   }
 
-  async getPurchaseOrderEmailTemplate(): Promise<EmailTemplate> {
-    const tpl = await this.getJsonConfig<EmailTemplate>("purchaseOrders.emailTemplate");
-    if (tpl?.subject && tpl?.body) {
-      return tpl;
-    }
-    // Return default template
+  async getPurchaseOrderEmailTemplate(branchId?: string | null): Promise<EmailTemplate> {
+    const tpl = await this.getJsonConfig<EmailTemplate>("purchaseOrders.emailTemplate", branchId);
+    if (tpl?.subject && tpl?.body) return tpl;
     return {
       subject: "Bestellung {{orderNumber}}",
       body: "Sehr geehrte Damen und Herren,\n\nanbei erhalten Sie unsere Bestellung {{orderNumber}}.\n\nMit freundlichen Grüßen\n{{companyName}}\n{{userName}}",
     };
   }
 
-  async setPurchaseOrderEmailTemplate(template: EmailTemplate): Promise<EmailTemplate> {
-    await this.setJsonConfig(
-      "purchaseOrders.emailTemplate",
-      template,
-      "E-Mail-Vorlage für Bestellungen",
-    );
-    return this.getPurchaseOrderEmailTemplate();
+  async setPurchaseOrderEmailTemplate(template: EmailTemplate, branchId?: string | null): Promise<EmailTemplate> {
+    await this.setJsonConfig("purchaseOrders.emailTemplate", template, branchId, "E-Mail-Vorlage für Bestellungen");
+    return this.getPurchaseOrderEmailTemplate(branchId);
   }
 
   private getDefaultPdfHtmlTemplate(): PdfHtmlTemplate {
@@ -785,11 +743,51 @@ body {
       if (description) existing.description = description;
       await this.configRepository.save(existing);
     } else {
-      await this.configRepository.insert({
-        key,
-        value,
-        description,
-      });
+      await this.configRepository.insert({ key, value, description });
+    }
+  }
+
+  // ── Branch-Config Helfer ───────────────────────────────────────────────────
+
+  /**
+   * Liest einen Config-Wert: branch-spezifisch zuerst, Fallback auf global (system_config).
+   * branchId = null/undefined → liest direkt aus system_config (Super-Admin).
+   */
+  private async getEffectiveValue(key: string, branchId?: string | null): Promise<string | null> {
+    if (branchId) {
+      const branchRec = await this.branchConfigRepo.findOne({ where: { branchId, key } });
+      if (branchRec !== null && branchRec !== undefined) return branchRec.value ?? null;
+    }
+    const globalRec = await this.configRepository.findOne({ where: { key } });
+    return globalRec?.value ?? null;
+  }
+
+  /**
+   * Schreibt einen Config-Wert: branch-spezifisch wenn branchId gesetzt, sonst global.
+   */
+  private async saveEffectiveValue(key: string, value: string, branchId?: string | null, description?: string): Promise<void> {
+    if (branchId) {
+      const existing = await this.branchConfigRepo.findOne({ where: { branchId, key } });
+      if (existing) {
+        existing.value = value;
+        if (description) existing.description = description;
+        await this.branchConfigRepo.save(existing);
+      } else {
+        await this.branchConfigRepo.insert({ branchId, key, value, description: description ?? null, isSecret: false });
+      }
+      return;
+    }
+    await this.saveConfig(key, value, description);
+  }
+
+  /**
+   * Löscht einen Config-Wert: branch-spezifisch wenn branchId gesetzt, sonst global.
+   */
+  private async deleteEffectiveValue(key: string, branchId?: string | null): Promise<void> {
+    if (branchId) {
+      await this.branchConfigRepo.delete({ branchId, key });
+    } else {
+      await this.configRepository.delete({ key });
     }
   }
 

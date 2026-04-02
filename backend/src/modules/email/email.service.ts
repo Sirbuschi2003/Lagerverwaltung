@@ -29,16 +29,19 @@ export interface SendEmailOptions {
 
 @Injectable()
 export class EmailService {
-  private transporter: nodemailer.Transporter | null = null;
+  /** Cache pro Niederlassung: key = branchId oder 'global' */
+  private transporters: Map<string, nodemailer.Transporter> = new Map();
 
   constructor(private readonly loggingService: LoggingService) {}
 
   /**
-   * Konfiguriert den Email-Transport
+   * Konfiguriert den Email-Transport (global oder niederlassungsspezifisch).
+   * Super-Admin (branchId = null) → schreibt in system_config (gilt als Fallback für alle).
+   * Branch-Manager → schreibt in branch_configs (eigene Einstellungen).
    */
-  async configureTransport(config: EmailConfig): Promise<void> {
+  async configureTransport(config: EmailConfig, branchId?: string | null): Promise<void> {
     try {
-      this.transporter = nodemailer.createTransport({
+      const transporter = nodemailer.createTransport({
         host: config.host,
         port: config.port,
         secure: config.secure,
@@ -48,79 +51,97 @@ export class EmailService {
         },
       });
 
-      // Test die Konfiguration
-      if (this.transporter) {
-        await this.transporter.verify();
+      if (transporter) {
+        await transporter.verify();
       }
-      
-      // Speichere Konfiguration (ohne Passwort)
-      await this.loggingService.setConfig('email.host', config.host, 'SMTP Server Host');
-      await this.loggingService.setConfig('email.port', config.port.toString(), 'SMTP Server Port');
-      await this.loggingService.setConfig('email.secure', config.secure.toString(), 'SMTP TLS/SSL');
-      await this.loggingService.setConfig('email.user', config.auth.user, 'SMTP Benutzername');
-      await this.loggingService.setConfig('email.password', config.auth.pass, 'SMTP Passwort', true);
-      await this.loggingService.setConfig('email.from', config.from, 'Standard Absender-Adresse');
+
+      const cacheKey = branchId || 'global';
+      this.transporters.set(cacheKey, transporter);
+
+      await this.loggingService.setConfig('email.host', config.host, 'SMTP Server Host', false, branchId ?? undefined);
+      await this.loggingService.setConfig('email.port', config.port.toString(), 'SMTP Server Port', false, branchId ?? undefined);
+      await this.loggingService.setConfig('email.secure', config.secure.toString(), 'SMTP TLS/SSL', false, branchId ?? undefined);
+      await this.loggingService.setConfig('email.user', config.auth.user, 'SMTP Benutzername', false, branchId ?? undefined);
+      await this.loggingService.setConfig('email.password', config.auth.pass, 'SMTP Passwort', true, branchId ?? undefined);
+      await this.loggingService.setConfig('email.from', config.from, 'Standard Absender-Adresse', false, branchId ?? undefined);
 
       await this.loggingService.logInfo(
         'SYSTEM' as any,
         'EMAIL_CONFIG_UPDATED',
-        `Email-Konfiguration aktualisiert: ${config.host}:${config.port}`,
-        {
-          metadata: { 
-            host: config.host, 
-            port: config.port, 
-            secure: config.secure, 
-            user: config.auth.user 
-          }
-        }
+        `Email-Konfiguration aktualisiert: ${config.host}:${config.port}${branchId ? ` (Niederlassung: ${branchId})` : ' (global)'}`,
+        { metadata: { host: config.host, port: config.port, secure: config.secure, user: config.auth.user, branchId } },
       );
     } catch (error) {
       await this.loggingService.logError(
         'SYSTEM' as any,
         'EMAIL_CONFIG_FAILED',
         `Email-Konfiguration fehlgeschlagen: ${error instanceof Error ? error.message : 'Unbekannter Fehler'}`,
-        { metadata: { error: error instanceof Error ? error.message : 'Unbekannter Fehler' } }
+        { metadata: { error: error instanceof Error ? error.message : 'Unbekannter Fehler' } },
       );
       throw error;
     }
   }
 
   /**
-   * Lädt die Email-Konfiguration aus der Datenbank
+   * Lädt die Email-Konfiguration aus der Datenbank (branch-spezifisch mit globalem Fallback).
    */
-  async loadConfiguration(): Promise<void> {
-    const host = await this.loggingService.getConfig('email.host');
-    const port = await this.loggingService.getConfig('email.port');
-    const secure = await this.loggingService.getConfig('email.secure');
-    const user = await this.loggingService.getConfig('email.user');
-    const password = await this.loggingService.getConfig('email.password');
-    const from = await this.loggingService.getConfig('email.from');
+  async loadConfiguration(branchId?: string | null): Promise<void> {
+    const host = await this.loggingService.getConfig('email.host', branchId ?? undefined);
+    const port = await this.loggingService.getConfig('email.port', branchId ?? undefined);
+    const secure = await this.loggingService.getConfig('email.secure', branchId ?? undefined);
+    const user = await this.loggingService.getConfig('email.user', branchId ?? undefined);
+    const password = await this.loggingService.getConfig('email.password', branchId ?? undefined);
+    const from = await this.loggingService.getConfig('email.from', branchId ?? undefined);
 
     if (host && port && user && password && from) {
-      await this.configureTransport({
+      const cacheKey = branchId || 'global';
+      const transporter = nodemailer.createTransport({
         host,
         port: parseInt(port),
         secure: secure === 'true',
         auth: { user, pass: password },
-        from,
       });
+      this.transporters.set(cacheKey, transporter);
     }
+  }
+
+  /**
+   * Gibt den Transporter für die angegebene Niederlassung zurück.
+   * Versucht zuerst branch-spezifisch, dann global.
+   */
+  private async getTransporter(branchId?: string | null): Promise<nodemailer.Transporter> {
+    const cacheKey = branchId || 'global';
+
+    if (this.transporters.has(cacheKey)) {
+      return this.transporters.get(cacheKey)!;
+    }
+
+    // Versuche zu laden
+    await this.loadConfiguration(branchId);
+
+    if (this.transporters.has(cacheKey)) {
+      return this.transporters.get(cacheKey)!;
+    }
+
+    // Fallback auf global wenn branchId gesetzt aber keine eigene Config
+    if (branchId && !this.transporters.has(cacheKey)) {
+      if (this.transporters.has('global')) return this.transporters.get('global')!;
+      await this.loadConfiguration(null);
+      if (this.transporters.has('global')) return this.transporters.get('global')!;
+    }
+
+    throw new Error('Email-Service nicht konfiguriert');
   }
 
   /**
    * Sendet eine Email
    */
-  async sendEmail(options: SendEmailOptions): Promise<void> {
-    if (!this.transporter) {
-      await this.loadConfiguration();
-      if (!this.transporter) {
-        throw new Error('Email-Service nicht konfiguriert');
-      }
-    }
+  async sendEmail(options: SendEmailOptions, branchId?: string | null): Promise<void> {
+    const transporter = await this.getTransporter(branchId);
 
     try {
-      const defaultFrom = await this.loggingService.getConfig('email.from');
-      
+      const defaultFrom = await this.loggingService.getConfig('email.from', branchId ?? undefined);
+
       const mailOptions = {
         from: options.from || defaultFrom || '',
         to: Array.isArray(options.to) ? options.to.join(', ') : options.to,
@@ -130,32 +151,20 @@ export class EmailService {
         attachments: options.attachments,
       };
 
-      const info = await this.transporter.sendMail(mailOptions) as { messageId?: string };
+      const info = await transporter.sendMail(mailOptions) as { messageId?: string };
 
       await this.loggingService.logInfo(
         'SYSTEM' as any,
         'EMAIL_SENT',
         `Email gesendet: "${options.subject}" an ${mailOptions.to}`,
-        {
-          metadata: {
-            to: mailOptions.to,
-            subject: options.subject,
-            messageId: info.messageId || 'unknown',
-          }
-        }
+        { metadata: { to: mailOptions.to, subject: options.subject, messageId: info.messageId || 'unknown' } },
       );
     } catch (error) {
       await this.loggingService.logError(
         'SYSTEM' as any,
         'EMAIL_SEND_FAILED',
         `Email-Versand fehlgeschlagen: ${error instanceof Error ? error.message : 'Unbekannter Fehler'}`,
-        {
-          metadata: {
-            to: options.to,
-            subject: options.subject,
-            error: error instanceof Error ? error.message : 'Unbekannter Fehler',
-          }
-        }
+        { metadata: { to: options.to, subject: options.subject, error: error instanceof Error ? error.message : 'Unbekannter Fehler' } },
       );
       throw error;
     }
@@ -164,7 +173,7 @@ export class EmailService {
   /**
    * Test-Email senden
    */
-  async sendTestEmail(to: string): Promise<void> {
+  async sendTestEmail(to: string, branchId?: string | null): Promise<void> {
     await this.sendEmail({
       to,
       subject: 'KFZ Teilelager - Test Email',
@@ -175,25 +184,15 @@ export class EmailService {
         <hr>
         <p><small>KFZ Teilelager System</small></p>
       `,
-      text: `
-        Email-Test erfolgreich
-        
-        Diese Test-Email wurde erfolgreich vom KFZ Teilelager System gesendet.
-        
-        Zeitstempel: ${new Date().toLocaleString('de-DE')}
-        
-        KFZ Teilelager System
-      `,
-    });
+      text: `Email-Test erfolgreich\n\nZeitstempel: ${new Date().toLocaleString('de-DE')}\n\nKFZ Teilelager System`,
+    }, branchId);
   }
 
   /**
    * Passwort-Reset Email senden
    */
   async sendPasswordResetEmail(to: string, username: string, resetToken: string): Promise<void> {
-    // Hier würde normalerweise die Frontend-URL aus der Konfiguration kommen
     const resetUrl = `${process.env.FRONTEND_URL || 'http://localhost:3000'}/reset-password?token=${resetToken}`;
-
     await this.sendEmail({
       to,
       subject: 'KFZ Teilelager - Passwort zurücksetzen',
@@ -201,56 +200,36 @@ export class EmailService {
         <h2>Passwort zurücksetzen</h2>
         <p>Hallo <strong>${username}</strong>,</p>
         <p>Sie haben eine Passwort-Zurücksetzung für Ihr KFZ Teilelager Konto angefordert.</p>
-        <p>Klicken Sie auf den folgenden Link, um Ihr Passwort zu ändern:</p>
         <p><a href="${resetUrl}" style="background-color: #1976d2; color: white; padding: 10px 20px; text-decoration: none; border-radius: 4px;">Passwort zurücksetzen</a></p>
         <p>Dieser Link ist für <strong>24 Stunden</strong> gültig.</p>
-        <p>Falls Sie diese Anfrage nicht gestellt haben, ignorieren Sie diese Email.</p>
         <hr>
         <p><small>KFZ Teilelager System</small></p>
       `,
-      text: `
-        Passwort zurücksetzen
-        
-        Hallo ${username},
-        
-        Sie haben eine Passwort-Zurücksetzung für Ihr KFZ Teilelager Konto angefordert.
-        
-        Öffnen Sie den folgenden Link in Ihrem Browser, um Ihr Passwort zu ändern:
-        ${resetUrl}
-        
-        Dieser Link ist für 24 Stunden gültig.
-        
-        Falls Sie diese Anfrage nicht gestellt haben, ignorieren Sie diese Email.
-        
-        KFZ Teilelager System
-      `,
+      text: `Passwort zurücksetzen\n\nHallo ${username},\n\n${resetUrl}\n\nKFZ Teilelager System`,
     });
   }
 
   /**
-   * Überprüft ob Email-Service konfiguriert ist
+   * Überprüft ob Email-Service konfiguriert ist (branch-spezifisch mit globalem Fallback)
    */
-  async isConfigured(): Promise<boolean> {
-    const host = await this.loggingService.getConfig('email.host');
-    const user = await this.loggingService.getConfig('email.user');
-    const password = await this.loggingService.getConfig('email.password');
-    
+  async isConfigured(branchId?: string | null): Promise<boolean> {
+    const host = await this.loggingService.getConfig('email.host', branchId ?? undefined);
+    const user = await this.loggingService.getConfig('email.user', branchId ?? undefined);
+    const password = await this.loggingService.getConfig('email.password', branchId ?? undefined);
     return !!(host && user && password);
   }
 
   /**
    * Gibt die aktuelle Email-Konfiguration zurück (ohne Passwort)
    */
-  async getConfiguration(): Promise<Partial<EmailConfig> | null> {
-    const host = await this.loggingService.getConfig('email.host');
-    const port = await this.loggingService.getConfig('email.port');
-    const secure = await this.loggingService.getConfig('email.secure');
-    const user = await this.loggingService.getConfig('email.user');
-    const from = await this.loggingService.getConfig('email.from');
+  async getConfiguration(branchId?: string | null): Promise<Partial<EmailConfig> | null> {
+    const host = await this.loggingService.getConfig('email.host', branchId ?? undefined);
+    const port = await this.loggingService.getConfig('email.port', branchId ?? undefined);
+    const secure = await this.loggingService.getConfig('email.secure', branchId ?? undefined);
+    const user = await this.loggingService.getConfig('email.user', branchId ?? undefined);
+    const from = await this.loggingService.getConfig('email.from', branchId ?? undefined);
 
-    if (!host || !port || !user || !from) {
-      return null;
-    }
+    if (!host || !port || !user || !from) return null;
 
     return {
       host,

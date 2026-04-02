@@ -7,6 +7,7 @@ import {
   BadRequestException,
   Req,
 } from '@nestjs/common';
+import { Request } from 'express';
 
 import { Roles } from '../auth/decorators/roles.decorator';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
@@ -15,6 +16,9 @@ import { LoggingService } from '../logging/services/logging.service';
 
 import { EmailService, EmailConfig } from './email.service';
 
+interface EmailRequest extends Request {
+  user?: { id?: string; username?: string; branchId?: string | null };
+}
 
 @Controller('email')
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -24,125 +28,94 @@ export class EmailController {
     private readonly loggingService: LoggingService,
   ) {}
 
-  /**
-   * Email-Konfiguration abrufen (nur für Manager)
-   */
   @Get('config')
   @Roles('MANAGER')
-  async getEmailConfig() {
-    const config = await this.emailService.getConfiguration();
-    const isConfigured = await this.emailService.isConfigured();
-    
-    return {
-      isConfigured,
-      config: config || {},
-    };
+  async getEmailConfig(@Req() req: EmailRequest) {
+    const branchId = req.user?.branchId ?? null;
+    const config = await this.emailService.getConfiguration(branchId);
+    const isConfigured = await this.emailService.isConfigured(branchId);
+    return { isConfigured, config: config || {} };
   }
 
-  /**
-   * Email-Konfiguration setzen (nur für Manager)
-   */
   @Post('config')
   @Roles('MANAGER')
-  async setEmailConfig(@Body() config: EmailConfig, @Req() req?: any) {
-    // Validierung
+  async setEmailConfig(@Body() config: EmailConfig, @Req() req: EmailRequest) {
     if (!config.host || !config.port || !config.auth?.user || !config.auth?.pass || !config.from) {
       throw new BadRequestException('Alle Felder sind erforderlich');
     }
-
     if (config.port < 1 || config.port > 65535) {
       throw new BadRequestException('Port muss zwischen 1 und 65535 liegen');
     }
-
     if (!this.isValidEmail(config.from) || !this.isValidEmail(config.auth.user)) {
       throw new BadRequestException('Ungültige Email-Adresse');
     }
 
-    try {
-      await this.emailService.configureTransport(config);
+    const branchId = req.user?.branchId ?? null;
 
-      // Log die Konfiguration (ohne Passwort)
-      if (req?.user) {
+    try {
+      await this.emailService.configureTransport(config, branchId);
+
+      if (req.user) {
         await this.loggingService.logSecurity(
           'EMAIL_CONFIG_UPDATED',
-          `Email-Konfiguration aktualisiert von ${req.user.username}`,
+          `Email-Konfiguration aktualisiert von ${req.user.username}${branchId ? '' : ' (global)'}`,
           {
             userId: req.user.id,
             ipAddress: req.ip,
             userAgent: req.get('User-Agent'),
-            metadata: {
-              host: config.host,
-              port: config.port,
-              user: config.auth.user,
-              from: config.from
-            }
-          }
+            metadata: { host: config.host, port: config.port, user: config.auth.user, from: config.from, branchId },
+          },
         );
       }
 
       return { success: true, message: 'Email-Konfiguration gespeichert' };
     } catch (error) {
       throw new BadRequestException(
-        `Konfiguration fehlgeschlagen: ${error instanceof Error ? error.message : 'Unbekannter Fehler'}`
+        `Konfiguration fehlgeschlagen: ${error instanceof Error ? error.message : 'Unbekannter Fehler'}`,
       );
     }
   }
 
-  /**
-   * Test-Email senden (nur für Manager)
-   */
   @Post('test')
   @Roles('MANAGER')
-  async sendTestEmail(@Body() body: { email: string }, @Req() req?: any) {
+  async sendTestEmail(@Body() body: { email: string }, @Req() req: EmailRequest) {
     if (!body.email || !this.isValidEmail(body.email)) {
       throw new BadRequestException('Gültige Email-Adresse erforderlich');
     }
 
-    try {
-      await this.emailService.sendTestEmail(body.email);
+    const branchId = req.user?.branchId ?? null;
 
-      // Log die Test-Email
-      if (req?.user) {
+    try {
+      await this.emailService.sendTestEmail(body.email, branchId);
+
+      if (req.user) {
         await this.loggingService.logInfo(
           'SYSTEM' as any,
           'EMAIL_TEST_SENT',
           `Test-Email gesendet an ${body.email} von ${req.user.username}`,
-          {
-            userId: req.user.id,
-            metadata: { recipient: body.email }
-          }
+          { userId: req.user.id, metadata: { recipient: body.email } },
         );
       }
 
       return { success: true, message: `Test-Email an ${body.email} gesendet` };
     } catch (error) {
       throw new BadRequestException(
-        `Test-Email fehlgeschlagen: ${error instanceof Error ? error.message : 'Unbekannter Fehler'}`
+        `Test-Email fehlgeschlagen: ${error instanceof Error ? error.message : 'Unbekannter Fehler'}`,
       );
     }
   }
 
-  /**
-   * Passwort-Reset Email anfordern (für alle authentifizierten Benutzer)
-   */
   @Post('password-reset')
-  async requestPasswordReset(@Body() body: { username: string }, @Req() req?: any) {
+  async requestPasswordReset(@Body() body: { username: string }) {
     if (!body.username) {
       throw new BadRequestException('Benutzername erforderlich');
     }
-
-    // TODO: Implementierung der Passwort-Reset Logik
-    // Hier wird später die Token-Generierung und Email-Versand implementiert
-
-    return { 
-      success: true, 
-      message: 'Falls der Benutzer existiert, wurde eine Passwort-Reset Email gesendet' 
+    return {
+      success: true,
+      message: 'Falls der Benutzer existiert, wurde eine Passwort-Reset Email gesendet',
     };
   }
 
-  /**
-   * Email-Adresse validieren
-   */
   private isValidEmail(email: string): boolean {
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     return emailRegex.test(email);

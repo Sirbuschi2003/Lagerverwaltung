@@ -3,6 +3,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, Between } from 'typeorm';
 
 import { User } from '../../users/entities/user.entity';
+import { BranchConfig } from '../entities/branch-config.entity';
 import { SystemConfig } from '../entities/system-config.entity';
 import { SystemLog, LogLevel, LogCategory } from '../entities/system-log.entity';
 
@@ -31,6 +32,8 @@ export class LoggingService {
     private readonly logRepository: Repository<SystemLog>,
     @InjectRepository(SystemConfig)
     private readonly configRepository: Repository<SystemConfig>,
+    @InjectRepository(BranchConfig)
+    private readonly branchConfigRepository: Repository<BranchConfig>,
   ) {}
 
   /**
@@ -403,8 +406,12 @@ export class LoggingService {
   /**
    * System-Konfiguration allgemein
    */
-  async getConfig(key: string): Promise<string | null> {
+  async getConfig(key: string, branchId?: string | null): Promise<string | null> {
     try {
+      if (branchId) {
+        const branchRec = await this.branchConfigRepository.findOne({ where: { branchId, key } });
+        if (branchRec) return branchRec.value ?? null;
+      }
       const config = await this.configRepository.findOne({ where: { key } });
       return config?.value || null;
     } catch (error) {
@@ -413,24 +420,28 @@ export class LoggingService {
     }
   }
 
-  async setConfig(key: string, value: string, description?: string, isSecret = false): Promise<void> {
-    // Prüfe ob Eintrag existiert
+  async setConfig(key: string, value: string, description?: string, isSecret = false, branchId?: string | null): Promise<void> {
+    if (branchId) {
+      const existing = await this.branchConfigRepository.findOne({ where: { branchId, key } });
+      if (existing) {
+        existing.value = value;
+        if (description !== undefined) existing.description = description;
+        if (isSecret !== undefined) existing.isSecret = isSecret;
+        await this.branchConfigRepository.save(existing);
+      } else {
+        await this.branchConfigRepository.insert({ branchId, key, value, description, isSecret });
+      }
+      return;
+    }
+    // Global (system_config)
     const existing = await this.configRepository.findOne({ where: { key } });
-    
     if (existing) {
-      // Update bestehenden Eintrag
       existing.value = value;
       if (description !== undefined) existing.description = description;
       if (isSecret !== undefined) existing.isSecret = isSecret;
       await this.configRepository.save(existing);
     } else {
-      // Erstelle neuen Eintrag
-      await this.configRepository.save({
-        key,
-        value,
-        description,
-        isSecret,
-      });
+      await this.configRepository.save({ key, value, description, isSecret });
     }
   }
 
