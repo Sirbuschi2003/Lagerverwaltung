@@ -140,6 +140,7 @@ export class StockController {
   @Get("movements/history")
   @Permissions("movements.view")
   async getMovementHistory(
+    @Req() req: StockRequest,
     @Query("itemId") itemId?: string,
     @Query("vehicleId") vehicleId?: string,
     @Query("userId") userId?: string,
@@ -162,6 +163,7 @@ export class StockController {
       to: parsedTo,
       limit: parsedLimit,
       offset: parsedOffset,
+      branchId: req.user?.branchId,
     });
     return data;
   }

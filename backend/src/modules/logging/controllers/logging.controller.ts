@@ -107,6 +107,7 @@ export class LoggingController {
   @Get()
   @Roles('MANAGER')
   async getLogs(
+    @Req() req: Request,
     @Query('startDate') startDate?: string,
     @Query('endDate') endDate?: string,
     @Query('userId') userId?: string,
@@ -138,6 +139,10 @@ export class LoggingController {
     if (level) filters.level = level;
     if (action) filters.action = action;
 
+    // Niederlassungs-Filter: Branch-Manager sieht nur eigene Logs
+    const reqUser = (req as any).user;
+    if (reqUser?.branchId) filters.branchId = reqUser.branchId;
+
     const limitNum = parseInt(limit, 10);
     const offsetNum = parseInt(offset, 10);
 
@@ -149,15 +154,13 @@ export class LoggingController {
     }
 
   const result = await this.loggingService.getLogs(filters, limitNum, offsetNum);
-    
-    // Log den Admin-Zugriff
-    const req = arguments[7]; // Workaround für @Req() Parameter
-    if (req?.user) {
+
+    if (reqUser) {
       await this.loggingService.logSecurity(
         'ADMIN_LOGS_ACCESS',
-        `Admin ${req.user.username} hat Logs abgerufen`,
+        `Admin ${reqUser.username} hat Logs abgerufen`,
         {
-          userId: req.user.id,
+          userId: reqUser.id,
           ipAddress: req.ip,
           userAgent: req.get('User-Agent'),
           metadata: { filters, limit: limitNum, offset: offsetNum }
@@ -201,7 +204,6 @@ export class LoggingController {
   ) {
     const filters: LogFilters = {};
 
-    // Gleiche Filter-Logik wie oben
     if (startDate) {
       filters.startDate = new Date(startDate);
       if (isNaN(filters.startDate.getTime())) {
@@ -219,6 +221,7 @@ export class LoggingController {
     if (category) filters.category = category;
     if (level) filters.level = level;
     if (action) filters.action = action;
+    if (req?.user?.branchId) filters.branchId = req.user.branchId;
 
     // Alle Logs ohne Limit für Export
     const { logs } = await this.loggingService.getLogs(filters, 50000, 0);
@@ -302,7 +305,6 @@ export class LoggingController {
   ) {
     const filters: LogFilters = {};
 
-    // Gleiche Filter-Logik
     if (startDate) {
       filters.startDate = new Date(startDate);
       if (isNaN(filters.startDate.getTime())) {
@@ -320,6 +322,7 @@ export class LoggingController {
     if (category) filters.category = category;
     if (level) filters.level = level;
     if (action) filters.action = action;
+    if (req?.user?.branchId) filters.branchId = req.user.branchId;
 
     const { logs } = await this.loggingService.getLogs(filters, 50000, 0);
 

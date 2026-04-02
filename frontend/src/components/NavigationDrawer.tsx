@@ -54,6 +54,7 @@ interface MenuItem {
   icon: React.ReactElement;
   roles: string[];
   permissions?: string[];
+  superAdminOnly?: boolean;
 }
 
 // Statische Menu-Definitionen ausserhalb der Komponente (werden nur einmal erstellt)
@@ -81,11 +82,11 @@ const SETTINGS_ITEMS: MenuItem[] = [
   { id: "settings-general", label: "Firmendaten", path: "/settings", icon: <SettingsIcon />, roles: ["MANAGER"], permissions: ["settings.company"] },
   { id: "settings-email", label: "E-Mail Einstellungen", path: "/settings/email", icon: <MarkEmailRead />, roles: ["MANAGER"], permissions: ["settings.email"] },
   { id: "settings-warehouse", label: "Lagereinstellungen", path: "/settings/warehouse", icon: <Warehouse />, roles: ["MANAGER"], permissions: ["settings.company"] },
-  { id: "settings-backup", label: "Datensicherung", path: "/backup", icon: <CloudDownload />, roles: ["MANAGER"], permissions: ["backup.access"] },
+  { id: "settings-backup", label: "Datensicherung", path: "/backup", icon: <CloudDownload />, roles: ["MANAGER"], permissions: ["backup.access"], superAdminOnly: true },
   { id: "settings-logs", label: "Systemprotokolle", path: "/logs", icon: <Analytics />, roles: ["MANAGER"], permissions: ["logs.view"] },
   { id: "settings-access", label: "Benutzer & Fahrzeuge", path: "/access-control", icon: <AdminPanelSettings />, roles: ["MANAGER"], permissions: ["access.manage"] },
-  { id: "settings-branches", label: "Niederlassungen", path: "/branches", icon: <CorporateFare />, roles: ["MANAGER"], permissions: ["branches.manage"] },
-  { id: "settings-maintenance", label: "Wartung & Update", path: "/settings/maintenance", icon: <Build />, roles: ["MANAGER"], permissions: ["settings.company"] },
+  { id: "settings-branches", label: "Niederlassungen", path: "/branches", icon: <CorporateFare />, roles: ["MANAGER"], permissions: ["branches.manage"], superAdminOnly: true },
+  { id: "settings-maintenance", label: "Wartung & Update", path: "/settings/maintenance", icon: <Build />, roles: ["MANAGER"], permissions: ["settings.company"], superAdminOnly: true },
 ];
 
 const NavigationDrawer: React.FC<NavigationDrawerProps> = ({ open, onClose, width = 280 }) => {
@@ -102,7 +103,10 @@ const NavigationDrawer: React.FC<NavigationDrawerProps> = ({ open, onClose, widt
   // DESIGN-ENTSCHEIDUNG Berechtigungen:
   // Wenn 'permissions' definiert → Berechtigungs-Check (MANAGER hat via hasPermission() Vollzugriff).
   // Andernfalls Fallback auf Rollen-Check. Dies ist konsistentes Verhalten fuer alle Menu-Eintraege.
+  const isSuperAdmin = user.role === "MANAGER" && user.branchId === null;
+
   const canAccess = (item: MenuItem) => {
+    if (item.superAdminOnly && !isSuperAdmin) return false;
     if (item.permissions && item.permissions.length > 0) {
       return hasPermission(item.permissions);
     }

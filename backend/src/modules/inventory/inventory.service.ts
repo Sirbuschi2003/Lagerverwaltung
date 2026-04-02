@@ -69,7 +69,7 @@ export class InventoryService {
     const where = branchId ? { branchId } : {};
     return this.sessionsRepository.find({
       where,
-      relations: ["lines", "vehicleStatuses", "vehicleStatuses.vehicle"],
+      relations: ["lines", "vehicleStatuses", "vehicleStatuses.vehicle", "branch"],
       order: { startedAt: "DESC" },
     });
   }

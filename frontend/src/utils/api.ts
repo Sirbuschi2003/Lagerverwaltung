@@ -906,6 +906,8 @@ export interface InventorySessionDto {
   serverChecksum?: string | null;
   adjustmentsApplied?: boolean;
   lines: InventoryLineDto[];
+  branchId?: string | null;
+  branch?: { id: string; name: string } | null;
 }
 
 export interface InventoryLineDto {

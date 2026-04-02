@@ -1499,6 +1499,11 @@ const InventoryPage = () => {
                         <Typography variant="body2" color="text.secondary">
                           Freigegeben durch: {session.createdBy}
                         </Typography>
+                        {user?.branchId === null && session.branch && (
+                          <Typography variant="body2" color="text.secondary">
+                            Niederlassung: <strong>{session.branch.name}</strong>
+                          </Typography>
+                        )}
                         {session.location && (
                           <Typography variant="body2" color="text.secondary">
                             Warenort: {session.location}

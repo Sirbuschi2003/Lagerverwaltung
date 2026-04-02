@@ -21,6 +21,7 @@ export interface LogFilters {
   category?: LogCategory;
   level?: LogLevel;
   action?: string;
+  branchId?: string | null;
 }
 
 @Injectable()
@@ -164,6 +165,11 @@ export class LoggingService {
 
     if (filters.action) {
       queryBuilder.andWhere('log.action LIKE :action', { action: `%${filters.action}%` });
+    }
+
+    // Niederlassungs-Filter: nur Logs von Usern dieser Niederlassung (branchId null = Super-Admin, sieht alles)
+    if (filters.branchId) {
+      queryBuilder.andWhere('(user.branchId = :branchId OR log.userId IS NULL)', { branchId: filters.branchId });
     }
 
     const [logs, total] = await queryBuilder.getManyAndCount();
