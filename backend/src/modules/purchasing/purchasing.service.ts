@@ -10,6 +10,7 @@ import { LocationsService } from "../locations/locations.service";
 import { Location } from "../locations/entities/location.entity";
 import { StockService } from "../stock/stock.service";
 import { StockLevel } from "../stock/entities/stock-level.entity";
+import { Branch } from "../branches/entities/branch.entity";
 import { Supplier } from "../suppliers/entities/supplier.entity";
 import { Item } from "../items/entities/item.entity";
 import { EmailService } from "../email/email.service";
@@ -48,7 +49,8 @@ export interface StoredOrderDocumentEntry {
 @Injectable()
 export class PurchasingService {
   // 10-Sekunden-Cache für Bestellvorschläge (kurz, damit Artikel-Änderungen schnell sichtbar sind)
-  private suggestionsCache: { data: unknown[]; timestamp: number } | null = null;
+  // Schlüssel: branchId oder "ALL" für SUPER_ADMIN
+  private suggestionsCacheMap = new Map<string, { data: unknown[]; timestamp: number }>();
   private readonly SUGGESTIONS_CACHE_TTL = 10_000;
 
   constructor(
@@ -62,6 +64,8 @@ export class PurchasingService {
     private readonly supplierRepository: Repository<Supplier>,
     @InjectRepository(Item)
     private readonly itemsRepository: Repository<Item>,
+    @InjectRepository(Branch)
+    private readonly branchesRepository: Repository<Branch>,
     private readonly itemsService: ItemsService,
     private readonly locationsService: LocationsService,
     private readonly stockService: StockService,
@@ -72,7 +76,7 @@ export class PurchasingService {
 
   /** Cache für Bestellvorschläge invalidieren (nach Bestandsbuchungen, Bestellungen) */
   invalidateSuggestionsCache() {
-    this.suggestionsCache = null;
+    this.suggestionsCacheMap.clear();
   }
 
   async findAll(params?: PurchaseOrderQueryParams & { branchId?: string | null }) {
@@ -513,23 +517,30 @@ export class PurchasingService {
     }
   }
 
-  async getSuggestions(refresh = false) {
-    // Cache-Check (überspringen wenn refresh=true)
+  async getSuggestions(branchId: string | null | undefined, refresh = false) {
+    // Cache-Check pro Niederlassung (überspringen wenn refresh=true)
+    const cacheKey = branchId ?? "ALL";
     const now = Date.now();
-    if (!refresh && this.suggestionsCache && (now - this.suggestionsCache.timestamp) < this.SUGGESTIONS_CACHE_TTL) {
-      return this.suggestionsCache.data;
+    const cached = this.suggestionsCacheMap.get(cacheKey);
+    if (!refresh && cached && (now - cached.timestamp) < this.SUGGESTIONS_CACHE_TTL) {
+      return cached.data;
     }
 
-    const openLines = await this.linesRepository
+    // Offene Bestellmengen (nur Bestellungen dieser Niederlassung berücksichtigen)
+    const openLinesQb = this.linesRepository
       .createQueryBuilder("line")
       .innerJoin("line.order", "order")
       .innerJoin("line.item", "item")
       .select("item.id", "itemId")
       .addSelect("SUM(line.quantity - line.receivedQuantity)", "openQuantity")
       .where("order.status IN (:...statuses)", { statuses: ["DRAFT", "ORDERED"] })
-      .andWhere("line.quantity > line.receivedQuantity")
-      .groupBy("item.id")
-      .getRawMany();
+      .andWhere("line.quantity > line.receivedQuantity");
+
+    if (branchId) {
+      openLinesQb.andWhere("order.branchId = :branchId", { branchId });
+    }
+
+    const openLines = await openLinesQb.groupBy("item.id").getRawMany();
 
     const incomingByItem = new Map<string, number>();
     openLines.forEach((row) => {
@@ -539,12 +550,12 @@ export class PurchasingService {
       }
     });
 
-    // Direkte DB-Query: nur Artikel mit Sollbestand > 0 laden (kein findAll(200k))
+    // Nur Artikel dieser Niederlassung laden
     const itemEntities = await this.itemsRepository.find({
-      where: { targetStock: MoreThan(0) },
+      where: { targetStock: MoreThan(0), ...(branchId ? { branchId } : {}) },
       relations: ["storageLocation", "supplier"],
     });
-    const allLocations = await this.locationsService.findAll({ includeVehicles: true });
+    const allLocations = await this.locationsService.findAll({ includeVehicles: true, branchId: branchId ?? undefined });
     const defaultWarehouse = allLocations.find((location) => location.type === "WAREHOUSE") ?? null;
     const locationById = new Map<string, Location>();
     allLocations.forEach((location) => {
@@ -583,6 +594,7 @@ export class PurchasingService {
       reorderPoint: number | null;
       currentQuantity: number;
       neededQuantity: number;
+      availableInOtherBranches: Array<{ branchId: string; branchName: string; quantity: number }>;
     }> = [];
 
     for (const item of itemEntities) {
@@ -628,11 +640,21 @@ export class PurchasingService {
         reorderPoint,
         currentQuantity,
         neededQuantity: needed,
+        availableInOtherBranches: [],
       });
     }
 
+    // Cross-Branch-Verfügbarkeit nachladen (nur wenn Benutzer einer Niederlassung angehört)
+    if (branchId && suggestions.length > 0) {
+      const codes = suggestions.map((s) => s.code);
+      const crossBranchMap = await this.getCrossBranchAvailability(codes, branchId);
+      for (const suggestion of suggestions) {
+        suggestion.availableInOtherBranches = crossBranchMap.get(suggestion.code) ?? [];
+      }
+    }
+
     // Ergebnis cachen
-    this.suggestionsCache = { data: suggestions, timestamp: Date.now() };
+    this.suggestionsCacheMap.set(cacheKey, { data: suggestions, timestamp: Date.now() });
     return suggestions;
   }
 
@@ -730,6 +752,46 @@ export class PurchasingService {
       current = parentId ? (locationById.get(parentId) ?? current.parent ?? null) : null;
     }
     return depth;
+  }
+
+  /** Findet Artikel-Bestände (Lager, keine Fahrzeuge) in ANDEREN Niederlassungen anhand des Artikel-Codes. */
+  private async getCrossBranchAvailability(
+    codes: string[],
+    currentBranchId: string,
+  ): Promise<Map<string, Array<{ branchId: string; branchName: string; quantity: number }>>> {
+    const result = new Map<string, Array<{ branchId: string; branchName: string; quantity: number }>>();
+    if (codes.length === 0) return result;
+
+    const rows = await this.itemsRepository
+      .createQueryBuilder("item")
+      .innerJoin("item.branch", "branch")
+      .leftJoin(
+        "stock_levels",
+        "sl",
+        "sl.itemId = item.id AND sl.vehicleId IS NULL",
+      )
+      .select("item.code", "code")
+      .addSelect("item.branchId", "branchId")
+      .addSelect("branch.name", "branchName")
+      .addSelect("COALESCE(SUM(sl.quantity), 0)", "quantity")
+      .where("item.code IN (:...codes)", { codes })
+      .andWhere("item.branchId != :currentBranchId", { currentBranchId })
+      .andWhere("branch.active = :active", { active: true })
+      .groupBy("item.code, item.branchId, branch.name")
+      .having("COALESCE(SUM(sl.quantity), 0) > 0")
+      .getRawMany<{ code: string; branchId: string; branchName: string; quantity: string }>();
+
+    for (const row of rows) {
+      const entry = { branchId: row.branchId, branchName: row.branchName, quantity: Number(row.quantity) };
+      const existing = result.get(row.code);
+      if (existing) {
+        existing.push(entry);
+      } else {
+        result.set(row.code, [entry]);
+      }
+    }
+
+    return result;
   }
 
   async listOrderDocuments(params?: OrderDocumentQueryParams): Promise<StoredOrderDocumentEntry[]> {

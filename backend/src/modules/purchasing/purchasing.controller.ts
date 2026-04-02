@@ -21,8 +21,11 @@ export class PurchasingController {
 
   @Get("suggestions")
   @Permissions("orders.view")
-  suggestions(@Query("refresh") refresh?: string) {
-    return this.purchasingService.getSuggestions(refresh === "true" || refresh === "1");
+  suggestions(@Req() req: PurchasingRequest, @Query("refresh") refresh?: string) {
+    return this.purchasingService.getSuggestions(
+      req.user?.branchId,
+      refresh === "true" || refresh === "1",
+    );
   }
 
   @Get()

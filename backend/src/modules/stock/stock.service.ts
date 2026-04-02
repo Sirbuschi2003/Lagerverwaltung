@@ -176,7 +176,7 @@ export class StockService {
     try {
       const [allStockLevels, totalItems, openInventorySessions] = await Promise.all([
         this.stockLevelsRepository.find({ relations: ["item", "vehicle"] }),
-        this.itemsService.countItems(),
+        this.itemsService.countItems(user?.branchId),
         this.inventorySessionRepository.count({
           where: [
             { status: InventorySessionStatus.DRAFT },

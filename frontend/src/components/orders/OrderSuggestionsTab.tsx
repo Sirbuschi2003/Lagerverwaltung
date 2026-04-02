@@ -33,6 +33,7 @@ import ShoppingCartIcon from "@mui/icons-material/ShoppingCart";
 import DownloadIcon from "@mui/icons-material/Download";
 import EmailIcon from "@mui/icons-material/Email";
 import DraftsIcon from "@mui/icons-material/Drafts";
+import StorefrontIcon from "@mui/icons-material/Storefront";
 import useAuthStore from "../../store/useAuthStore";
 import {
   fetchPurchaseSuggestions,
@@ -809,6 +810,25 @@ const OrderSuggestionsTab: React.FC = () => {
                           <Typography variant="body2" sx={{ fontWeight: 600 }}>{suggestion.description}</Typography>
                           {suggestion.descriptionSecondary && (
                             <Typography variant="body2" color="text.secondary">{suggestion.descriptionSecondary}</Typography>
+                          )}
+                          {suggestion.availableInOtherBranches && suggestion.availableInOtherBranches.length > 0 && (
+                            <Box sx={{ display: "flex", gap: 0.5, flexWrap: "wrap", mt: 0.5 }}>
+                              {suggestion.availableInOtherBranches.map((branch) => (
+                                <Tooltip
+                                  key={branch.branchId}
+                                  title={`In ${branch.branchName} verfügbar: ${branch.quantity} Stk.`}
+                                >
+                                  <Chip
+                                    icon={<StorefrontIcon />}
+                                    label={`${branch.branchName}: ${branch.quantity}`}
+                                    size="small"
+                                    color="info"
+                                    variant="outlined"
+                                    sx={{ fontSize: "0.7rem" }}
+                                  />
+                                </Tooltip>
+                              ))}
+                            </Box>
                           )}
                         </TableCell>
                         <TableCell>

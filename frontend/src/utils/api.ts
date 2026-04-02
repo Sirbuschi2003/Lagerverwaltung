@@ -756,6 +756,7 @@ export interface PurchaseOrderSuggestionDto {
   reorderPoint: number | null;
   currentQuantity: number;
   neededQuantity: number;
+  availableInOtherBranches?: Array<{ branchId: string; branchName: string; quantity: number }>;
 }
 
 export interface PurchaseOrderQueryParams {

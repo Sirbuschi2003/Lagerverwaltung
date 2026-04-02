@@ -226,8 +226,8 @@ export class ItemsService {
     }
   }
 
-  async countItems(): Promise<number> {
-    return this.repository.count();
+  async countItems(branchId?: string | null): Promise<number> {
+    return this.repository.count({ where: branchId ? { branchId } : undefined });
   }
 
   async exportItemsCsv(params?: { search?: string; manufacturer?: string; productGroup?: string }): Promise<Buffer> {

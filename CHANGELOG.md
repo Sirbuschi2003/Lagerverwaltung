@@ -4,6 +4,21 @@ Alle Änderungen werden hier dokumentiert.
 
 ---
 
+## 2026-04-02
+
+### [3.1.0] – Cross-Branch-Verfügbarkeit in Bestellvorschlägen
+
+#### Neue Funktionen
+- **Bestellvorschläge jetzt niederlassungsspezifisch** — Jede Niederlassung sieht ausschließlich ihre eigenen Artikel und offenen Bestellmengen in den Bestellvorschlägen. Bisher wurden Artikel und Bestellungen aller Niederlassungen zusammengemischt.
+- **Andere Niederlassungen mit Bestand anzeigen** — Wenn ein Artikel bestellt werden muss, wird direkt in der Vorschlagszeile angezeigt, welche andere Niederlassung diesen Artikel noch auf Lager hat (nur Lagerbestand, keine Fahrzeuge). Anzeige als Chip z.B. „Hannover: 5" mit Tooltip „In Hannover verfügbar: 5 Stk."
+- **Dashboard-KPI „Gesamtartikel" niederlassungsspezifisch** — Der Artikelzähler im Dashboard zeigt nun nur noch die Artikel der eigenen Niederlassung, nicht mehr alle Niederlassungen summiert.
+
+#### Bugfixes
+- **Lagerorte in Bestellvorschlägen aus falscher Niederlassung** — `defaultWarehouse` wurde bisher aus allen Niederlassungen genommen und konnte auf ein fremdes Lager zeigen. Lagerorte werden jetzt gefiltert nach der Niederlassung des angemeldeten Benutzers.
+- **Cache für Bestellvorschläge war global** — Ein gemeinsamer Cache für alle Niederlassungen führte dazu, dass Benutzer Vorschläge einer anderen Niederlassung sehen konnten. Der Cache ist jetzt pro Niederlassung getrennt.
+
+---
+
 ## 2026-04-01
 
 ### [3.0.1] – Multi-Branch Fixes & SUPER_ADMIN
