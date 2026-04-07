@@ -4,6 +4,16 @@ Alle Änderungen werden hier dokumentiert.
 
 ---
 
+## 2026-04-07 (2)
+
+### [3.3.2] – Hotfix Migration & Benutzerverwaltung
+
+#### Fehlerbehebungen
+- **Migration idempotent** — Doppelte Alternativcodes in `item_codes` werden vor dem Anlegen des Unique-Index automatisch bereinigt
+- **Benutzerverwaltung** — Super-Admin kann beim Anlegen/Bearbeiten von Benutzern eine Niederlassung zuweisen; Benutzerliste zeigt Niederlassungsspalte
+
+---
+
 ## 2026-04-07
 
 ### [3.3.1] – Vollständige Artikel-Isolation pro Niederlassung (Bugfix)
