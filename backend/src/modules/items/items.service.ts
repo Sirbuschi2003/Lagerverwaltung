@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException, Logger } from "@nestjs/common";
 import { InjectRepository } from "@nestjs/typeorm";
-import { In, Repository } from "typeorm";
+import { In, IsNull, Repository } from "typeorm";
 import * as fs from "fs/promises";
 import * as path from "path";
 import sharp from "sharp";
@@ -335,17 +335,15 @@ export class ItemsService {
         return direct;
       }
 
-      // Prüfe alternative Codes
+      // Prüfe alternative Codes – direkt nach branchId filtern
+      const altWhere: Record<string, unknown> = { code: normalized };
+      if (branchId) altWhere.branchId = branchId;
+      else altWhere.branchId = IsNull();
       const alias = await this.codesRepository.findOne({
-        where: { code: normalized },
+        where: altWhere,
         relations: ["item", "item.codes", "item.storageLocation", "item.supplier"]
       });
-      const item = alias?.item ?? null;
-      // Prüfe ob gefundener Artikel zur Niederlassung gehört
-      if (item && branchId && item.branchId !== branchId) {
-        return null;
-      }
-      return item;
+      return alias?.item ?? null;
     } catch (error) {
       this.logger.error(`Fehler beim Abrufen des Artikels nach Code ${code}: ${error instanceof Error ? error.message : String(error)}`);
       throw error;
@@ -354,7 +352,11 @@ export class ItemsService {
 
   async create(dto: CreateItemDto & { branchId?: string | null }): Promise<Item> {
     const { alternateCodes, storageLocationId, supplierId, price, packSize, orderQuantity, currentQuantity: _currentQuantity, branchId, ...rest } = dto;
-    const exists = await this.repository.findOne({ where: { code: rest.code } });
+    const effectiveBranchId = branchId ?? null;
+    const existsWhere: Record<string, unknown> = { code: rest.code };
+    if (effectiveBranchId) existsWhere.branchId = effectiveBranchId;
+    else existsWhere.branchId = IsNull();
+    const exists = await this.repository.findOne({ where: existsWhere });
     if (exists) {
       throw new Error('Artikelnummer/QR-Code bereits vergeben');
     }
@@ -370,21 +372,24 @@ export class ItemsService {
       price: normalizedPrice,
       packSize: packSize !== undefined ? packSize : null,
       orderQuantity: orderQuantity !== undefined && Number(orderQuantity) > 0 ? orderQuantity : null,
-      branchId: branchId ?? null,
+      branchId: effectiveBranchId,
     });
     const codes = sanitizeCodes(alternateCodes);
     if (codes.length > 0) {
-      const existingCodes = await this.codesRepository.find({ where: { code: In(codes) } });
+      const altWhere = effectiveBranchId
+        ? { code: In(codes), branchId: effectiveBranchId }
+        : { code: In(codes), branchId: IsNull() };
+      const existingCodes = await this.codesRepository.find({ where: altWhere });
       if (existingCodes.length > 0) {
         throw new Error('Alternativer QR-Code bereits vergeben: ' + existingCodes[0].code);
       }
-      entity.codes = codes.map((code) => this.codesRepository.create({ code }));
+      entity.codes = codes.map((code) => this.codesRepository.create({ code, branchId: effectiveBranchId as string }));
     }
     return this.repository.save(entity);
   }
 
-  async previewBulk(dtos: CreateItemDto[]): Promise<BulkImportPreviewResult> {
-    const analysis = await this.analyzeBulkImport(dtos);
+  async previewBulk(dtos: CreateItemDto[], branchId?: string | null): Promise<BulkImportPreviewResult> {
+    const analysis = await this.analyzeBulkImport(dtos, branchId);
     return {
       created: analysis.created,
       updated: analysis.updated,
@@ -394,8 +399,8 @@ export class ItemsService {
     };
   }
 
-  async createBulk(dtos: CreateItemDto[]): Promise<{ created: number; updated: number; skipped: number; errors: string[] }> {
-    const analysis = await this.analyzeBulkImport(dtos);
+  async createBulk(dtos: CreateItemDto[], branchId?: string | null): Promise<{ created: number; updated: number; skipped: number; errors: string[] }> {
+    const analysis = await this.analyzeBulkImport(dtos, branchId);
     const result = {
       created: 0,
       updated: 0,
@@ -415,6 +420,7 @@ export class ItemsService {
     for (const normalized of toCreate) {
       const entity = this.repository.create({
         code: normalized.code,
+        branchId: branchId ?? null,
         description: normalized.description,
         descriptionSecondary: normalized.descriptionSecondary,
         manufacturer: normalized.manufacturer,
@@ -430,7 +436,7 @@ export class ItemsService {
         orderQuantity: normalized.orderQuantity,
       });
       if (normalized.alternateCodes.length > 0) {
-        entity.codes = normalized.alternateCodes.map((code) => this.codesRepository.create({ code }));
+        entity.codes = normalized.alternateCodes.map((code) => this.codesRepository.create({ code, branchId: branchId ?? null as any }));
       }
       entities.push(entity);
       if (normalized.storageLocationId && normalized.currentQuantity !== undefined) {
@@ -474,7 +480,9 @@ export class ItemsService {
     const existingCodesToLoad = toUpdate.map((n) => n.code);
     if (existingCodesToLoad.length > 0) {
       const existingItems = await this.repository.find({
-        where: { code: In(existingCodesToLoad) },
+        where: branchId
+          ? { code: In(existingCodesToLoad), branchId }
+          : { code: In(existingCodesToLoad), branchId: IsNull() },
         relations: ['codes'],
       });
       const existingByCode = new Map(existingItems.map((item) => [item.code, item]));
@@ -507,7 +515,7 @@ export class ItemsService {
     return result;
   }
 
-  private async analyzeBulkImport(dtos: CreateItemDto[]): Promise<BulkImportAnalysis> {
+  private async analyzeBulkImport(dtos: CreateItemDto[], branchId?: string | null): Promise<BulkImportAnalysis> {
     const result: BulkImportAnalysis = {
       created: 0,
       updated: 0,
@@ -570,7 +578,9 @@ export class ItemsService {
     const codes = candidates.map((entry) => entry.code);
     const existingItems = codes.length
       ? await this.repository.find({
-          where: { code: In(codes) },
+          where: branchId
+            ? { code: In(codes), branchId }
+            : { code: In(codes), branchId: IsNull() },
           select: ["code"],
         })
       : [];
@@ -578,7 +588,9 @@ export class ItemsService {
 
     const existingAltCodes = requestedAltCodes.size
       ? await this.codesRepository.find({
-          where: { code: In(Array.from(requestedAltCodes)) },
+          where: branchId
+            ? { code: In(Array.from(requestedAltCodes)), branchId }
+            : { code: In(Array.from(requestedAltCodes)), branchId: IsNull() },
           select: ["code"],
         })
       : [];
@@ -755,16 +767,19 @@ export class ItemsService {
       // Füge neue alternative Codes hinzu
       const codes = sanitizeCodes(alternateCodes);
       if (codes.length > 0) {
-        // Prüfe auf Duplikate in der Datenbank (IN-Query statt N+1)
+        // Prüfe auf Duplikate in der Datenbank – nur innerhalb der Niederlassung
+        const altWhere = entity.branchId
+          ? { code: In(codes), branchId: entity.branchId }
+          : { code: In(codes), branchId: IsNull() };
         const existingCodes = await this.codesRepository.find({
-          where: { code: In(codes) },
+          where: altWhere,
           relations: ["item"],
         });
         const conflict = existingCodes.find((ec) => ec.item?.id !== id);
         if (conflict) {
           throw new Error(`Alternativer Code bereits vergeben: ${conflict.code}`);
         }
-        entity.codes = codes.map((code) => this.codesRepository.create({ code }));
+        entity.codes = codes.map((code) => this.codesRepository.create({ code, branchId: entity.branchId as string }));
       } else {
         entity.codes = [];
       }
@@ -780,12 +795,12 @@ export class ItemsService {
   }
 
   /** Bulk-Update: mehrere Artikel auf einmal aktualisieren (für Hyreka-Import) */
-  async updateBulk(updates: Array<UpdateItemDto & { id: string }>): Promise<{ updated: number; errors: string[] }> {
+  async updateBulk(updates: Array<UpdateItemDto & { id: string }>, branchId?: string | null): Promise<{ updated: number; errors: string[] }> {
     let updated = 0;
     const errors: string[] = [];
     for (const { id, ...dto } of updates) {
       try {
-        await this.update(id, dto);
+        await this.update(id, dto, branchId);
         updated++;
       } catch (err) {
         errors.push(`${id}: ${err instanceof Error ? err.message : String(err)}`);
@@ -842,22 +857,31 @@ export class ItemsService {
     );
   }
 
-  async removeAll(): Promise<{ deleted: number }> {
+  async removeAll(branchId?: string | null): Promise<{ deleted: number }> {
     try {
       this.logger.log("Starte removeAll-Operation");
 
-      const itemCount = await this.repository.count();
+      const whereClause = branchId ? { branchId } : { branchId: IsNull() };
+      const itemCount = await this.repository.count({ where: whereClause });
       this.logger.log(`Gefundene Artikel vor Loeschung: ${itemCount}`);
 
       if (itemCount === 0) {
         return { deleted: 0 };
       }
 
-      // Erst Artikel-Codes loeschen (Kind-Datensaetze), dann Artikel
-      const codesDeleted = await this.codesRepository.createQueryBuilder().delete().execute();
+      // Erst Artikel-Codes der Niederlassung löschen, dann Artikel
+      const codesDeleted = await this.codesRepository
+        .createQueryBuilder("ic")
+        .delete()
+        .where(branchId ? "ic.branchId = :branchId" : "ic.branchId IS NULL", branchId ? { branchId } : {})
+        .execute();
       this.logger.log(`Artikel-Codes geloescht: ${codesDeleted.affected ?? 0}`);
 
-      const itemsDeleted = await this.repository.createQueryBuilder().delete().execute();
+      const itemsDeleted = await this.repository
+        .createQueryBuilder("item")
+        .delete()
+        .where(branchId ? "item.branchId = :branchId" : "item.branchId IS NULL", branchId ? { branchId } : {})
+        .execute();
       this.logger.log(`Artikel geloescht: ${itemsDeleted.affected ?? 0}`);
 
       return { deleted: itemsDeleted.affected ?? 0 };
@@ -873,8 +897,8 @@ export class ItemsService {
     return process.env.ITEM_IMAGE_PATH || "/app/item-images";
   }
 
-  async uploadImage(id: string, file: Express.Multer.File): Promise<Item> {
-    const item = await this.findOne(id);
+  async uploadImage(id: string, file: Express.Multer.File, branchId?: string | null): Promise<Item> {
+    const item = await this.findOne(id, branchId);
     if (!item) throw new NotFoundException("Artikel nicht gefunden");
 
     await fs.mkdir(this.imageDir, { recursive: true });
@@ -891,8 +915,8 @@ export class ItemsService {
     return this.findOne(id) as Promise<Item>;
   }
 
-  async deleteImage(id: string): Promise<Item> {
-    const item = await this.findOne(id);
+  async deleteImage(id: string, branchId?: string | null): Promise<Item> {
+    const item = await this.findOne(id, branchId);
     if (!item) throw new NotFoundException("Artikel nicht gefunden");
 
     if (item.imagePath) {

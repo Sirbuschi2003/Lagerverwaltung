@@ -4,6 +4,25 @@ Alle Änderungen werden hier dokumentiert.
 
 ---
 
+## 2026-04-07
+
+### [3.3.1] – Vollständige Artikel-Isolation pro Niederlassung (Bugfix)
+
+#### Fehlerbehebungen
+- **Firmendaten pro Niederlassung** — Einstellungsseite zeigte bisher die globalen Firmendaten statt der niederlassungsspezifischen. Jetzt lädt die Seite immer die eigenen Daten der jeweiligen Niederlassung.
+- **Artikel-Import (Hyreka)** — Artikelnummern die in einer anderen Niederlassung bereits vorhanden sind, wurden fälschlicherweise als Duplikat abgelehnt. Jetzt wird die Duplikat-Prüfung korrekt pro Niederlassung durchgeführt.
+- **Alternativcodes vollständig isoliert** — Die `item_codes`-Tabelle hatte einen globalen Unique-Index. Gleichnamige Alternativcodes in verschiedenen Niederlassungen sind jetzt möglich (Migration `1742000000001`).
+- **Artikel löschen (Alle löschen)** — Der „Alle Artikel löschen"-Endpunkt löschte bisher alle Artikel aller Niederlassungen. Jetzt werden nur Artikel der eigenen Niederlassung gelöscht.
+- **Artikelbilder** — Upload und Löschen von Artikelbildern prüfen jetzt ob der Artikel zur eigenen Niederlassung gehört.
+- **Bulk-Update / Bulk-Preview** — Alle Bulk-Operationen (Import, Update, Preview) sind jetzt vollständig niederlassungsisoliert.
+
+#### Technisch
+- `item_codes.branchId` Spalte hinzugefügt, befüllt aus `items.branchId`
+- Composite Unique-Index `(branchId, code)` ersetzt globalen Index auf `code`
+- Alle Alt-Code-Prüfungen in `create()`, `update()`, `analyzeBulkImport()` filtern nach `branchId`
+
+---
+
 ## 2026-04-02 (3)
 
 ### [3.3.0] – Niederlassungsspezifische Einstellungen

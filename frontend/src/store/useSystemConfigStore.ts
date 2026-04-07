@@ -4,6 +4,7 @@ import {
   CompanyConfigDto,
   UpdateCompanyConfigRequest,
   fetchPublicCompanyConfig,
+  fetchCompanyConfig,
   updateCompanyConfig,
 } from "../utils/api";
 
@@ -20,6 +21,7 @@ interface SystemConfigState {
   isLoading: boolean;
   hasLoaded: boolean;
   loadCompany: () => Promise<void>;
+  loadCompanyAuthenticated: () => Promise<void>;
   saveCompany: (payload: UpdateCompanyConfigRequest) => Promise<CompanyConfigDto | null>;
 }
 
@@ -58,6 +60,29 @@ const useSystemConfigStore = create<SystemConfigState>((set, get) => ({
     } catch (error) {
       console.warn("[SystemConfigStore] Laden der Firmendaten fehlgeschlagen:", error);
       set({ companyName: null, companyLogo: null, hasLoaded: true });
+    } finally {
+      set({ isLoading: false });
+    }
+  },
+
+  loadCompanyAuthenticated: async () => {
+    set({ isLoading: true });
+    try {
+      const config = await fetchCompanyConfig();
+      set({
+        companyName: config.name ?? null,
+        companyLogo: config.logoDataUrl ?? null,
+        companyAddressLine1: config.addressLine1 ?? null,
+        companyAddressLine2: config.addressLine2 ?? null,
+        companyPostalCode: config.postalCode ?? null,
+        companyCity: config.city ?? null,
+        companyCountry: config.country ?? null,
+        companyPhone: config.phone ?? null,
+        companyEmail: config.email ?? null,
+        hasLoaded: true,
+      });
+    } catch (error) {
+      console.warn("[SystemConfigStore] Laden der branch-spezifischen Firmendaten fehlgeschlagen:", error);
     } finally {
       set({ isLoading: false });
     }

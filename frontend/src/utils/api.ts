@@ -1144,6 +1144,11 @@ export const fetchPublicCompanyConfig = async (): Promise<CompanyConfigDto> => {
   return response.data;
 };
 
+export const fetchCompanyConfig = async (): Promise<CompanyConfigDto> => {
+  const response = await api.get<CompanyConfigDto>("/company");
+  return response.data;
+};
+
 export const updateCompanyConfig = async (payload: UpdateCompanyConfigRequest): Promise<CompanyConfigDto> => {
   const response = await api.put<CompanyConfigDto>("/company", payload);
   return response.data;

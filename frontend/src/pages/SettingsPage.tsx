@@ -33,7 +33,7 @@ const SettingsPage = () => {
     companyEmail,
     hasLoaded: companyLoaded,
     isLoading: companyLoading,
-    loadCompany,
+    loadCompanyAuthenticated,
     saveCompany,
   } = useSystemConfigStore((state) => ({
     companyName: state.companyName,
@@ -47,7 +47,7 @@ const SettingsPage = () => {
     companyEmail: state.companyEmail,
     hasLoaded: state.hasLoaded,
     isLoading: state.isLoading,
-    loadCompany: state.loadCompany,
+    loadCompanyAuthenticated: state.loadCompanyAuthenticated,
     saveCompany: state.saveCompany,
   }));
 
@@ -65,10 +65,8 @@ const SettingsPage = () => {
   const [companySaving, setCompanySaving] = useState(false);
 
   useEffect(() => {
-    if (!companyLoaded) {
-      loadCompany().catch(() => undefined);
-    }
-  }, [companyLoaded, loadCompany]);
+    loadCompanyAuthenticated().catch(() => undefined);
+  }, [loadCompanyAuthenticated]);
 
 
   useEffect(() => {

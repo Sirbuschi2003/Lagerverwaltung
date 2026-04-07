@@ -97,10 +97,10 @@ export class ItemsController {
 
   @Post("bulk")
   @Permissions("items.create")
-  async createBulk(@Body() dto: CreateItemDto[]) {
+  async createBulk(@Body() dto: CreateItemDto[], @Req() req: ItemsRequest) {
     try {
       this.logger.debug(`Erstelle ${dto?.length || 0} Artikel in Bulk`);
-      return await this.itemsService.createBulk(dto);
+      return await this.itemsService.createBulk(dto, req.user?.branchId);
     } catch (error) {
       this.logger.error(`Fehler beim Bulk-Erstellen: ${error instanceof Error ? error.message : String(error)}`);
       throw new InternalServerErrorException('Bulk-Import konnte nicht durchgeführt werden');
@@ -111,6 +111,7 @@ export class ItemsController {
   @Permissions("items.create")
   async previewBulk(
     @Body() dto: CreateItemDto[],
+    @Req() req: ItemsRequest,
   ): Promise<{
     created: number;
     updated: number;
@@ -120,7 +121,7 @@ export class ItemsController {
   }> {
     try {
       this.logger.debug(`Preview fuer ${dto?.length || 0} Artikel in Bulk`);
-      return await this.itemsService.previewBulk(dto);
+      return await this.itemsService.previewBulk(dto, req.user?.branchId);
     } catch (error) {
       this.logger.error(`Fehler beim Bulk-Preview: ${error instanceof Error ? error.message : String(error)}`);
       throw new InternalServerErrorException("Bulk-Preview konnte nicht durchgeführt werden");
@@ -129,10 +130,10 @@ export class ItemsController {
 
   @Delete("bulk")
   @Permissions("items.delete")
-  async removeAll() {
+  async removeAll(@Req() req: ItemsRequest) {
     try {
       this.logger.debug("[ItemsController] removeAll endpoint called");
-      const result = await this.itemsService.removeAll();
+      const result = await this.itemsService.removeAll(req.user?.branchId);
       this.logger.log(`[ItemsController] removeAll completed: ${result.deleted} items deleted`);
       return result;
     } catch (error) {
@@ -192,14 +193,14 @@ export class ItemsController {
   @Post(":id/image")
   @Permissions("items.edit")
   @UseInterceptors(FileInterceptor("image", { storage: memoryStorage(), limits: { fileSize: 25 * 1024 * 1024 } }))
-  async uploadImage(@Param("id") id: string, @UploadedFile() file: Express.Multer.File) {
+  async uploadImage(@Param("id") id: string, @UploadedFile() file: Express.Multer.File, @Req() req: ItemsRequest) {
     if (!file) throw new BadRequestException("Keine Datei angegeben");
     const allowed = ["image/jpeg", "image/png", "image/webp", "image/gif"];
     if (!allowed.includes(file.mimetype)) {
       throw new BadRequestException("Nur JPEG, PNG, WebP und GIF sind erlaubt");
     }
     try {
-      const item = await this.itemsService.uploadImage(id, file);
+      const item = await this.itemsService.uploadImage(id, file, req.user?.branchId);
       return { ...item, alternateCodes: item.codes ? item.codes.map(c => c.code) : [] };
     } catch (error) {
       if (error instanceof NotFoundException) throw error;
@@ -210,9 +211,9 @@ export class ItemsController {
 
   @Delete(":id/image")
   @Permissions("items.edit")
-  async deleteImage(@Param("id") id: string) {
+  async deleteImage(@Param("id") id: string, @Req() req: ItemsRequest) {
     try {
-      const item = await this.itemsService.deleteImage(id);
+      const item = await this.itemsService.deleteImage(id, req.user?.branchId);
       return { ...item, alternateCodes: item.codes ? item.codes.map(c => c.code) : [] };
     } catch (error) {
       if (error instanceof NotFoundException) throw error;
@@ -258,10 +259,10 @@ export class ItemsController {
 
   @Patch("bulk")
   @Permissions("items.edit")
-  async updateBulk(@Body() updates: Array<UpdateItemDto & { id: string }>) {
+  async updateBulk(@Body() updates: Array<UpdateItemDto & { id: string }>, @Req() req: ItemsRequest) {
     try {
       this.logger.debug(`Bulk-Update von ${updates?.length || 0} Artikeln`);
-      return await this.itemsService.updateBulk(updates);
+      return await this.itemsService.updateBulk(updates, req.user?.branchId);
     } catch (error) {
       this.logger.error(`Fehler beim Bulk-Update: ${error instanceof Error ? error.message : String(error)}`);
       throw new InternalServerErrorException('Bulk-Update konnte nicht durchgeführt werden');
