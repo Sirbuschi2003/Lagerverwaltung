@@ -417,6 +417,7 @@ export class ItemsService {
     // === NEUE ARTIKEL ANLEGEN ===
     const initialStockByCode = new Map<string, { locationId: string; quantity: number; targetQuantity: number }>();
     const entities: Item[] = [];
+    const altCodesByCode = new Map<string, string[]>();
     for (const normalized of toCreate) {
       const entity = this.repository.create({
         code: normalized.code,
@@ -435,8 +436,10 @@ export class ItemsService {
         packSize: normalized.packSize,
         orderQuantity: normalized.orderQuantity,
       });
+      // Codes NICHT als Cascade setzen – separat nach dem Save einfügen
+      // um den "itemId has no default value" Fehler beim Batch-Save zu vermeiden
       if (normalized.alternateCodes.length > 0) {
-        entity.codes = normalized.alternateCodes.map((code) => this.codesRepository.create({ code, branchId: branchId ?? null as any }));
+        altCodesByCode.set(normalized.code, normalized.alternateCodes);
       }
       entities.push(entity);
       if (normalized.storageLocationId && normalized.currentQuantity !== undefined) {
@@ -454,6 +457,16 @@ export class ItemsService {
       try {
         const savedBatch = await this.repository.save(batch);
         result.created += savedBatch.length;
+
+        // Alt-Codes separat einfügen (nach dem Save, damit itemId bekannt ist)
+        const codeEntries = savedBatch.flatMap((saved) => {
+          const altCodes = altCodesByCode.get(saved.code) ?? [];
+          return altCodes.map((code) => this.codesRepository.create({ code, branchId: branchId ?? null as any, item: { id: saved.id } as any }));
+        });
+        if (codeEntries.length > 0) {
+          await this.codesRepository.save(codeEntries);
+        }
+
         const stockEntries: StockLevel[] = [];
         for (const saved of savedBatch) {
           const stock = initialStockByCode.get(saved.code);
