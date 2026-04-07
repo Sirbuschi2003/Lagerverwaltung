@@ -81,7 +81,16 @@ export class ItemCodesPerBranch1742000000001 implements MigrationInterface {
       await queryRunner.query(`DROP INDEX \`${oldIdx}\` ON \`item_codes\``);
     }
 
-    // 6. Neuen Composite-Index (branchId, code) anlegen (falls noch nicht vorhanden)
+    // 6. Duplikate entfernen: bei (branchId, code) den neueren Eintrag behalten
+    await queryRunner.query(`
+      DELETE ic1 FROM \`item_codes\` ic1
+      INNER JOIN \`item_codes\` ic2
+        ON ic1.branchId = ic2.branchId
+        AND ic1.code = ic2.code
+        AND ic1.id > ic2.id
+    `);
+
+    // 7. Neuen Composite-Index (branchId, code) anlegen (falls noch nicht vorhanden)
     if (!(await this.indexExists(queryRunner, "item_codes", "IDX_item_codes_branch_code"))) {
       await queryRunner.query(
         `CREATE UNIQUE INDEX \`IDX_item_codes_branch_code\` ON \`item_codes\` (\`branchId\`, \`code\`)`,
