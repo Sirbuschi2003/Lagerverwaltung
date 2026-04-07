@@ -4,6 +4,7 @@ import {
   Alert,
   Box,
   Button,
+  Chip,
   Dialog,
   DialogActions,
   DialogContent,
@@ -29,7 +30,7 @@ import EditIcon from "@mui/icons-material/Edit";
 import useUsersStore from "../store/useUsersStore";
 import useVehiclesStore from "../store/useVehiclesStore";
 import useAuthStore from "../store/useAuthStore";
-import type { CreateUserRequest, UpdateUserRequest, UserDto } from "../utils/api";
+import { fetchBranches, type BranchDto, type CreateUserRequest, type UpdateUserRequest, type UserDto } from "../utils/api";
 
 const initialForm: CreateUserRequest = {
   username: "",
@@ -38,24 +39,32 @@ const initialForm: CreateUserRequest = {
   email: "",
   role: "TECHNICIAN",
   vehicleId: undefined,
+  branchId: undefined,
 };
 
 const UsersPage = () => {
   const { users, loadUsers, addUser, editUser, removeUser, isLoading } = useUsersStore();
   const { vehicles, loadVehicles } = useVehiclesStore();
-  const role = useAuthStore((state: any) => state.user?.role ?? null);
+  const user = useAuthStore((state: any) => state.user);
+  const role = user?.role ?? null;
+  const isSuperAdmin = role === "MANAGER" && user?.branchId === null;
+
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState<CreateUserRequest>(initialForm);
   const [editingUser, setEditingUser] = useState<UserDto | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setSubmitting] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<UserDto | null>(null);
-  const [availableRoles, setAvailableRoles] = useState<Array<{ id: number; name: string }>>([])
+  const [availableRoles, setAvailableRoles] = useState<Array<{ id: number; name: string }>>([]);
+  const [branches, setBranches] = useState<BranchDto[]>([]);
 
   useEffect(() => {
     void loadUsers();
     void loadVehicles();
     void loadAvailableRoles();
+    if (isSuperAdmin) {
+      fetchBranches().then(setBranches).catch(() => {});
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -81,6 +90,11 @@ const UsersPage = () => {
     [users],
   );
 
+  const branchById = useMemo(
+    () => new Map(branches.map((b) => [b.id, b.name])),
+    [branches],
+  );
+
   const handleOpenCreate = () => {
     setForm(initialForm);
     setEditingUser(null);
@@ -88,15 +102,16 @@ const UsersPage = () => {
     setOpen(true);
   };
 
-  const handleOpenEdit = (user: UserDto) => {
-    setEditingUser(user);
+  const handleOpenEdit = (u: UserDto) => {
+    setEditingUser(u);
     setForm({
-      username: user.username,
-      displayName: user.displayName,
+      username: u.username,
+      displayName: u.displayName,
       password: "",
-      email: user.email ?? "",
-      role: user.role,
-      vehicleId: user.vehicleId ?? undefined,
+      email: u.email ?? "",
+      role: u.role,
+      vehicleId: u.vehicleId ?? undefined,
+      branchId: u.branchId ?? undefined,
     });
     setError(null);
     setOpen(true);
@@ -124,6 +139,11 @@ const UsersPage = () => {
     setForm((prev: any) => ({ ...prev, vehicleId: value === "none" ? undefined : value }));
   };
 
+  const handleBranchChange = (event: SelectChangeEvent<string>) => {
+    const value = event.target.value;
+    setForm((prev: any) => ({ ...prev, branchId: value === "superadmin" ? null : value || undefined }));
+  };
+
   const validate = () => {
     if (!form.username.trim()) return "Bitte Benutzernamen eingeben.";
     if (!form.displayName.trim()) return "Bitte Anzeigenamen eingeben.";
@@ -131,6 +151,8 @@ const UsersPage = () => {
       return "Passwort muss mindestens 6 Zeichen haben.";
     if (editingUser && form.password.trim().length > 0 && form.password.trim().length < 6)
       return "Passwort muss mindestens 6 Zeichen haben.";
+    if (isSuperAdmin && !editingUser && form.branchId === undefined)
+      return "Bitte eine Niederlassung auswählen.";
     return null;
   };
 
@@ -153,6 +175,9 @@ const UsersPage = () => {
           role: form.role,
           vehicleId: form.vehicleId ?? null,
         };
+        if (isSuperAdmin && form.branchId !== undefined) {
+          payload.branchId = form.branchId;
+        }
         if (form.password.trim()) {
           payload.password = form.password.trim();
         }
@@ -165,6 +190,7 @@ const UsersPage = () => {
           email: form.email?.trim() || undefined,
           role: form.role,
           vehicleId: form.vehicleId,
+          branchId: form.branchId,
         };
         await addUser(payload);
       }
@@ -224,24 +250,36 @@ const UsersPage = () => {
               <TableCell>Name</TableCell>
               <TableCell>Benutzername</TableCell>
               <TableCell>Rolle</TableCell>
+              {isSuperAdmin && <TableCell>Niederlassung</TableCell>}
               <TableCell>Fahrzeug</TableCell>
               <TableCell align="right">Aktionen</TableCell>
             </TableRow>
           </TableHead>
           <TableBody>
-            {sortedUsers.map((user: any) => {
-              const vehicle = vehicles.find((v: any) => v.id === user.vehicleId);
+            {sortedUsers.map((u: any) => {
+              const vehicle = vehicles.find((v: any) => v.id === u.vehicleId);
               return (
-                <TableRow key={user.id} hover>
-                  <TableCell>{user.displayName}</TableCell>
-                  <TableCell>{user.username}</TableCell>
+                <TableRow key={u.id} hover>
+                  <TableCell>{u.displayName}</TableCell>
+                  <TableCell>{u.username}</TableCell>
                   <TableCell>
-                    {availableRoles.find((r: { id: number; name: string }) => r.name === user.role)?.name ?? user.role}
+                    {availableRoles.find((r: { id: number; name: string }) => r.name === u.role)?.name ?? u.role}
                   </TableCell>
+                  {isSuperAdmin && (
+                    <TableCell>
+                      {u.branchId === null ? (
+                        <Chip label="Super-Admin" size="small" color="warning" variant="outlined" />
+                      ) : (
+                        <Typography variant="body2">
+                          {branchById.get(u.branchId) ?? u.branchId}
+                        </Typography>
+                      )}
+                    </TableCell>
+                  )}
                   <TableCell>{vehicle ? `${vehicle.licensePlate} - ${vehicle.description}` : "-"}</TableCell>
                   <TableCell align="right">
                     <Tooltip title="Bearbeiten">
-                      <IconButton size="small" onClick={() => handleOpenEdit(user)}>
+                      <IconButton size="small" onClick={() => handleOpenEdit(u)}>
                         <EditIcon fontSize="small" />
                       </IconButton>
                     </Tooltip>
@@ -249,7 +287,7 @@ const UsersPage = () => {
                       <IconButton
                         size="small"
                         color="error"
-                        onClick={() => setDeleteTarget(user)}
+                        onClick={() => setDeleteTarget(u)}
                       >
                         <DeleteIcon fontSize="small" />
                       </IconButton>
@@ -260,7 +298,7 @@ const UsersPage = () => {
             })}
             {sortedUsers.length === 0 && !isLoading && (
               <TableRow>
-                <TableCell colSpan={5} align="center">
+                <TableCell colSpan={isSuperAdmin ? 6 : 5} align="center">
                   Noch keine Benutzer angelegt.
                 </TableCell>
               </TableRow>
@@ -322,15 +360,36 @@ const UsersPage = () => {
                 <FormControl fullWidth>
                   <InputLabel>Rolle</InputLabel>
                   <Select value={form.role} label="Rolle" onChange={handleRoleChange}>
-                    {availableRoles.map((role: { id: number; name: string }) => (
-                      <MenuItem key={role.id} value={role.name}>
-                        {role.name}
+                    {availableRoles.map((r: { id: number; name: string }) => (
+                      <MenuItem key={r.id} value={r.name}>
+                        {r.name}
                       </MenuItem>
                     ))}
                   </Select>
                 </FormControl>
               </Grid>
-              <Grid item xs={12} sm={6}>
+              {isSuperAdmin && (
+                <Grid item xs={12} sm={6}>
+                  <FormControl fullWidth required={!editingUser}>
+                    <InputLabel>Niederlassung *</InputLabel>
+                    <Select
+                      value={form.branchId === null ? "superadmin" : (form.branchId ?? "")}
+                      label="Niederlassung *"
+                      onChange={handleBranchChange}
+                    >
+                      <MenuItem value="superadmin">
+                        <em>Super-Admin (keine Niederlassung)</em>
+                      </MenuItem>
+                      {branches.map((b) => (
+                        <MenuItem key={b.id} value={b.id}>
+                          {b.name}
+                        </MenuItem>
+                      ))}
+                    </Select>
+                  </FormControl>
+                </Grid>
+              )}
+              <Grid item xs={12} sm={isSuperAdmin ? 12 : 6}>
                 <FormControl fullWidth>
                   <InputLabel>Fahrzeug</InputLabel>
                   <Select
@@ -341,7 +400,7 @@ const UsersPage = () => {
                     <MenuItem value="none">Keines</MenuItem>
                     {vehicles.map((vehicle: any) => (
                       <MenuItem key={vehicle.id} value={vehicle.id}>
-                        {vehicle.licensePlate} ? {vehicle.description}
+                        {vehicle.licensePlate} - {vehicle.description}
                       </MenuItem>
                     ))}
                   </Select>
