@@ -69,17 +69,18 @@ export class LocationsService {
     }
 
     const parentId = parent?.id ?? null;
+    const branchId = data.branchId ?? null;
     const manualCode = data.code?.trim() ?? "";
     let resolvedCode = manualCode;
 
     if (manualCode) {
-      const duplicateCode = await this.codeExists(parentId, manualCode);
+      const duplicateCode = await this.codeExists(parentId, manualCode, branchId);
       if (duplicateCode) {
         throw new BadRequestException("Code existiert im ausgewaehlten Parent bereits.");
       }
     } else {
       const generatedBase = this.buildAutoCodeBase(data.type, data.name);
-      resolvedCode = await this.generateUniqueCode(parentId, generatedBase);
+      resolvedCode = await this.generateUniqueCode(parentId, generatedBase, branchId);
     }
 
     const entity = this.repository.create({
@@ -122,7 +123,7 @@ export class LocationsService {
     }
 
     if (data.code !== undefined || data.parentId !== undefined) {
-      const duplicateCode = await this.codeExists(location.parent?.id ?? null, location.code, location.id);
+      const duplicateCode = await this.codeExists(location.parent?.id ?? null, location.code, location.branchId, location.id);
       if (duplicateCode) {
         throw new BadRequestException("Code existiert im ausgewaehlten Parent bereits.");
       }
@@ -152,14 +153,14 @@ export class LocationsService {
     return slug.slice(0, 120);
   }
 
-  private async generateUniqueCode(parentId: string | null, baseCode: string): Promise<string> {
+  private async generateUniqueCode(parentId: string | null, baseCode: string, branchId?: string | null): Promise<string> {
     const maxLength = 120;
     const initialBase = (baseCode || "ORT").slice(0, maxLength) || "ORT";
 
     let candidate = initialBase;
     let index = 2;
 
-    while (await this.codeExists(parentId, candidate)) {
+    while (await this.codeExists(parentId, candidate, branchId)) {
       const suffix = `-${index}`;
       const trimmedBase = initialBase.slice(0, Math.max(1, maxLength - suffix.length));
       candidate = `${trimmedBase}${suffix}`;
@@ -169,7 +170,7 @@ export class LocationsService {
     return candidate;
   }
 
-  private async codeExists(parentId: string | null, code: string, ignoreId?: string): Promise<boolean> {
+  private async codeExists(parentId: string | null, code: string, branchId?: string | null, ignoreId?: string): Promise<boolean> {
     const qb = this.repository
       .createQueryBuilder("location")
       .where("location.code = :code", { code });
@@ -178,6 +179,12 @@ export class LocationsService {
       qb.andWhere("location.parentId = :parentId", { parentId });
     } else {
       qb.andWhere("location.parentId IS NULL");
+    }
+
+    if (branchId) {
+      qb.andWhere("location.branchId = :branchId", { branchId });
+    } else {
+      qb.andWhere("location.branchId IS NULL");
     }
 
     if (ignoreId) {

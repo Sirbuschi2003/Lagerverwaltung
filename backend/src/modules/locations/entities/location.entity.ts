@@ -17,7 +17,7 @@ export const LOCATION_TYPES = ["WAREHOUSE", "SHELF", "BIN", "VEHICLE"] as const;
 export type LocationType = (typeof LOCATION_TYPES)[number];
 
 @Entity({ name: "locations" })
-@Index(["parent", "code"], { unique: true })
+@Index("IDX_locations_branch_parent_code", ["branchId", "parent", "code"], { unique: true })
 export class Location {
   @PrimaryGeneratedColumn("uuid")
   id!: string;
