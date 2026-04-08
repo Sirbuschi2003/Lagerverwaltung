@@ -10,6 +10,7 @@ import {
   Res,
   HttpStatus,
   BadRequestException,
+  ForbiddenException,
 } from '@nestjs/common';
 import { Request, Response } from 'express';
 
@@ -23,6 +24,14 @@ import { LoggingService, LogFilters } from '../services/logging.service';
 @UseGuards(JwtAuthGuard, RolesGuard)
 export class LoggingController {
   constructor(private readonly loggingService: LoggingService) {}
+
+  /** Wirft 403 wenn der eingeloggte Benutzer kein Super-Admin ist (branchId = null) */
+  private requireSuperAdmin(req: Request): void {
+    const user = (req as any).user;
+    if (user?.branchId !== null && user?.branchId !== undefined) {
+      throw new ForbiddenException('Systemprotokolle sind nur für Super-Admins zugänglich');
+    }
+  }
 
   /**
    * Frontend-Logs empfangen (von allen authentifizierten Usern)
@@ -117,6 +126,7 @@ export class LoggingController {
     @Query('limit') limit = '1000',
     @Query('offset') offset = '0',
   ) {
+    this.requireSuperAdmin(req);
     const filters: LogFilters = {};
 
     // Datum-Filter
@@ -202,6 +212,7 @@ export class LoggingController {
     @Req() req?: any,
     @Res() res?: Response,
   ) {
+    this.requireSuperAdmin(req);
     const filters: LogFilters = {};
 
     if (startDate) {
@@ -303,6 +314,7 @@ export class LoggingController {
     @Req() req?: any,
     @Res() res?: Response,
   ) {
+    this.requireSuperAdmin(req);
     const filters: LogFilters = {};
 
     if (startDate) {
@@ -379,6 +391,7 @@ export class LoggingController {
   @Get('stats')
   @Roles('MANAGER')
   async getLogStats(@Req() req?: any) {
+    this.requireSuperAdmin(req);
     // Grundlegende Statistiken für die letzten 30 Tage
     const thirtyDaysAgo = new Date();
     thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
@@ -442,6 +455,7 @@ export class LoggingController {
   @Put('config/level')
   @Roles('MANAGER')
   async setLogLevel(@Body() body: { logLevel: LogLevel }, @Req() req?: any) {
+    this.requireSuperAdmin(req);
     if (!Object.values(LogLevel).includes(body.logLevel)) {
       throw new BadRequestException('Ungültiger Log-Level');
     }
@@ -471,6 +485,7 @@ export class LoggingController {
   @Post('cleanup/old')
   @Roles('MANAGER')
   async cleanupOldLogs(@Body() body: { daysToKeep?: number }, @Req() req?: any) {
+    this.requireSuperAdmin(req);
     const daysToKeep = body.daysToKeep || 90;
     
     if (daysToKeep < 1 || daysToKeep > 365) {
@@ -502,6 +517,7 @@ export class LoggingController {
   @Post('cleanup/invalid')
   @Roles('MANAGER')
   async cleanupInvalidLogs(@Req() req?: any) {
+    this.requireSuperAdmin(req);
     const deleted = await this.loggingService.cleanupInvalidLogs();
 
     // Log die Bereinigung
@@ -527,6 +543,7 @@ export class LoggingController {
   @Post('cleanup/all')
   @Roles('MANAGER')
   async deleteAllLogs(@Req() req?: any) {
+    this.requireSuperAdmin(req);
     const deleted = await this.loggingService.deleteAllLogs();
 
     // Log die vollständige Löschung (nach der Löschung wird dieser Eintrag auch gelöscht)
@@ -562,6 +579,7 @@ export class LoggingController {
   @Put('config/retention')
   @Roles('MANAGER')
   async setLogRetention(@Body() body: { retentionDays: number }, @Req() req?: any) {
+    this.requireSuperAdmin(req);
     const days = body.retentionDays;
     
     if (!days || isNaN(days) || days < 1 || days > 3650) {

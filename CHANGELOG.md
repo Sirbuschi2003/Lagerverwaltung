@@ -4,6 +4,19 @@ Alle Änderungen werden hier dokumentiert.
 
 ---
 
+## 2026-04-08 (2)
+
+### [3.3.6] – Bugfixes & Zugriffssteuerung
+
+#### Fehlerbehebungen
+- **Inventur: Erstellung durch Super-Admin** — Super-Admin konnte keine Inventursitzung anlegen (500-Fehler), weil `inventory_sessions.branchId` als NOT NULL definiert war. Migration `1744000000000` macht die Spalte wieder nullable. Super-Admin-Inventuren gelten niederlassungsübergreifend.
+- **CORS: App zeigte "offline"** — Same-origin Requests vom Browser senden keinen Origin-Header; die neue CORS-Regel lehnte diese fälschlicherweise ab. Fix: Same-origin Requests werden wieder durchgelassen; `APP_HOST` aus `.env` wird automatisch als erlaubte Origin registriert.
+
+#### Zugriffssteuerung
+- **Systemprotokolle: nur Super-Admin** — Alle Endpunkte unter `/api/logs` (Abrufen, Herunterladen, Statistiken, Konfiguration, Bereinigung) sind jetzt ausschließlich für Super-Admins (`branchId = null`) zugänglich. Branch-Manager erhalten 403.
+
+---
+
 ## 2026-04-08
 
 ### [3.3.5] – Sicherheitshärtung (NIS2-orientiert)
