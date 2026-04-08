@@ -34,19 +34,19 @@ async function bootstrap() {
   app.setGlobalPrefix("api");
 
   // CORS: nur erlaubte Origins zulassen (nie origin: true in Produktion!)
+  // APP_HOST aus .env wird automatisch als erlaubte Origin aufgenommen (http + https)
+  const appHost = process.env.APP_HOST ? process.env.APP_HOST.trim() : null;
+  const defaultOrigins = ["http://localhost:5173", "http://localhost:3000"];
+  if (appHost) {
+    defaultOrigins.push(`http://${appHost}`, `https://${appHost}`);
+  }
   const allowedOrigins = process.env.ALLOWED_ORIGINS
     ? process.env.ALLOWED_ORIGINS.split(",").map((o) => o.trim())
-    : ["http://localhost:5173", "http://localhost:3000"];
+    : defaultOrigins;
   app.enableCors({
     origin: (origin, callback) => {
-      // In Produktion: Anfragen ohne Origin ablehnen (verhindert CSRF durch direkte Requests)
-      if (!origin) {
-        if (process.env.NODE_ENV === "development") {
-          return callback(null, true);
-        }
-        return callback(new Error("CORS: Origin-Header erforderlich"));
-      }
-      if (allowedOrigins.includes(origin)) {
+      // Same-origin Requests (kein Origin-Header) und erlaubte Origins durchlassen
+      if (!origin || allowedOrigins.includes(origin)) {
         callback(null, true);
       } else {
         callback(new Error(`CORS: Origin '${origin}' nicht erlaubt`));
