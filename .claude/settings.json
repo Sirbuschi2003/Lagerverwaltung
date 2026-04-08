@@ -17,7 +17,12 @@
       "Read(//c/Users/Thomas.Busche/.github/workflows/**)",
       "Bash(npx tsc:*)",
       "Bash(node_modules/.bin/tsc --noEmit)",
-      "Read(//c/Users/Thomas.Busche/Desktop/Code/Lagerverwaltung/backend/src/modules/**)"
+      "Read(//c/Users/Thomas.Busche/Desktop/Code/Lagerverwaltung/backend/src/modules/**)",
+      "Bash(xargs grep:*)",
+      "Bash(node -e \"const p = require\\('./package.json'\\); console.log\\(p.dependencies['file-type'] || 'nicht installiert'\\)\")",
+      "Bash(node -e \"const p = require\\('./package.json'\\); console.log\\(p.dependencies['file-type']\\)\")",
+      "Bash(node -e \"require\\('file-type'\\).then ? console.log\\('ESM only'\\) : console.log\\('CJS ok'\\)\")",
+      "Bash(node -e \"import\\('file-type'\\).then\\(m => console.log\\(Object.keys\\(m\\)\\)\\).catch\\(e => console.log\\('Error:', e.message\\)\\)\")"
     ],
     "additionalDirectories": [
       "c:\\Users\\Thomas.Busche\\.claude\\projects\\c--Users-Thomas-Busche-Desktop-Code-Lagerverwaltung\\memory",

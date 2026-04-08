@@ -49,8 +49,8 @@ export class AuthController {
     return this.authService.getProfile(this.extractUserId(req));
   }
 
-  // Max. 3 Login-Versuche pro 15 Minuten pro IP (Brute-Force-Schutz)
-  @Throttle({ default: { ttl: 900000, limit: 3 } })
+  // Max. 10 Login-Versuche pro 15 Minuten pro IP (Brute-Force-Schutz)
+  @Throttle({ default: { ttl: 900000, limit: 10 } })
   @Post("login")
   async login(@Body() dto: LoginDto, @Req() req: Request, @Res({ passthrough: true }) res: Response) {
     const context = this.buildRequestContext(req);

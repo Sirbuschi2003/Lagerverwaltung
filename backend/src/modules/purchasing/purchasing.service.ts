@@ -38,12 +38,14 @@ interface OrderDocumentQueryParams {
 
 export interface StoredOrderDocumentEntry {
   year: number;
+  month: number;
   filename: string;
   path: string;
   size: number;
   created: string;
   supplierId: string | null;
   supplierName: string | null;
+  branchFolder: string | null;
 }
 
 @Injectable()
@@ -452,7 +454,7 @@ export class PurchasingService {
       
       // Lade E-Mail-Vorlage aus System-Config
       const emailTemplate = await this.systemConfigService.getPurchaseOrderEmailTemplate();
-      const companyConfig = await this.systemConfigService.getCompanyConfig();
+      const companyConfig = await this.systemConfigService.getCompanyConfig(branchId);
       
       // Ersetze Platzhalter in Vorlage
       const replacePlaceholders = (text: string): string => {
@@ -805,110 +807,138 @@ export class PurchasingService {
     try {
       await fs.access(storagePath);
     } catch {
-      // Ordner existiert nicht oder nicht zugänglich → leere Liste zurückgeben
       return [];
     }
 
-    // Ordner existiert aber ist evtl. leer → gesamte Funktion absichern
     try {
+      // Lookup-Map: relPath → Supplier-Info (sowohl neue als auch alte Pfade)
+      const fileToSupplier = new Map<string, { supplierId: string | null; supplierName: string | null }>();
+      const allOrders = await this.ordersRepository.find({ where: branchId ? { branchId } : undefined });
+      for (const order of allOrders) {
+        const filename = this.buildStoredOrderFilename(order);
+        const refDate = new Date(order.orderedAt ?? order.createdAt ?? new Date());
+        const year = String(refDate.getFullYear());
+        const month = String(refDate.getMonth() + 1).padStart(2, '0');
+        const branchFolder = await this.getBranchFolder(order.branchId);
+        const entry = { supplierId: order.supplier?.id ?? null, supplierName: order.supplier?.name ?? null };
+        // Neuer Pfad: branchFolder/YYYY/MM/filename.pdf
+        fileToSupplier.set(`${branchFolder}/${year}/${month}/${filename}`, entry);
+        // Alter Pfad (Rückwärtskompatibilität): YYYY/filename.pdf
+        fileToSupplier.set(`${year}/${filename}`, entry);
+      }
 
-    const fileToSupplier = new Map<string, { supplierId: string | null; supplierName: string | null }>();
-    const allOrders = await this.ordersRepository.find({ where: branchId ? { branchId } : undefined });
-    allOrders.forEach((order) => {
-      const year = this.getOrderDocumentYear(order);
-      const filename = this.buildStoredOrderFilename(order);
-      const key = `${year}/${filename}`;
-      fileToSupplier.set(key, {
-        supplierId: order.supplier?.id ?? null,
-        supplierName: order.supplier?.name ?? null,
-      });
-    });
+      const topLevelEntries = await fs.readdir(storagePath, { withFileTypes: true });
+      const documents: StoredOrderDocumentEntry[] = [];
 
-    const yearDirectories = await fs.readdir(storagePath, { withFileTypes: true });
-    const documents: StoredOrderDocumentEntry[] = [];
+      for (const topEntry of topLevelEntries) {
+        if (!topEntry.isDirectory()) continue;
 
-    for (const yearDir of yearDirectories) {
-      if (!yearDir.isDirectory()) continue;
-      if (!/^\d{4}$/.test(yearDir.name)) continue;
+        if (/^\d{4}$/.test(topEntry.name)) {
+          // Alte Struktur: YYYY/filename.pdf
+          const year = Number.parseInt(topEntry.name, 10);
+          if (params?.year && year !== params.year) continue;
+          const yearPath = path.join(storagePath, topEntry.name);
+          let files: Awaited<ReturnType<typeof fs.readdir>>;
+          try { files = await fs.readdir(yearPath, { withFileTypes: true }); } catch { continue; }
+          for (const file of files) {
+            if (!file.isFile() || !this.isValidOrderDocumentFilename(file.name)) continue;
+            const relPath = `${topEntry.name}/${file.name}`;
+            const mappedSupplier = fileToSupplier.get(relPath);
+            if (params?.supplierId && mappedSupplier?.supplierId !== params.supplierId) continue;
+            const stats = await fs.stat(path.join(yearPath, file.name));
+            documents.push({
+              year, month: 0, filename: file.name, path: relPath, size: stats.size,
+              created: stats.mtime.toISOString(),
+              supplierId: mappedSupplier?.supplierId ?? null,
+              supplierName: mappedSupplier?.supplierName ?? null,
+              branchFolder: null,
+            });
+          }
+        } else {
+          // Neue Struktur: branchFolder/YYYY/MM/filename.pdf
+          const branchFolderName = topEntry.name;
+          const branchPath = path.join(storagePath, branchFolderName);
+          let yearDirs: Awaited<ReturnType<typeof fs.readdir>>;
+          try { yearDirs = await fs.readdir(branchPath, { withFileTypes: true }); } catch { continue; }
 
-      const year = Number.parseInt(yearDir.name, 10);
-      if (params?.year && year !== params.year) continue;
+          for (const yearDir of yearDirs) {
+            if (!yearDir.isDirectory() || !/^\d{4}$/.test(yearDir.name)) continue;
+            const year = Number.parseInt(yearDir.name, 10);
+            if (params?.year && year !== params.year) continue;
+            const yearPath = path.join(branchPath, yearDir.name);
+            let monthDirs: Awaited<ReturnType<typeof fs.readdir>>;
+            try { monthDirs = await fs.readdir(yearPath, { withFileTypes: true }); } catch { continue; }
 
-      const yearPath = path.join(storagePath, yearDir.name);
-      const files = await fs.readdir(yearPath, { withFileTypes: true });
+            for (const monthDir of monthDirs) {
+              if (!monthDir.isDirectory() || !/^\d{2}$/.test(monthDir.name)) continue;
+              const month = Number.parseInt(monthDir.name, 10);
+              const monthPath = path.join(yearPath, monthDir.name);
+              let files: Awaited<ReturnType<typeof fs.readdir>>;
+              try { files = await fs.readdir(monthPath, { withFileTypes: true }); } catch { continue; }
 
-      for (const file of files) {
-        if (!file.isFile()) continue;
-        if (!this.isValidOrderDocumentFilename(file.name)) continue;
-
-        const relativePath = `${yearDir.name}/${file.name}`;
-        const mappedSupplier = fileToSupplier.get(relativePath);
-
-        if (params?.supplierId) {
-          if (!mappedSupplier?.supplierId) continue;
-          if (mappedSupplier.supplierId !== params.supplierId) continue;
+              for (const file of files) {
+                if (!file.isFile() || !this.isValidOrderDocumentFilename(file.name)) continue;
+                const relPath = `${branchFolderName}/${yearDir.name}/${monthDir.name}/${file.name}`;
+                const mappedSupplier = fileToSupplier.get(relPath);
+                if (params?.supplierId && mappedSupplier?.supplierId !== params.supplierId) continue;
+                const stats = await fs.stat(path.join(monthPath, file.name));
+                documents.push({
+                  year, month, filename: file.name, path: relPath, size: stats.size,
+                  created: stats.mtime.toISOString(),
+                  supplierId: mappedSupplier?.supplierId ?? null,
+                  supplierName: mappedSupplier?.supplierName ?? null,
+                  branchFolder: branchFolderName,
+                });
+              }
+            }
+          }
         }
-
-        const fullPath = path.join(yearPath, file.name);
-        const stats = await fs.stat(fullPath);
-        documents.push({
-          year,
-          filename: file.name,
-          path: relativePath,
-          size: stats.size,
-          created: stats.mtime.toISOString(),
-          supplierId: mappedSupplier?.supplierId ?? null,
-          supplierName: mappedSupplier?.supplierName ?? null,
-        });
       }
-    }
 
-    documents.sort((a, b) => {
-      if (a.year !== b.year) {
-        return b.year - a.year;
-      }
-      const dateDiff = new Date(b.created).getTime() - new Date(a.created).getTime();
-      if (dateDiff !== 0) {
-        return dateDiff;
-      }
-      return a.filename.localeCompare(b.filename, "de", { sensitivity: "base" });
-    });
+      documents.sort((a, b) => {
+        if (a.year !== b.year) return b.year - a.year;
+        if (a.month !== b.month) return b.month - a.month;
+        const dateDiff = new Date(b.created).getTime() - new Date(a.created).getTime();
+        if (dateDiff !== 0) return dateDiff;
+        return a.filename.localeCompare(b.filename, "de", { sensitivity: "base" });
+      });
 
-    return documents;
+      return documents;
     } catch (err) {
       console.error('[PurchasingService] listOrderDocuments Fehler:', err);
       return [];
     }
   }
 
-  async getOrderDocument(year: string, filename: string, branchId?: string | null): Promise<{ filename: string; buffer: Buffer }> {
-    if (!/^\d{4}$/.test(year)) {
-      throw new BadRequestException("Ungueltiges Jahr.");
+  async getOrderDocument(relPath: string, branchId?: string | null): Promise<{ filename: string; buffer: Buffer }> {
+    // Sicherheitscheck: Nur erlaubte Zeichen, keine Path-Traversal-Angriffe
+    if (!relPath || !/^[a-zA-Z0-9._\-/]+$/.test(relPath) || relPath.includes('..') || relPath.includes('\\')) {
+      throw new BadRequestException("Ungueltiger Dateipfad.");
     }
+
+    const parts = relPath.split('/');
+    const filename = parts[parts.length - 1];
+
     if (!this.isValidOrderDocumentFilename(filename)) {
       throw new BadRequestException("Ungueltiger Dateiname.");
     }
 
-    // Niederlassungs-Isolation: prüfen ob die Datei zur eigenen NL gehört
+    // Niederlassungs-Isolation: Dateiname muss einer Bestellung der eigenen NL entsprechen
     if (branchId) {
       const branchOrders = await this.ordersRepository.find({ where: { branchId } });
-      const isOwned = branchOrders.some((order) => {
-        const orderYear = this.getOrderDocumentYear(order);
-        const orderFilename = this.buildStoredOrderFilename(order);
-        return orderYear === year && orderFilename === filename;
-      });
+      const isOwned = branchOrders.some((order) => this.buildStoredOrderFilename(order) === filename);
       if (!isOwned) {
         throw new NotFoundException("Dokument nicht gefunden.");
       }
     }
 
     const storagePath = this.getPurchaseOrderStoragePath();
-    const yearPath = path.join(storagePath, year);
-    const fullPath = path.join(yearPath, filename);
+    const fullPath = path.join(storagePath, relPath);
 
-    const resolvedBasePath = path.resolve(yearPath);
-    const resolvedFullPath = path.resolve(fullPath);
-    if (path.dirname(resolvedFullPath) !== resolvedBasePath) {
+    // Path-Traversal-Schutz
+    const resolvedBase = path.resolve(storagePath);
+    const resolvedFull = path.resolve(fullPath);
+    if (!resolvedFull.startsWith(resolvedBase + path.sep) && resolvedFull !== resolvedBase) {
       throw new BadRequestException("Ungueltiger Dateipfad.");
     }
 
@@ -929,7 +959,7 @@ export class PurchasingService {
 
   private async buildOrderPdf(order: PurchaseOrder): Promise<Buffer> {
     const template = await this.systemConfigService.getPurchaseOrderPdfTemplate();
-    const company = await this.systemConfigService.getCompanyConfig();
+    const company = await this.systemConfigService.getCompanyConfig(order.branchId);
 
     const orderNumber = order.orderNumber ?? order.id;
     const orderDate = order.orderedAt ?? order.createdAt;
@@ -1219,17 +1249,27 @@ export class PurchasingService {
   }
 
   private async generateOrderNumber(order?: PurchaseOrder, date = new Date()): Promise<string> {
-    // Format: HERST-YYYYMMDD-001
+    // Format: {NL-CODE}-{YYYYMMDD}-{001}-{HERST}
+    // Beispiel: 400-20260408-001-BOSCH
     const year = date.getFullYear();
     const month = String(date.getMonth() + 1).padStart(2, '0');
     const day = String(date.getDate()).padStart(2, '0');
     const dateStr = `${year}${month}${day}`;
 
+    // Niederlassungs-Code bestimmen (externalCode bevorzugt, sonst Namensprefix)
+    let branchCode = 'NL';
+    if (order?.branchId) {
+      const branch = await this.branchesRepository.findOne({ where: { id: order.branchId } });
+      if (branch) {
+        const rawCode = (branch.externalCode ?? branch.name).toUpperCase().replace(/[^A-Z0-9]/g, '').substring(0, 8);
+        branchCode = rawCode || 'NL';
+      }
+    }
+
     const manufacturerPrefix = this.extractNamePrefix(this.getDominantManufacturer(order), 'HERST');
+    const prefix = `${branchCode}-${dateStr}`;
 
-    const prefix = `${manufacturerPrefix}-${dateStr}`;
-
-    // Suche nach Bestellungen mit diesem Prefix (gleicher Tag, gleicher Hersteller+Lieferant)
+    // Suche nach Bestellungen mit diesem Prefix (gleicher Tag, gleiche NL)
     const existing = await this.ordersRepository
       .createQueryBuilder("order")
       .select("order.orderNumber", "orderNumber")
@@ -1239,14 +1279,27 @@ export class PurchasingService {
     let max = 0;
     existing.forEach((row) => {
       const value = String(row.orderNumber || "");
-      const match = value.match(/-(\d+)$/);
-      if (!match) return;
-      const num = Number(match[1]);
+      if (!value.startsWith(prefix + '-')) return;
+      // Format: {prefix}-{seq}-{HERST} → seq ist der Teil nach dem prefix
+      const afterPrefix = value.substring(prefix.length + 1);
+      const seqStr = afterPrefix.split('-')[0];
+      const num = Number(seqStr);
       if (!Number.isNaN(num)) max = Math.max(max, num);
     });
 
     const suffix = String(max + 1).padStart(3, "0");
-    return `${prefix}-${suffix}`;
+    return `${prefix}-${suffix}-${manufacturerPrefix}`;
+  }
+
+  /** Ordnername für eine Niederlassung (sicher für Dateisystem) */
+  private async getBranchFolder(branchId: string | null | undefined): Promise<string> {
+    if (!branchId) return '_ALLGEMEIN';
+    const branch = await this.branchesRepository.findOne({ where: { id: branchId } });
+    if (!branch) return '_ALLGEMEIN';
+    const code = (branch.externalCode ?? '').replace(/[^A-Z0-9]/gi, '').substring(0, 10).toUpperCase();
+    const name = this.sanitizeStorageToken(branch.name).substring(0, 20);
+    if (code && name) return `${code}_${name}`;
+    return code || name || '_ALLGEMEIN';
   }
 
   private getPurchaseOrderStoragePath(): string {
@@ -1283,13 +1336,16 @@ export class PurchasingService {
       const storagePath = this.getPurchaseOrderStoragePath();
       const pdfBuffer = buffer ?? (await this.buildOrderPdf(order));
       const filename = this.buildStoredOrderFilename(order);
-      const year = this.getOrderDocumentYear(order);
-      const yearPath = path.join(storagePath, year);
+      const refDate = new Date(order.orderedAt ?? order.createdAt ?? new Date());
+      const year = String(refDate.getFullYear());
+      const month = String(refDate.getMonth() + 1).padStart(2, '0');
+      const branchFolder = await this.getBranchFolder(order.branchId);
+      const targetDir = path.join(storagePath, branchFolder, year, month);
 
-      await fs.mkdir(yearPath, { recursive: true });
-      const fullPath = path.join(yearPath, filename);
+      await fs.mkdir(targetDir, { recursive: true });
+      const fullPath = path.join(targetDir, filename);
       await fs.writeFile(fullPath, pdfBuffer);
-      console.log(`[PurchasingService] PDF gespeichert: ${year}/${filename}`);
+      console.log(`[PurchasingService] PDF gespeichert: ${branchFolder}/${year}/${month}/${filename}`);
     } catch (error) {
       console.warn("[PurchasingService] PDF Ablage fehlgeschlagen:", error);
     }

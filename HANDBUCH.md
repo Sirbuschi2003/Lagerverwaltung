@@ -1,7 +1,7 @@
-# KFZ-Lagerverwaltung – Benutzerhandbuch
+# Lagerverwaltung – Benutzerhandbuch
 
-> **Version:** 2.x
-> **Zielgruppe:** Lageristen, Disponenten, Techniker, Administratoren
+> **Version:** 3.3.6
+> **Zielgruppe:** Lageristen, Techniker, Manager, Administratoren
 > **Sprache:** Deutsch
 
 ---
@@ -20,18 +20,19 @@
 10. [Inventur](#10-inventur)
 11. [Bestellwesen](#11-bestellwesen)
 12. [Lieferantenverwaltung](#12-lieferantenverwaltung)
-13. [Berichte, Protokolle & Logs](#13-berichte-protokolle--logs)
+13. [Berichte & Systemprotokolle](#13-berichte--systemprotokolle)
 14. [Offline-Modus & Synchronisation](#14-offline-modus--synchronisation)
 15. [Systemeinstellungen](#15-systemeinstellungen)
 16. [Benutzerverwaltung & Zugriffsrechte](#16-benutzerverwaltung--zugriffsrechte)
-17. [Administration & Wartung](#17-administration--wartung)
-18. [Anhang: Berechtigungsübersicht](#18-anhang-berechtigungsübersicht)
+17. [Niederlassungen](#17-niederlassungen)
+18. [Administration & Wartung](#18-administration--wartung)
+19. [Anhang: Berechtigungsübersicht](#19-anhang-berechtigungsübersicht)
 
 ---
 
 ## 1. Überblick
 
-Die **KFZ-Lagerverwaltung** ist ein webbasiertes System zur Verwaltung von Ersatzteilen und Verbrauchsmaterialien im Fuhrpark. Es läuft vollständig im Browser und ist als Progressive Web App (PWA) auch offline nutzbar.
+Die **Lagerverwaltung** ist ein webbasiertes System zur Verwaltung von Ersatzteilen und Verbrauchsmaterialien. Es läuft vollständig im Browser und ist als Progressive Web App (PWA) auch offline nutzbar. Das System unterstützt mehrere Niederlassungen mit getrennten Beständen, Einstellungen und Benutzern.
 
 ### Kernfunktionen auf einen Blick
 
@@ -39,8 +40,9 @@ Die **KFZ-Lagerverwaltung** ist ein webbasiertes System zur Verwaltung von Ersat
 |---|---|
 | Artikelverwaltung | Anlegen, Bearbeiten und Importieren von Ersatzteilen |
 | Bestandsführung | Buchungen pro Fahrzeug, Scanner-Integration |
-| Inventur | Zählung und Abgleich des Fahrzeugbestands |
+| Inventur | Körperliche Bestandsaufnahme pro Niederlassung |
 | Bestellwesen | Bestellvorschläge, Bestellungen, Wareneingang |
+| Niederlassungen | Mehrere Standorte mit getrennten Daten und Einstellungen |
 | Offline-Betrieb | Buchungen ohne Internetverbindung möglich |
 | Zugriffsrechte | Rollen- und benutzerbasierte Berechtigungen |
 | Exporte | PDF, Excel, CSV für alle Bereiche |
@@ -49,10 +51,10 @@ Die **KFZ-Lagerverwaltung** ist ein webbasiertes System zur Verwaltung von Ersat
 
 | Rolle | Beschreibung |
 |---|---|
-| **Administrator** | Vollzugriff auf alle Funktionen |
-| **Manager** | Bestellwesen, Berichte, Benutzer verwalten |
+| **Super-Admin** | Niederlassungsübergreifender Vollzugriff, Systemkonfiguration, Protokolle |
+| **Manager** | Vollzugriff innerhalb der eigenen Niederlassung |
+| **Lagerist** | Bestandsbuchungen, Bestellungen, Inventur |
 | **Techniker** | Buchungen am eigenen Fahrzeug |
-| **Betrachter** | Nur-Lesen-Zugriff |
 
 > Die genauen Rechte können je nach Konfiguration abweichen. Ihre zugewiesenen Rechte sehen Sie in der Benutzerverwaltung.
 
@@ -62,13 +64,16 @@ Die **KFZ-Lagerverwaltung** ist ein webbasiertes System zur Verwaltung von Ersat
 
 ### 2.1 Ersteinrichtung
 
-Beim ersten Start des Systems erscheint die **Einrichtungsseite**. Hier legen Sie den ersten Administrator-Account an:
+Beim allerersten Start des Systems erscheint die **Einrichtungsseite**. Hier legen Sie den ersten Super-Admin-Account an:
 
 1. **Benutzername** eingeben (wird für den Login verwendet)
 2. **Anzeigename** eingeben (wird im System angezeigt)
-3. **Passwort** vergeben (mindestens 6 Zeichen)
-4. **Passwort bestätigen**
-5. Auf **„Einrichtung abschließen"** klicken
+3. **Passwort** vergeben – das Passwort muss folgende Anforderungen erfüllen:
+   - Mindestens **8 Zeichen**
+   - Mindestens ein **Großbuchstabe**
+   - Mindestens eine **Zahl**
+   - Mindestens ein **Sonderzeichen** (z.B. `!`, `@`, `#`, `$`)
+4. **„Einrichtung abschließen"** klicken
 
 Nach erfolgreicher Einrichtung werden Sie automatisch zur Anmeldeseite weitergeleitet.
 
@@ -78,17 +83,21 @@ Nach erfolgreicher Einrichtung werden Sie automatisch zur Anmeldeseite weitergel
 2. Geben Sie **Benutzername** und **Passwort** ein
 3. Klicken Sie auf **„Anmelden"**
 
-**Offline-Anmeldung:** Wenn keine Internetverbindung besteht und Sie sich zuvor schon einmal angemeldet haben, können Sie sich mit Ihren gespeicherten Zugangsdaten auch offline anmelden. Die App zeigt in diesem Fall einen Hinweis an.
+> **Sicherheitshinweis:** Nach 10 aufeinanderfolgenden Fehlversuchen wird das Konto für 15 Minuten gesperrt.
+
+**Offline-Anmeldung:** Wenn keine Internetverbindung besteht und Sie sich zuvor schon einmal online angemeldet haben, können Sie sich mit Ihren gespeicherten Zugangsdaten offline anmelden. Die App zeigt in diesem Fall einen Hinweis an.
 
 ### 2.3 Passwort ändern
 
-Das Passwort können Administratoren in der Benutzerverwaltung für jeden Benutzer ändern.
+Administratoren können in der Benutzerverwaltung Passwörter für alle Benutzer ändern. Benutzer können ihr eigenes Passwort über **„Profil"** → **„Passwort ändern"** ändern.
+
+Das neue Passwort muss die Komplexitätsanforderungen erfüllen (siehe 2.1).
 
 ---
 
 ## 3. Dashboard
 
-Das Dashboard ist die Startseite nach dem Login. Es zeigt auf einen Blick die wichtigsten Informationen.
+Das Dashboard ist die Startseite nach dem Login. Es zeigt auf einen Blick die wichtigsten Informationen der eigenen Niederlassung.
 
 ### 3.1 Verfügbare Widgets
 
@@ -111,11 +120,11 @@ Wenn die App keine Verbindung zum Server hat, erscheint oben ein gelber Warnbalk
 
 ## 4. Artikelverwaltung
 
-Die Artikelverwaltung ist das Herzstück des Systems. Hier werden alle Ersatzteile und Verbrauchsmaterialien gepflegt.
+Die Artikelverwaltung ist das Herzstück des Systems. Hier werden alle Ersatzteile und Verbrauchsmaterialien gepflegt. Jede Niederlassung hat ihren eigenen, isolierten Artikelstamm.
 
 ### 4.1 Artikelübersicht
 
-Navigieren Sie über das Menü zu **„Artikel"**. Die Übersicht zeigt alle angelegten Artikel mit:
+Navigieren Sie über das Menü zu **„Artikel"**. Die Übersicht zeigt alle Artikel der eigenen Niederlassung mit:
 - Artikelnummer
 - Bezeichnung
 - Hersteller
@@ -136,7 +145,7 @@ Navigieren Sie über das Menü zu **„Artikel"**. Die Übersicht zeigt alle ang
 
 | Feld | Pflicht | Beschreibung |
 |---|---|---|
-| Artikelnummer | ✅ | Eindeutige Kennung (z.B. Hersteller-Teilenummer) |
+| Artikelnummer | ✅ | Eindeutige Kennung pro Niederlassung |
 | Bezeichnung | ✅ | Kurzbeschreibung des Artikels |
 | Bezeichnung (2) | – | Zusatzinfo (erscheint in Listen und bei Bestellvorschlägen) |
 | Hersteller | ✅ | Herstellername |
@@ -161,7 +170,7 @@ Navigieren Sie über das Menü zu **„Artikel"**. Die Übersicht zeigt alle ang
 
 ### 4.3 Artikel bearbeiten
 
-Klicken Sie auf das **Stift-Symbol** neben einem Artikel oder direkt auf die Zeile. Das Bearbeitungsdialog öffnet sich mit allen aktuellen Werten.
+Klicken Sie auf das **Stift-Symbol** neben einem Artikel oder direkt auf die Zeile. Der Bearbeitungsdialog öffnet sich mit allen aktuellen Werten. Aus dem Bestellmenü kann ein Artikel auch direkt über einen Klick auf die Artikelnummer geöffnet werden.
 
 ### 4.4 Artikel löschen
 
@@ -185,11 +194,10 @@ Das System unterstützt den Import von Artikelstammdaten aus der **Hyreka**-Soft
 - Lieferant (wird ggf. neu angelegt)
 - Lagerort (wird ggf. neu angelegt)
 
-> **Hinweis:** Bestehende Artikel werden aktualisiert, neue Artikel werden angelegt. Bereits vorhandene Daten werden nicht gelöscht.
+> **Hinweis:** Der Import ist niederlassungsisoliert. Gleiche Artikelnummern in verschiedenen Niederlassungen sind möglich. Bestehende Artikel werden aktualisiert, neue angelegt.
 
 ### 4.6 CSV-Import (allgemein)
 
-Für den allgemeinen CSV-Import:
 1. Laden Sie zunächst das **CSV-Template** herunter
 2. Befüllen Sie die Vorlage mit Ihren Daten
 3. Importieren Sie die CSV-Datei
@@ -207,7 +215,7 @@ In der Artikeldetailansicht sehen Sie die **Bewegungshistorie** des Artikels: al
 
 ## 5. Lagerorte
 
-Lagerorte beschreiben die physische Struktur Ihres Zentrallagers (Regale, Fächer, Schränke usw.).
+Lagerorte beschreiben die physische Struktur Ihres Lagers (Regale, Fächer, Schränke usw.). Lagerorte sind pro Niederlassung getrennt.
 
 ### 5.1 Ortstypen
 
@@ -226,7 +234,7 @@ Lagerorte beschreiben die physische Struktur Ihres Zentrallagers (Regale, Fäche
 4. Optional: **Übergeordneten Ort** wählen (für Hierarchie)
 5. Klicken Sie auf **„Speichern"**
 
-> **Tipp:** Verwenden Sie strukturierte Codes wie `LAGER / REGAL-01 / FACH-03` — diese werden in der Suche automatisch erkannt und angezeigt.
+> **Tipp:** Strukturierte Codes wie `Regal 1 / Fach 3` oder `Schrank 2 / Schublade 1` werden in der Bestellansicht automatisch erkannt und lesbar angezeigt.
 
 ### 5.3 Lagerort zuweisen
 
@@ -236,11 +244,11 @@ Lagerorte werden in der Artikelverwaltung einem Artikel zugewiesen. Beim Anlegen
 
 ## 6. Fahrzeugverwaltung
 
-Fahrzeuge repräsentieren die Servicefahrzeuge Ihres Fuhrparks. Jedes Fahrzeug hat seinen eigenen Bestand.
+Fahrzeuge repräsentieren die Servicefahrzeuge Ihres Fuhrparks. Jedes Fahrzeug hat seinen eigenen Bestand. Fahrzeuge sind pro Niederlassung getrennt.
 
 ### 6.1 Fahrzeug anlegen
 
-1. Navigieren Sie zu **„Zugangskontrolle" → „Fahrzeuge"** (oder direkt im Menü)
+1. Navigieren Sie zu **„Zugangskontrolle" → „Fahrzeuge"**
 2. Klicken Sie auf **„Neues Fahrzeug"**
 3. Geben Sie **Kennzeichen** und **Beschreibung** ein
 4. Klicken Sie auf **„Speichern"**
@@ -260,7 +268,7 @@ Sie können den kompletten Artikelbestand von einem Fahrzeug auf ein anderes üb
 
 ## 7. Fuhrpark-Übersicht
 
-Die Fuhrpark-Übersicht zeigt den **aktuellen Bestand aller Fahrzeuge** auf einen Blick.
+Die Fuhrpark-Übersicht zeigt den **aktuellen Bestand aller Fahrzeuge** der eigenen Niederlassung auf einen Blick.
 
 **Funktionen:**
 - Suche nach Kennzeichen oder Beschreibung
@@ -303,16 +311,18 @@ Der Scanner erlaubt das schnelle Buchen über Barcode- oder QR-Code-Scan.
 
 **Vorgehensweise:**
 1. Navigieren Sie zu **„Scanner"**
-2. Aktivieren Sie die Kamera über den **Scanner-Button**
+2. Aktivieren Sie die Kamera über den **„Scanner starten"-Button**
 3. Halten Sie den Barcode/QR-Code vor die Kamera
 4. Der Artikel wird automatisch erkannt
 5. Wählen Sie die **Buchart**: Einbuchen oder Ausbuchen
 6. Passen Sie die **Menge** an (+ / – Buttons oder direkte Eingabe)
 7. Klicken Sie auf **„Buchen"**
 
-**Manuell suchen:** Wenn kein Scanner verfügbar ist, können Sie den Artikel auch über das Suchfeld manuell auswählen.
+**Manuell suchen:** Wenn kein Scanner verfügbar ist, können Sie über **„Artikel manuell auswählen"** den Artikel über ein Suchfeld finden.
 
-**Neuen Artikel anlegen:** Wenn ein gescannter Code nicht gefunden wird, können Sie direkt aus dem Scanner heraus einen neuen Artikel anlegen.
+**Neuen Artikel anlegen:** Wenn ein gescannter Code nicht gefunden wird, erscheint ein Dialog. Sie können dort direkt einen neuen Artikel anlegen und anschließend sofort buchen.
+
+> **Hinweis:** QR-Codes im Format `ARTIKELCODE - BESCHREIBUNG` werden korrekt erkannt – auch wenn der Artikelcode selbst Bindestriche enthält (z.B. `GO-00732000 - HDD`).
 
 ### 9.2 Schnellbuchung
 
@@ -331,8 +341,6 @@ Die Schnellbuchung eignet sich für **Massenbuchungen**, z.B. beim Auffüllen me
 6. Wiederholen Sie für alle weiteren Artikel
 7. Klicken Sie auf **„Alle buchen"** um alle Positionen zu verbuchen
 
-**Liste bearbeiten:** Einzelne Positionen können vor dem Buchen noch entfernt oder geändert werden.
-
 ### 9.3 Offline-Buchungen
 
 Buchungen können auch **ohne Internetverbindung** vorgenommen werden. Sie werden lokal in der Warteschlange gespeichert und beim nächsten Online-Gang automatisch übertragen. Die Anzahl der ausstehenden Buchungen wird im Sync-Bereich angezeigt.
@@ -341,25 +349,23 @@ Buchungen können auch **ohne Internetverbindung** vorgenommen werden. Sie werde
 
 ## 10. Inventur
 
-Die Inventur ermöglicht die **körperliche Bestandsaufnahme** aller Fahrzeuge.
+Die Inventur ermöglicht die **körperliche Bestandsaufnahme** aller Fahrzeuge einer Niederlassung. Jede Niederlassung führt ihre Inventur eigenständig durch. Super-Admin kann niederlassungsübergreifende Inventursitzungen anlegen.
 
 ### 10.1 Inventursitzung starten
 
 1. Navigieren Sie zu **„Inventur"**
 2. Klicken Sie auf **„Neue Sitzung"**
-3. Wählen Sie:
-   - **Einzelnes Fahrzeug**: Inventur für ein bestimmtes Fahrzeug
-   - **Ganzer Fuhrpark**: Inventur für alle Fahrzeuge gleichzeitig
-4. Die Sitzung wird geöffnet
+3. Vergeben Sie einen **Namen** (z.B. „Jahresinventur April 2026")
+4. Optional: **Standort** eintragen
+5. Klicken Sie auf **„Starten"**
 
 ### 10.2 Artikel zählen
 
-1. Scannen Sie den Barcode eines Artikels oder wählen Sie ihn manuell
-2. Geben Sie die **gezählte Menge** ein
-3. Klicken Sie auf **„Eintragen"**
-4. Wiederholen Sie für alle Artikel
-
-**Tipp:** Nutzen Sie den eingebauten Barcode-Scanner für schnelleres Arbeiten.
+1. Wählen Sie das **Fahrzeug** in der Sitzung aus
+2. Scannen Sie den Barcode eines Artikels oder wählen Sie ihn manuell
+3. Geben Sie die **gezählte Menge** ein
+4. Klicken Sie auf **„Eintragen"**
+5. Wiederholen Sie für alle Artikel
 
 ### 10.3 Inventurprozess
 
@@ -367,22 +373,24 @@ Die Sitzung durchläuft folgende Zustände:
 
 | Status | Bedeutung |
 |---|---|
-| **Offen** | Sitzung angelegt, Zählung noch nicht begonnen |
-| **In Bearbeitung** | Zählung läuft |
-| **Abgeschlossen** | Zählung beendet, wartet auf Überprüfung |
-| **Eingereicht** | Zur Freigabe eingereicht |
+| **Entwurf** | Sitzung angelegt, Zählung noch nicht begonnen |
+| **In Bearbeitung** | Zählung läuft, Techniker buchen ein |
+| **Eingereicht** | Fahrzeug vom Techniker zur Freigabe eingereicht |
+| **Abgeschlossen** | Alle Fahrzeuge eingereicht, wartet auf Finalisierung |
 | **Finalisiert** | Freigegeben, Bestände übernommen |
 
 ### 10.4 Differenzauswertung
 
 Nach der Zählung zeigt das System die **Differenzen** zwischen gezähltem und erwartetem Bestand an. Sie können:
 - Differenzen einzeln prüfen
-- Sitzung neu öffnen für Nachzählungen
+- Sitzung für Nachzählungen neu öffnen
 - Protokoll als **PDF** oder **Excel** exportieren
 
 ### 10.5 Sitzung finalisieren
 
 Nach Überprüfung und Freigabe durch einen Manager wird die Sitzung **finalisiert**. Die gezählten Bestände werden als neue Sollwerte übernommen.
+
+> **Techniker:** Sie können Ihre Fahrzeuginventur nach Abschluss als PDF herunterladen. Navigieren Sie zur Sitzung und klicken Sie auf das PDF-Symbol neben Ihrem Fahrzeug.
 
 ---
 
@@ -394,7 +402,7 @@ Das Bestellwesen umfasst den gesamten Beschaffungsprozess – von der automatisc
 
 Das System ermittelt automatisch Artikel, die bestellt werden sollten, basierend auf Meldebestand und Sollbestand.
 
-**Ansicht aufrufen:** Navigieren Sie zu **„Bestellungen" → Tab „Bestellvorschläge"**
+**Ansicht aufrufen:** Navigieren Sie zu **„Bestellungen" → Tab „Vorschläge"**
 
 #### Wie werden Vorschläge berechnet?
 
@@ -407,6 +415,10 @@ Die **benötigte Menge** ergibt sich aus: Sollbestand − Ist-Bestand − bereit
 #### Filter: Nur Mindestbestand unterschritten
 
 Aktivieren Sie diese Checkbox um nur die **kritischen** Artikel anzuzeigen, deren Ist-Bestand den Mindestbestand (Sicherheitspuffer) unterschritten hat.
+
+#### Bestand anderer Niederlassungen anzeigen
+
+Aktivieren Sie den Schalter **„Bestand anderer Niederlassungen"** um bei jedem Artikel farbige Chips einzublenden, die zeigen ob und wie viel Bestand in anderen Niederlassungen vorhanden ist. Dies hilft, unnötige Bestellungen zu vermeiden wenn ein Artikel intern umgelagert werden kann.
 
 #### Artikel direkt bearbeiten
 
@@ -422,6 +434,7 @@ Der **„Aktualisieren"-Button** lädt die Vorschläge neu und umgeht den server
 2. Passen Sie die Bestellmenge bei Bedarf an
 3. Klicken Sie auf **„Bestellungen erstellen"**
 4. Das System gruppiert die Artikel automatisch nach Lieferant und erstellt separate Bestellungen
+5. Im folgenden Dialog wählen Sie die Aktion: **Als Entwurf speichern**, **PDF herunterladen** oder **Per E-Mail versenden**
 
 ### 11.2 Aktive Bestellungen
 
@@ -432,16 +445,16 @@ Hier sehen Sie alle offenen Bestellungen mit ihrem aktuellen Status.
 | Status | Bedeutung |
 |---|---|
 | **Entwurf** | Erstellt, aber noch nicht abgesendet |
-| **Bestellt** | An Lieferant übermittelt |
-| **Empfangen** | Ware vollständig eingegangen |
-| **Archiviert** | Abgeschlossen und archiviert |
+| **Bestellt** | An Lieferant übermittelt, Wareneingang steht aus |
+| **Archiviert** | Ware vollständig eingegangen und abgeschlossen |
+
+> **Hinweis:** Vollständig eingegangene Bestellungen werden automatisch archiviert. Das Bestell-PDF bleibt auch nach der Archivierung abrufbar.
 
 #### Aktionen pro Bestellung
 
-- **PDF erzeugen:** Druckbares Bestellformular als PDF
-- **E-Mail senden:** Bestellung per E-Mail an Lieferanten senden
+- **PDF erzeugen / herunterladen:** Druckbares Bestellformular als PDF
+- **Per E-Mail senden:** Öffnet das Mailprogramm mit vorbereitetem Text und lädt das PDF herunter
 - **Bearbeiten:** Positionen und Mengen ändern (nur im Status „Entwurf")
-- **Archivieren:** Abgeschlossene Bestellungen archivieren
 - **Löschen:** Bestellung löschen (nur Entwürfe)
 
 ### 11.3 Wareneingang
@@ -454,20 +467,20 @@ Im Tab **„Wareneingang"** erfassen Sie eingegangene Lieferungen.
 3. Tragen Sie die **gelieferte Menge** ein
 4. Bestätigen Sie den Eingang
 
-Das System aktualisiert automatisch den Lagerbestand und den Bestellstatus. Bei Teillieferungen bleibt die Bestellung im Status „Bestellt" bis alle Positionen eingegangen sind.
+Das System aktualisiert automatisch den Lagerbestand und den Bestellstatus. Bei Teillieferungen bleibt die Bestellung im Status „Bestellt" bis alle Positionen eingegangen sind. Bei vollständigem Eingang wird die Bestellung automatisch archiviert.
 
 ### 11.4 Archivierte Bestellungen
 
 Alle abgeschlossenen Bestellungen finden Sie im Tab **„Archiv"**. Hier können Sie:
 - Vergangene Bestellungen einsehen
 - PDFs erneut herunterladen
-- Bestellhistorie nach Datum und Lieferant filtern
+- Bestellhistorie nach Jahr und Lieferant filtern
 
 ---
 
 ## 12. Lieferantenverwaltung
 
-Lieferanten werden in der Bestellverwaltung verwendet und können Artikeln zugeordnet werden.
+Lieferanten werden in der Bestellverwaltung verwendet und können Artikeln zugeordnet werden. Lieferanten sind pro Niederlassung getrennt.
 
 ### 12.1 Lieferant anlegen
 
@@ -495,25 +508,28 @@ Lieferanten werden in der Bestellverwaltung verwendet und können Artikeln zugeo
 
 ---
 
-## 13. Berichte, Protokolle & Logs
+## 13. Berichte & Systemprotokolle
 
 ### 13.1 Systemlogs
 
-Navigieren Sie zu **„Logs"** (im Admin-Bereich). Das System protokolliert alle wichtigen Ereignisse.
+> **Zugriff:** Systemprotokolle sind ausschließlich für den **Super-Admin** zugänglich.
+
+Navigieren Sie zu **„Logs"** im Admin-Bereich. Das System protokolliert alle wichtigen Ereignisse niederlassungsübergreifend.
 
 #### Filteroptionen
 
 | Filter | Optionen |
 |---|---|
-| Quelle | Frontend, Backend |
+| Zeitraum | Von / Bis Datum |
 | Level | Info, Warnung, Fehler, Sicherheit |
 | Kategorie | Auth, Bestand, Inventur, System, API |
-| Anzahl | 25 / 50 / 100 / 200 Einträge |
+| Benutzer | Filter auf einzelnen Benutzer |
+| Anzahl | 1 – 10.000 Einträge |
 
 #### Log-Statistiken
 
 Oben in der Log-Ansicht sehen Sie auf einen Blick:
-- Gesamtanzahl der Logs
+- Gesamtanzahl der Logs (letzte 30 Tage)
 - Anzahl Fehler
 - Anzahl Warnungen
 - Anzahl Sicherheitsereignisse
@@ -522,12 +538,12 @@ Oben in der Log-Ansicht sehen Sie auf einen Blick:
 
 - **CSV exportieren:** Alle angezeigten Logs als CSV-Datei
 - **JSON exportieren:** Alle Logs im JSON-Format
-- **Logs bereinigen:** Alte Logs löschen (nach einstellbarer Aufbewahrungszeit)
+- **Logs bereinigen:** Alte Logs nach einstellbarer Aufbewahrungszeit löschen
 - **Alle löschen:** Komplette Log-Datenbank leeren (Bestätigung erforderlich)
 
 #### Aufbewahrungszeit
 
-Legen Sie fest, wie lange Logs aufbewahrt werden sollen (1 bis 3650 Tage). Klicken Sie auf **„Speichern"** um die Einstellung zu übernehmen.
+Legen Sie fest, wie lange Logs aufbewahrt werden sollen (1 bis 3650 Tage).
 
 ### 13.2 Archivverwaltung
 
@@ -539,19 +555,20 @@ Navigieren Sie zu **„Archiv"** um archivierte Dokumente zu verwalten.
 - Mehrere Dokumente als ZIP herunterladen
 - Archiv-Statistiken (Anzahl, Größe, Datumsbereich)
 - Aufbewahrungsrichtlinie konfigurieren
-- Manuell archivieren
 
 ---
 
 ## 14. Offline-Modus & Synchronisation
 
-Die App unterstützt vollständigen **Offline-Betrieb**. Sie können Buchungen vornehmen, auch wenn keine Internetverbindung besteht.
+Die App unterstützt vollständigen **Offline-Betrieb**. Buchungen können auch ohne Internetverbindung vorgenommen werden.
 
 ### 14.1 Wie funktioniert Offline?
 
 1. Beim ersten Online-Aufruf werden **Artikelstammdaten** und **Fahrzeugbestände** lokal gespeichert
 2. Buchungen werden in einer **lokalen Warteschlange** gespeichert
 3. Sobald die Verbindung wiederhergestellt ist, werden die Buchungen automatisch übertragen
+
+Die Offline-Sitzung ist bis zu **30 Tage** gültig – ausreichend für Techniker die längere Touren ohne Netzanbindung durchführen.
 
 ### 14.2 Synchronisationsseite
 
@@ -586,9 +603,11 @@ Navigieren Sie zu **„Sync"** um den Synchronisationsstatus einzusehen und manu
 
 ## 15. Systemeinstellungen
 
+Einstellungen sind in zwei Ebenen unterteilt: **globale Einstellungen** (Super-Admin) und **niederlassungsspezifische Einstellungen** (Manager der jeweiligen Niederlassung). Niederlassungsspezifische Einstellungen überschreiben die globalen Werte.
+
 ### 15.1 Firmeneinstellungen
 
-Navigieren Sie zu **„Einstellungen"** (nur für Manager und Administratoren).
+Navigieren Sie zu **„Einstellungen"** → **„Firmendaten"**.
 
 **Konfigurierbare Felder:**
 - Firmenname
@@ -600,9 +619,11 @@ Navigieren Sie zu **„Einstellungen"** (nur für Manager und Administratoren).
 
 Das Firmenlogo wird im Login-Bildschirm und in generierten PDFs verwendet.
 
+> Manager sehen und bearbeiten nur die Daten ihrer eigenen Niederlassung. Super-Admin bearbeitet die globalen Firmendaten, die als Fallback für alle Niederlassungen dienen.
+
 ### 15.2 E-Mail-Einstellungen
 
-Navigieren Sie zu **„Lagerverwaltung" → „E-Mail-Einstellungen"** (nur für Manager).
+Navigieren Sie zu **„Einstellungen" → „E-Mail"**.
 
 **SMTP-Konfiguration:**
 
@@ -617,9 +638,11 @@ Navigieren Sie zu **„Lagerverwaltung" → „E-Mail-Einstellungen"** (nur für
 
 **E-Mail testen:** Geben Sie eine Testadresse ein und klicken Sie auf **„Test-Mail senden"** um die Konfiguration zu prüfen.
 
+Jede Niederlassung kann eine eigene SMTP-Konfiguration hinterlegen. Ist keine eigene Konfiguration vorhanden, wird automatisch die globale Konfiguration des Super-Admins verwendet.
+
 ### 15.3 Bestellvorlagen
 
-Navigieren Sie zu **„Lagerverwaltung"** für Template-Einstellungen:
+Navigieren Sie zu **„Einstellungen"** für Template-Einstellungen:
 
 #### Bestell-PDF Vorlage
 
@@ -632,7 +655,7 @@ Gestalten Sie das Layout der generierten Bestellungs-PDFs:
 #### E-Mail-Vorlage für Bestellungen
 
 Konfigurieren Sie den Text der Bestell-E-Mails:
-- Betreff-Template mit Variablen ({{orderNumber}}, {{supplierName}} etc.)
+- Betreff-Template mit Variablen (`{{orderNumber}}`, `{{supplierName}}` etc.)
 - E-Mail-Text mit Platzhaltern
 - Automatischer Positionsblock
 
@@ -645,11 +668,13 @@ Gestalten Sie die PDF-Vorlage für den Fahrzeug-Artikelkatalog:
 
 ### 15.4 Datensicherung (Backup)
 
-Navigieren Sie zu **„Datensicherung"** (nur für Administratoren).
+> **Zugriff:** Nur für Super-Admin.
+
+Navigieren Sie zu **„Datensicherung"**.
 
 #### Manuelles Backup
 
-Klicken Sie auf **„Backup herunterladen"** um eine Sicherungsdatei zu erzeugen und herunterzuladen.
+Klicken Sie auf **„Backup herunterladen"** um eine Sicherungsdatei zu erzeugen und herunterzuladen. Das Backup enthält alle Daten aller Niederlassungen.
 
 #### Backup wiederherstellen
 
@@ -685,29 +710,33 @@ Navigieren Sie zu **„Zugangskontrolle"** → Tab **„Benutzer"**.
 | Benutzername | Einzigartiger Login-Name |
 | Anzeigename | Name im System |
 | E-Mail | E-Mail-Adresse |
-| Passwort | Anfangspasswort (min. 6 Zeichen) |
+| Passwort | Anfangspasswort (min. 8 Zeichen, Großbuchstabe + Zahl + Sonderzeichen) |
 | Rolle | System-Rolle zuweisen |
+| Niederlassung | Niederlassungszuweisung (Super-Admin kann beliebige Niederlassung wählen) |
 | Fahrzeug | Fahrzeugzuweisung (für Techniker) |
+
+> **Passwortanforderungen:** Mindestens 8 Zeichen, ein Großbuchstabe, eine Zahl und ein Sonderzeichen. Beim ersten Login sollte das Passwort vom Benutzer geändert werden.
 
 #### Benutzer bearbeiten
 
-Klicken Sie auf das Stift-Symbol um Benutzerdaten zu ändern. Sie können Passwort, Rolle, Fahrzeugzuweisung und weitere Daten bearbeiten.
+Klicken Sie auf das Stift-Symbol um Benutzerdaten zu ändern. Sie können Passwort, Rolle, Niederlassungszuweisung, Fahrzeugzuweisung und weitere Daten bearbeiten.
+
+> Manager sehen und verwalten nur Benutzer ihrer eigenen Niederlassung. Super-Admin sieht alle Benutzer aller Niederlassungen und kann die Niederlassungszuweisung ändern.
 
 ### 16.2 Rollen verwalten
 
 Im Tab **„Rollen verwalten"** erstellen und bearbeiten Sie Rollen.
 
 Standardrollen:
-- **Admin** – Vollzugriff
-- **Manager** – Verwaltungszugriff
-- **Techniker** – Buchungen und Fahrzeugbestand
-- **Viewer** – Nur-Lese-Zugriff
+- **MANAGER** – Vollzugriff innerhalb der Niederlassung
+- **WAREHOUSE** – Lagerist: Buchungen, Bestellungen, Inventur
+- **TECHNICIAN** – Techniker: Buchungen am eigenen Fahrzeug
 
 Sie können eigene Rollen mit individuellen Rechten anlegen.
 
-### 16.3 Rollenrechte
+### 16.3 Rollenrechte-Matrix
 
-Im Tab **„Rollenrechte"** weisen Sie einer Rolle konkrete Berechtigungen zu.
+Im Tab **„Rollenrechte"** sehen Sie alle Rollen mit ihren Berechtigungen in einer übersichtlichen Matrix. Berechtigungen können direkt in der Matrix ein- und ausgeschaltet werden.
 
 Jede Berechtigung folgt dem Schema `bereich.aktion`, z.B.:
 - `items.view` – Artikel ansehen
@@ -715,23 +744,51 @@ Jede Berechtigung folgt dem Schema `bereich.aktion`, z.B.:
 - `orders.create` – Bestellungen erstellen
 - `inventory.manage` – Inventur verwalten
 
-### 16.4 Rechte-Matrix
-
-Die **Rechte-Matrix** zeigt übersichtlich alle Rollen mit ihren Berechtigungen in einer Tabelle. Berechtigungen können direkt in der Matrix ein- und ausgeschaltet werden.
-
-### 16.5 Benutzer-Overrides
+### 16.4 Benutzer-Overrides
 
 Im Tab **„Benutzer-Overrides"** können Sie einzelnen Benutzern abweichende Berechtigungen geben, die von der zugewiesenen Rolle abweichen:
-- Berechtigung **hinzufügen** (über die Rolle hinaus)
-- Berechtigung **entziehen** (trotz Rolle nicht erlaubt)
+- Berechtigung **hinzufügen** (über die Rolle hinaus, grün markiert)
+- Berechtigung **entziehen** (trotz Rolle nicht erlaubt, rot markiert)
+
+Dies ermöglicht es z.B. einem Manager gezielt einzelne Rechte zu entziehen, ohne eine neue Rolle anlegen zu müssen.
 
 ---
 
-## 17. Administration & Wartung
+## 17. Niederlassungen
 
-### 17.1 Datenbankwartung
+> **Zugriff:** Verwaltung nur für Super-Admin.
 
-Navigieren Sie zu **„Admin" → „Wartung"** (nur für Administratoren).
+Das System unterstützt mehrere Niederlassungen (Standorte). Jede Niederlassung hat vollständig isolierte Daten:
+- Eigener Artikelstamm
+- Eigene Fahrzeuge und Bestände
+- Eigene Lieferanten und Lagerorte
+- Eigene Benutzer und Rollen
+- Eigene Firmeneinstellungen und E-Mail-Konfiguration
+
+### 17.1 Niederlassung anlegen
+
+1. Navigieren Sie zu **„Niederlassungen"** (nur Super-Admin)
+2. Klicken Sie auf **„Neue Niederlassung"**
+3. Geben Sie **Name** und **Kürzel** ein
+4. Speichern Sie
+
+### 17.2 Benutzer einer Niederlassung zuweisen
+
+Super-Admin kann in der Benutzerverwaltung bei jedem Benutzer die **Niederlassung** auswählen. Manager können nur innerhalb ihrer eigenen Niederlassung agieren.
+
+### 17.3 Super-Admin
+
+Der Super-Admin hat **branchId = null** (keine Niederlassung) und damit niederlassungsübergreifenden Vollzugriff. Er sieht alle Daten aller Niederlassungen und ist für die globale Systemkonfiguration zuständig.
+
+---
+
+## 18. Administration & Wartung
+
+> **Zugriff:** Nur für Super-Admin.
+
+### 18.1 Datenbankwartung
+
+Navigieren Sie zu **„Wartung & Update"**.
 
 Das Wartungswerkzeug prüft die Datenbank auf Inkonsistenzen und Probleme:
 - Verwaiste Datensätze
@@ -744,16 +801,15 @@ Das Wartungswerkzeug prüft die Datenbank auf Inkonsistenzen und Probleme:
 3. Klicken Sie auf **„Automatisch beheben"** für lösbare Probleme
 4. Bestätigen Sie die Aktion
 
-### 17.2 Protokollverwaltung
+### 18.2 Software-Update
 
-Navigieren Sie zu **„Admin" → „Protokollverwaltung"** für erweiterte Log-Verwaltung:
-- Logs nach Datum filtern
-- Ältere Logs archivieren
-- Export für externe Analyse
+Navigieren Sie zu **„Wartung & Update"** → Bereich **„Update"**.
+
+Hier sehen Sie die aktuell installierte Version und können prüfen ob eine neue Version verfügbar ist.
 
 ---
 
-## 18. Anhang: Berechtigungsübersicht
+## 19. Anhang: Berechtigungsübersicht
 
 | Berechtigung | Beschreibung |
 |---|---|
@@ -787,35 +843,22 @@ Navigieren Sie zu **„Admin" → „Protokollverwaltung"** für erweiterte Log-
 | `users.delete` | Benutzer löschen |
 | `settings.company` | Firmeneinstellungen bearbeiten |
 | `settings.email` | E-Mail-Einstellungen bearbeiten |
-| `logs.view` | Logs ansehen |
-| `logs.manage` | Logs verwalten und löschen |
-| `backup.create` | Backups erstellen |
-| `backup.restore` | Backups wiederherstellen |
-
----
-
-## Tastaturkürzel & Tipps
-
-| Aktion | Hinweis |
-|---|---|
-| Artikel suchen | Suchfeld aktiv, einfach tippen |
-| Barcode scannen | Scanner-Seite oder Quick-Booking öffnen |
-| Buchung rückgängig | Nicht direkt möglich – Gegenbuchung vornehmen |
-| Offline-Sync | Sync-Seite → „Jetzt synchronisieren" |
-| Alle Vorschläge auswählen | Checkbox in der Kopfzeile der Bestellvorschläge |
+| `logs.view` | Systemprotokolle ansehen (nur Super-Admin) |
+| `logs.manage` | Systemprotokolle verwalten und löschen (nur Super-Admin) |
+| `backup.access` | Datensicherung erstellen und wiederherstellen (nur Super-Admin) |
 
 ---
 
 ## Häufige Fragen (FAQ)
 
 **F: Ich sehe einen Artikel nicht in der Bestellvorschlagsliste, obwohl der Bestand niedrig ist.**
-A: Prüfen Sie ob der Artikel einen **Sollbestand > 0** hat. Nur Artikel mit Sollbestand werden berücksichtigt. Außerdem muss ein Lagerort zugewiesen sein.
+A: Prüfen Sie ob der Artikel einen **Sollbestand > 0** hat. Nur Artikel mit Sollbestand werden berücksichtigt. Außerdem muss ein Lieferant zugewiesen sein (ohne Lieferant erscheint der Artikel als „nicht bestellbar").
 
 **F: Die Bestellvorschläge aktualisieren sich nach einer Artikeländerung nicht sofort.**
 A: Klicken Sie auf **„Aktualisieren"** im Tab Bestellvorschläge. Der Button umgeht den Server-Cache und lädt aktuelle Daten.
 
 **F: Ein Artikel erscheint in den Bestellvorschlägen, obwohl genug Bestand vorhanden ist.**
-A: Prüfen Sie den **Meldebestand** des Artikels. Wenn Ist-Bestand ≤ Meldebestand, wird eine Bestellung vorgeschlagen – unabhängig davon ob Mindestbestand unterschritten ist.
+A: Prüfen Sie den **Meldebestand** des Artikels. Wenn Ist-Bestand ≤ Meldebestand, wird eine Bestellung vorgeschlagen – unabhängig davon ob der Mindestbestand unterschritten ist.
 
 **F: Meine Offline-Buchungen werden nicht synchronisiert.**
 A: Gehen Sie auf die **Sync-Seite** und klicken Sie auf „Jetzt synchronisieren". Prüfen Sie ob Sie online sind und ob Sie angemeldet sind.
@@ -824,16 +867,25 @@ A: Gehen Sie auf die **Sync-Seite** und klicken Sie auf „Jetzt synchronisieren
 A: Sie benötigen die Berechtigung `users.create`. Wenden Sie sich an Ihren Administrator.
 
 **F: Wie ändere ich mein Passwort?**
-A: Passwörter können derzeit nur von Administratoren in der Benutzerverwaltung geändert werden.
+A: Passwörter können von Administratoren in der Benutzerverwaltung geändert werden. Das neue Passwort muss mindestens 8 Zeichen enthalten sowie einen Großbuchstaben, eine Zahl und ein Sonderzeichen.
 
-**F: Bestellungs-PDFs werden nicht im `purchase-orders`-Ordner auf dem Server gespeichert.**
-A: Ursache sind fehlende Schreibrechte auf dem gemounteten Ordner. Der Backend-Container läuft als Benutzer mit UID 1001 und benötigt Schreibzugriff auf das Verzeichnis. Behebung auf der NAS per SSH:
+**F: Ich sehe die Systemprotokolle nicht.**
+A: Die Systemprotokolle sind ausschließlich für den **Super-Admin** zugänglich. Manager und andere Rollen haben keinen Zugriff darauf.
+
+**F: Ein Techniker kann sich nach mehreren Fehlversuchen nicht mehr anmelden.**
+A: Nach 10 aufeinanderfolgenden falschen Passwörtern wird das Konto automatisch für **15 Minuten** gesperrt. Danach kann sich der Techniker wieder normal anmelden. Ein Administrator kann das Passwort in der Benutzerverwaltung zurücksetzen.
+
+**F: Bestellungs-PDFs werden nicht auf dem Server gespeichert.**
+A: Ursache sind fehlende Schreibrechte auf dem gemounteten Ordner. Behebung auf der NAS per SSH:
 ```bash
 mkdir -p /volume1/docker/Lagerverwaltung/purchase-orders
 chown 1001:1001 /volume1/docker/Lagerverwaltung/purchase-orders
 ```
-Danach ein PDF herunterladen – in den Backend-Logs erscheint dann `[PurchasingService] PDF gespeichert: 2026/...`. Die PDFs sind anschließend auch per SMB-Freigabe erreichbar (Freigabe auf `/volume1/docker/Lagerverwaltung/purchase-orders` im NAS-Adminbereich einrichten).
+Danach ein PDF herunterladen – in den Backend-Logs erscheint dann `[PurchasingService] PDF gespeichert`. Die PDFs sind anschließend auch per SMB-Freigabe erreichbar.
+
+**F: Die App zeigt „Offline" obwohl das Netzwerk funktioniert.**
+A: Prüfen Sie ob der Backend-Container läuft (`sudo docker logs lagerverwaltung-backend-1 --tail 20`). Häufige Ursache nach Updates: eine Pflicht-Umgebungsvariable fehlt in der `.env` (z.B. `INVENTORY_HMAC_SECRET`). Alle Pflichtfelder sind in `.env.example` dokumentiert.
 
 ---
 
-*Dieses Handbuch wurde automatisch generiert. Bei Fragen oder Anmerkungen wenden Sie sich an Ihren Systemadministrator.*
+*Lagerverwaltung – Benutzerhandbuch v3.3.6*

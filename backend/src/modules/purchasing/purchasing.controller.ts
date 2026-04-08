@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, Param, Patch, Post, Query, Req, StreamableFile, UseGuards } from "@nestjs/common";
+import { BadRequestException, Body, Controller, Delete, Get, Param, Patch, Post, Query, Req, StreamableFile, UseGuards } from "@nestjs/common";
 import type { Request } from "express";
 
 interface PurchasingRequest extends Request {
@@ -66,10 +66,11 @@ export class PurchasingController {
     );
   }
 
-  @Get("documents/download/:year/:filename")
+  @Get("documents/download")
   @Permissions("orders.view")
-  async downloadDocument(@Req() req: PurchasingRequest, @Param("year") year: string, @Param("filename") filename: string) {
-    const result = await this.purchasingService.getOrderDocument(year, filename, req.user?.branchId);
+  async downloadDocument(@Req() req: PurchasingRequest, @Query("path") relPath: string) {
+    if (!relPath) throw new BadRequestException("Kein Pfad angegeben.");
+    const result = await this.purchasingService.getOrderDocument(relPath, req.user?.branchId);
     return new StreamableFile(result.buffer, {
       type: "application/pdf",
       disposition: `attachment; filename="${result.filename}"`,

@@ -4,6 +4,20 @@ Alle Änderungen werden hier dokumentiert.
 
 ---
 
+## 2026-04-08 (3)
+
+### [3.3.7] – Bestellungen: Firmendaten & Struktur
+
+#### Fehlerbehebungen
+- **Bestellungs-PDF: Firmendaten fehlten** — PDF und E-Mail-Versand nutzten immer die globalen Firmendaten statt der niederlassungsspezifischen. Fix: `getCompanyConfig()` erhält jetzt die `branchId` der Bestellung.
+
+#### Erweiterungen
+- **Neues Bestellnummer-Format** — Format geändert von `HERST-YYYYMMDD-001` auf `{NL-CODE}-{YYYYMMDD}-{001}-{HERST}` (Beispiel: `400-20260408-001-BOSCH`). Die Sequenznummer ist pro Niederlassung und Tag isoliert.
+- **Niederlassungsbasierte Ordnerstruktur** — PDFs werden jetzt unter `{NL-CODE}_{NL-Name}/{Jahr}/{Monat}/` abgelegt (Beispiel: `400_Hannover/2026/04/`). Bestehende Dateien in der alten Struktur (`YYYY/`) bleiben weiterhin abrufbar.
+- **Login Rate-Limit** — Von 3 auf 10 Versuche / 15 Minuten angehoben (Praxiswert; Brute-Force wird durch Account-Lockout nach 10 Versuchen abgefangen).
+
+---
+
 ## 2026-04-08 (2)
 
 ### [3.3.6] – Bugfixes & Zugriffssteuerung

@@ -769,12 +769,14 @@ export interface PurchaseOrderQueryParams {
 
 export interface PurchaseOrderDocumentDto {
   year: number;
+  month: number;
   filename: string;
   path: string;
   size: number;
   created: string;
   supplierId: string | null;
   supplierName: string | null;
+  branchFolder: string | null;
 }
 
 export const fetchPurchaseOrders = async (params?: PurchaseOrderQueryParams): Promise<PurchaseOrderDto[]> => {
@@ -851,12 +853,11 @@ export const fetchPurchaseOrderDocuments = async (params?: {
 };
 
 export const downloadPurchaseOrderDocument = async (
-  year: number,
-  filename: string,
+  docPath: string,
 ): Promise<Blob> => {
   const response = await api.get(
-    `/purchase-orders/documents/download/${year}/${encodeURIComponent(filename)}`,
-    { responseType: "blob" },
+    `/purchase-orders/documents/download`,
+    { params: { path: docPath }, responseType: "blob" },
   );
   return response.data;
 };

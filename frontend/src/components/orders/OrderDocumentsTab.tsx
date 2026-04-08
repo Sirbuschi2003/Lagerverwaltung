@@ -94,7 +94,7 @@ const OrderDocumentsTab: React.FC = () => {
   const handleDownload = async (doc: PurchaseOrderDocumentDto) => {
     setDownloading(doc.path);
     try {
-      const blob = await downloadPurchaseOrderDocument(doc.year, doc.filename);
+      const blob = await downloadPurchaseOrderDocument(doc.path);
       const url = window.URL.createObjectURL(blob);
       const link = document.createElement("a");
       link.href = url;
