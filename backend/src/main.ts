@@ -13,7 +13,21 @@ async function bootstrap() {
 
   // Sicherheits-Header (OWASP-Empfehlungen)
   app.use(helmet({
-    contentSecurityPolicy: false, // CSP wird vom Caddy-Proxy gesetzt
+    contentSecurityPolicy: {
+      directives: {
+        defaultSrc: ["'self'"],
+        scriptSrc: ["'self'"],
+        styleSrc: ["'self'", "'unsafe-inline'"],
+        imgSrc: ["'self'", "data:"],
+        connectSrc: ["'self'"],
+        fontSrc: ["'self'"],
+        objectSrc: ["'none'"],
+        frameSrc: ["'none'"],
+        frameAncestors: ["'none'"],
+        baseUri: ["'self'"],
+        formAction: ["'self'"],
+      },
+    },
     crossOriginEmbedderPolicy: false,
   }));
 
@@ -25,8 +39,14 @@ async function bootstrap() {
     : ["http://localhost:5173", "http://localhost:3000"];
   app.enableCors({
     origin: (origin, callback) => {
-      // Anfragen ohne Origin erlauben (z.B. mobile Apps, curl, Postman)
-      if (!origin || allowedOrigins.includes(origin)) {
+      // In Produktion: Anfragen ohne Origin ablehnen (verhindert CSRF durch direkte Requests)
+      if (!origin) {
+        if (process.env.NODE_ENV === "development") {
+          return callback(null, true);
+        }
+        return callback(new Error("CORS: Origin-Header erforderlich"));
+      }
+      if (allowedOrigins.includes(origin)) {
         callback(null, true);
       } else {
         callback(new Error(`CORS: Origin '${origin}' nicht erlaubt`));

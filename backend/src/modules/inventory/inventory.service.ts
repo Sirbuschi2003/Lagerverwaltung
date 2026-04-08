@@ -59,9 +59,14 @@ export class InventoryService {
     private readonly configService: ConfigService,
   ) {
     // HMAC-Geheimnis für Inventur-Checksums (tamper-evident)
-    const secret = this.configService.get<string>("INVENTORY_HMAC_SECRET")
-      ?? this.configService.get<string>("auth.secret")
-      ?? "fallback-inventory-secret-change-in-production";
+    const secret = this.configService.get<string>("INVENTORY_HMAC_SECRET");
+    if (!secret) {
+      throw new Error(
+        "INVENTORY_HMAC_SECRET ist nicht konfiguriert. " +
+        "Bitte setze diese Umgebungsvariable (min. 32 zufällige Zeichen). " +
+        "Erzeuge einen Wert mit: openssl rand -hex 32",
+      );
+    }
     this.hmacSecret = `inventory-checksum-v1:${secret}`;
   }
 

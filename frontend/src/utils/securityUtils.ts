@@ -30,95 +30,73 @@ export const validateAuthToken = (token: string): boolean => {
 };
 
 /**
- * Secure Token Storage mit Expiration
+ * Secure Token Manager – Access Token wird ausschließlich im Arbeitsspeicher gehalten.
+ * Kein localStorage-Schreiben → kein XSS-lesbarer Klartext-Token.
+ * Die Session-Persistenz (Reload nach Offline-Nutzung) übernimmt der Zustand-Store.
  */
 export class SecureTokenManager {
-  private static readonly TOKEN_KEY = 'auth_token';
-  private static readonly EXPIRY_KEY = 'auth_expiry';
-  private static readonly REFRESH_TOKEN_KEY = 'refresh_token';
-  private static readonly REFRESH_EXPIRY_KEY = 'refresh_expiry';
+  // In-Memory-Speicher – nicht persistiert, nicht per XSS auslesbar
+  private static _token: string | null = null;
+  private static _tokenExpiry: number | null = null;
 
   static setToken(token: string, expiryHours: number = 24): void {
     if (!validateAuthToken(token)) {
       throw new Error('Invalid token format');
     }
-    const expiry = Date.now() + (expiryHours * 60 * 60 * 1000);
+    this._token = token;
+    this._tokenExpiry = Date.now() + expiryHours * 60 * 60 * 1000;
+
+    // Alte localStorage-Einträge aus früheren Versionen aufräumen
     try {
-      localStorage.setItem(this.TOKEN_KEY, token);
-      localStorage.setItem(this.EXPIRY_KEY, expiry.toString());
+      localStorage.removeItem('auth_token');
+      localStorage.removeItem('auth_expiry');
     } catch {
-      // localStorage nicht verfügbar (z.B. Private-Mode)
+      // Ignorieren
     }
   }
 
   static getToken(): string | null {
-    try {
-      const token = localStorage.getItem(this.TOKEN_KEY);
-      const expiry = localStorage.getItem(this.EXPIRY_KEY);
-      if (!token || !expiry) return null;
-      if (Date.now() > parseInt(expiry)) {
-        this.clearToken();
-        return null;
-      }
-      return validateAuthToken(token) ? token : null;
-    } catch {
+    if (!this._token || !this._tokenExpiry) return null;
+    if (Date.now() > this._tokenExpiry) {
+      this.clearToken();
       return null;
     }
+    return validateAuthToken(this._token) ? this._token : null;
   }
 
   static clearToken(): void {
+    this._token = null;
+    this._tokenExpiry = null;
     try {
-      localStorage.removeItem(this.TOKEN_KEY);
-      localStorage.removeItem(this.EXPIRY_KEY);
+      localStorage.removeItem('auth_token');
+      localStorage.removeItem('auth_expiry');
     } catch {
       // Ignorieren
     }
   }
 
-  static setRefreshToken(token: string, expiryHours: number = 24 * 30): void {
-    if (!validateAuthToken(token)) {
-      throw new Error('Invalid refresh token format');
-    }
-    const expiry = Date.now() + expiryHours * 60 * 60 * 1000;
-    try {
-      localStorage.setItem(this.REFRESH_TOKEN_KEY, token);
-      localStorage.setItem(this.REFRESH_EXPIRY_KEY, expiry.toString());
-    } catch {
-      // Ignorieren
-    }
+  // Refresh-Token wird als HttpOnly-Cookie vom Backend verwaltet –
+  // diese Methoden bleiben als No-Op erhalten, damit bestehende Aufrufer nicht brechen.
+  static setRefreshToken(_token: string, _expiryHours?: number): void {
+    // Intentionally empty: Refresh-Token wird serverseitig als HttpOnly-Cookie gesetzt
   }
 
   static getRefreshToken(): string | null {
-    try {
-      const token = localStorage.getItem(this.REFRESH_TOKEN_KEY);
-      const expiry = localStorage.getItem(this.REFRESH_EXPIRY_KEY);
-      if (!token || !expiry) return null;
-      if (Date.now() > parseInt(expiry)) {
-        this.clearRefreshToken();
-        return null;
-      }
-      return validateAuthToken(token) ? token : null;
-    } catch {
-      return null;
-    }
+    return null; // Kommt ausschließlich aus dem HttpOnly-Cookie (nicht JS-lesbar)
   }
 
   static clearRefreshToken(): void {
     try {
-      localStorage.removeItem(this.REFRESH_TOKEN_KEY);
-      localStorage.removeItem(this.REFRESH_EXPIRY_KEY);
+      localStorage.removeItem('refresh_token');
+      localStorage.removeItem('refresh_expiry');
     } catch {
       // Ignorieren
     }
   }
 
   static isTokenExpired(): boolean {
-    try {
-      const expiry = localStorage.getItem(this.EXPIRY_KEY);
-      return !expiry || Date.now() > parseInt(expiry);
-    } catch {
-      return true;
-    }
+    if (!this._tokenExpiry) return true;
+    return Date.now() > this._tokenExpiry;
   }
 }
 

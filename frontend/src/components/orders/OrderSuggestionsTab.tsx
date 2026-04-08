@@ -27,6 +27,7 @@ import {
   alpha,
   useTheme,
   FormControlLabel,
+  Switch,
 } from "@mui/material";
 import RefreshIcon from "@mui/icons-material/Refresh";
 import ShoppingCartIcon from "@mui/icons-material/ShoppingCart";
@@ -65,6 +66,7 @@ const OrderSuggestionsTab: React.FC = () => {
 
   const [filterBelowMinimum, setFilterBelowMinimum] = useState(false);
   const [filterSupplier, setFilterSupplier] = useState<string | null>(null);
+  const [showCrossBranchAvailability, setShowCrossBranchAvailability] = useState(false);
 
   // Artikel-Bearbeitung Dialog
   const [itemDialogOpen, setItemDialogOpen] = useState(false);
@@ -633,6 +635,18 @@ const OrderSuggestionsTab: React.FC = () => {
               label="Nur Mindestbestand unterschritten"
             />
           </Tooltip>
+          <Tooltip title="Zeigt bei jedem Artikel an, ob und wie viel Bestand in anderen Niederlassungen vorhanden ist.">
+            <FormControlLabel
+              control={
+                <Switch
+                  checked={showCrossBranchAvailability}
+                  onChange={(e) => setShowCrossBranchAvailability(e.target.checked)}
+                  size="small"
+                />
+              }
+              label="Bestand anderer Niederlassungen"
+            />
+          </Tooltip>
         </Box>
         <Box sx={{ display: "flex", gap: 1 }}>
           <Button
@@ -811,7 +825,7 @@ const OrderSuggestionsTab: React.FC = () => {
                           {suggestion.descriptionSecondary && (
                             <Typography variant="body2" color="text.secondary">{suggestion.descriptionSecondary}</Typography>
                           )}
-                          {suggestion.availableInOtherBranches && suggestion.availableInOtherBranches.length > 0 && (
+                          {showCrossBranchAvailability && suggestion.availableInOtherBranches && suggestion.availableInOtherBranches.length > 0 && (
                             <Box sx={{ display: "flex", gap: 0.5, flexWrap: "wrap", mt: 0.5 }}>
                               {suggestion.availableInOtherBranches.map((branch) => (
                                 <Tooltip

@@ -4,6 +4,29 @@ Alle Änderungen werden hier dokumentiert.
 
 ---
 
+## 2026-04-08
+
+### [3.3.5] – Sicherheitshärtung (NIS2-orientiert)
+
+#### Sicherheit
+- **Account-Lockout** — Nach 10 aufeinanderfolgenden Fehlversuchen wird das Konto 15 Minuten gesperrt; verhindert Brute-Force-Angriffe auf Passwörter
+- **Passwort-Komplexität** — Neue Passwörter müssen mindestens einen Großbuchstaben, eine Ziffer und ein Sonderzeichen enthalten (gilt für Ersteinrichtung, Passwort-Änderung und Passwort-Reset)
+- **Login Rate-Limit verschärft** — Von 10 auf 3 Versuche pro 15 Minuten reduziert
+- **Setup-Endpunkt abgesichert** — POST `/api/setup` ist jetzt ebenfalls auf 3 Versuche / 15 min gedrosselt
+- **Cookie Secure-Flag** — `HttpOnly`-Cookie für Refresh-Token wird nun außerhalb der Entwicklungsumgebung immer mit `Secure`-Flag übertragen
+- **Content-Security-Policy aktiviert** — Strikte CSP-Direktiven in Helmet (Backend) und vollständige Security-Header in Caddy (`X-Frame-Options`, `X-Content-Type-Options`, `Referrer-Policy`, `Permissions-Policy`)
+- **CORS gehärtet** — Anfragen ohne `Origin`-Header werden in der Produktionsumgebung abgewiesen
+- **Bild-Upload Magic-Bytes-Prüfung** — Dateiformat wird anhand der tatsächlichen Byte-Signatur geprüft, nicht nur anhand des vom Client gesendeten MIME-Types
+- **Access Token aus localStorage entfernt** — Access Token wird nur noch im Arbeitsspeicher gehalten; kein Auslesen per XSS möglich
+- **HMAC-Secret Pflichtfeld** — Fehlt `INVENTORY_HMAC_SECRET` in der Umgebungskonfiguration, startet der Server nicht mehr (verhindert schwachen Fallback-Wert)
+- **API-Request-Limit** — Maximale Datensätze pro API-Anfrage von 200.000 auf 50.000 reduziert (Offline-Sync weiterhin voll funktionsfähig)
+
+#### Fehlerbehebungen
+- **Scanner: Artikel nicht gefunden** — QR-Codes im Format `CODE - BESCHREIBUNG` wurden nicht erkannt, wenn der Code selbst Bindestriche enthielt (z. B. `GO-00732000 - HDD`). Der Fallback-Split trennt jetzt nur noch bei Leerzeichen-umgebenen Bindestrichen.
+- **Bestellvorschläge: Niederlassungs-Chips** — Verfügbarkeit anderer Niederlassungen ist standardmäßig ausgeblendet und kann per Schalter „Bestand anderer Niederlassungen" eingeblendet werden.
+
+---
+
 ## 2026-04-07 (2)
 
 ### [3.3.2] – Hotfix Migration & Benutzerverwaltung

@@ -195,9 +195,13 @@ export class ItemsController {
   @UseInterceptors(FileInterceptor("image", { storage: memoryStorage(), limits: { fileSize: 25 * 1024 * 1024 } }))
   async uploadImage(@Param("id") id: string, @UploadedFile() file: Express.Multer.File, @Req() req: ItemsRequest) {
     if (!file) throw new BadRequestException("Keine Datei angegeben");
-    const allowed = ["image/jpeg", "image/png", "image/webp", "image/gif"];
-    if (!allowed.includes(file.mimetype)) {
-      throw new BadRequestException("Nur JPEG, PNG, WebP und GIF sind erlaubt");
+
+    // Magic-Bytes prüfen – verhindert gefälschte MIME-Types
+    const { fileTypeFromBuffer } = await import("file-type");
+    const detectedType = await fileTypeFromBuffer(file.buffer);
+    const allowedMimes = ["image/jpeg", "image/png", "image/webp", "image/gif"];
+    if (!detectedType || !allowedMimes.includes(detectedType.mime)) {
+      throw new BadRequestException("Nur JPEG, PNG, WebP und GIF sind erlaubt (Dateiinhalt ungültig)");
     }
     try {
       const item = await this.itemsService.uploadImage(id, file, req.user?.branchId);

@@ -38,6 +38,42 @@ export class AuthService {
 
   private static readonly PASSWORD_HISTORY_LIMIT = 5;
 
+  // Account-Lockout: In-Memory-Tracking fehlgeschlagener Login-Versuche
+  // Wird bei Server-Neustart zurückgesetzt (reicht für Brute-Force-Schutz im Betrieb)
+  private static readonly failedAttempts = new Map<string, { count: number; lockedUntil: number | null }>();
+  private static readonly MAX_FAILED_ATTEMPTS = 10;
+  private static readonly LOCKOUT_DURATION_MS = 15 * 60 * 1000; // 15 Minuten
+
+  private checkLockout(username: string): void {
+    const key = `user:${username.toLowerCase()}`;
+    const entry = AuthService.failedAttempts.get(key);
+    if (entry?.lockedUntil && Date.now() < entry.lockedUntil) {
+      const remaining = Math.ceil((entry.lockedUntil - Date.now()) / 60000);
+      throw new UnauthorizedException(
+        `Konto temporär gesperrt – zu viele Fehlversuche. Bitte in ${remaining} Minute(n) erneut versuchen.`,
+      );
+    }
+    // Abgelaufene Sperren aufräumen
+    if (entry?.lockedUntil && Date.now() >= entry.lockedUntil) {
+      AuthService.failedAttempts.delete(key);
+    }
+  }
+
+  private recordFailedAttempt(username: string): void {
+    const key = `user:${username.toLowerCase()}`;
+    const entry = AuthService.failedAttempts.get(key) ?? { count: 0, lockedUntil: null };
+    entry.count++;
+    if (entry.count >= AuthService.MAX_FAILED_ATTEMPTS) {
+      entry.lockedUntil = Date.now() + AuthService.LOCKOUT_DURATION_MS;
+      entry.count = 0; // Counter zurücksetzen nach Sperre
+    }
+    AuthService.failedAttempts.set(key, entry);
+  }
+
+  private clearFailedAttempts(username: string): void {
+    AuthService.failedAttempts.delete(`user:${username.toLowerCase()}`);
+  }
+
   /** Prüft ob das neue Passwort in der Passwort-Historie vorkommt */
   private async isPasswordInHistory(userId: string, newPassword: string): Promise<boolean> {
     const history = await this.passwordHistoryRepository.find({
@@ -74,6 +110,9 @@ export class AuthService {
   private static readonly DUMMY_HASH = "$2b$12$invalidhashfortimingnulluser00000000000000000000000000";
 
   async validateUser(username: string, password: string, context?: { ipAddress?: string; userAgent?: string }): Promise<User> {
+    // Lockout prüfen BEVOR Datenbankzugriff (verhindert Enumeration + DoS)
+    this.checkLockout(username);
+
     const user = await this.usersService.findOneByUsername(username);
 
     // Immer bcrypt.compare ausfuehren – auch wenn User nicht existiert (Timing-Attack-Schutz)
@@ -81,7 +120,7 @@ export class AuthService {
     const isMatch = await bcrypt.compare(password, hashToCompare);
 
     if (!user) {
-      // Log fehlgeschlagenen Login-Versuch
+      this.recordFailedAttempt(username);
       await this.loggingService.logSecurity(
         'LOGIN_FAILED_USER_NOT_FOUND',
         `Login-Versuch mit unbekanntem Benutzernamen: ${username}`,
@@ -91,7 +130,7 @@ export class AuthService {
     }
 
     if (!isMatch) {
-      // Log fehlgeschlagenen Login-Versuch
+      this.recordFailedAttempt(username);
       await this.loggingService.logSecurity(
         'LOGIN_FAILED_WRONG_PASSWORD',
         `Falsches Passwort für Benutzer: ${username}`,
@@ -100,6 +139,8 @@ export class AuthService {
       throw new UnauthorizedException("Invalid credentials");
     }
 
+    // Erfolgreicher Login: Fehlversuche zurücksetzen
+    this.clearFailedAttempts(username);
     return user;
   }
 

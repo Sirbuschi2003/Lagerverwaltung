@@ -39,7 +39,8 @@ export const findItemByCode = <T extends { code: string; qrCodeValue?: string | 
   if (direct) return direct;
 
   // Fallback: QR-Code enthält mehrere Codes getrennt durch " - " (z.B. "6LK50755000 - ROL-KIT-FC30-U")
-  const parts = code.split(/\s*[-–]\s*/);
+  // Achtung: nur bei Bindestrich MIT Leerzeichen auf beiden Seiten trennen, damit Codes wie "G0-00732000" nicht zerstückelt werden
+  const parts = code.split(/\s+[-–]\s+/);
   if (parts.length > 1) {
     for (const part of parts) {
       const partNorm = normalize(part);

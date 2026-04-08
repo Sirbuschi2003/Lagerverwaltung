@@ -1,4 +1,5 @@
 import { Body, ConflictException, Controller, Delete, Get, Param, Post, Res, UseGuards } from "@nestjs/common";
+import { Throttle } from "@nestjs/throttler";
 import { Response } from 'express';
 import { JwtAuthGuard } from "../auth/guards/jwt-auth.guard";
 import { RolesGuard } from "../auth/guards/roles.guard";
@@ -24,6 +25,8 @@ export class SetupController {
     return { needsSetup };
   }
 
+  // Max. 3 Setup-Versuche pro 15 Minuten – verhindert automatisierte Angriffe auf frische Instanzen
+  @Throttle({ default: { ttl: 900000, limit: 3 } })
   @Post()
   async createInitialAdmin(@Body() dto: CreateInitialAdminDto) {
     const needsSetup = await this.setupService.needsSetup();

@@ -1,4 +1,4 @@
-import { IsNotEmpty, IsString, MaxLength, MinLength } from "class-validator";
+import { IsNotEmpty, IsString, Matches, MaxLength, MinLength } from "class-validator";
 
 export class CreateInitialAdminDto {
   @IsString()
@@ -13,7 +13,10 @@ export class CreateInitialAdminDto {
 
   @IsString()
   @IsNotEmpty()
-  @MinLength(6)
+  @MinLength(8)
   @MaxLength(255)
+  @Matches(/^(?=.*[A-Z])(?=.*[0-9])(?=.*[^A-Za-z0-9]).{8,}$/, {
+    message: 'Passwort muss mindestens einen Großbuchstaben, eine Zahl und ein Sonderzeichen enthalten',
+  })
   password!: string;
 }

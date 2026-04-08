@@ -116,8 +116,10 @@ export class ItemsService {
   async findAll(params?: { page?: number; limit?: number; search?: string; manufacturer?: string; productGroup?: string; branchId?: string | null }) {
     try {
       const page = Math.max(1, Number(params?.page) || 1);
-      // Höheres Limit zulassen, damit Offline-Sync den kompletten Artikelstamm holen kann
-      const limit = Math.min(Math.max(1, Number(params?.limit) || 50), 200000);
+      // Höheres Limit zulassen, damit Offline-Sync den kompletten Artikelstamm holen kann.
+      // API-Maximum: 50.000 – verhindert DoS durch einzelne Requests, deckt aber auch große Bestände ab.
+      // Interne Aufrufe (z.B. exportItemsCsv) übergeben limit direkt und umgehen diese Grenze nicht.
+      const limit = Math.min(Math.max(1, Number(params?.limit) || 50), 50000);
 
       this.logger.debug(`findAll called with page=${page}, limit=${limit}, search=${params?.search}`);
 

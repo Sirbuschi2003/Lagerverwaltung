@@ -27,7 +27,7 @@ const REFRESH_COOKIE_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000; // 30 Tage
 function setRefreshCookie(res: Response, token: string): void {
   res.cookie(REFRESH_COOKIE_NAME, token, {
     httpOnly: true,        // Kein JavaScript-Zugriff (XSS-Schutz)
-    secure: process.env.NODE_ENV === "production", // HTTPS-only in Produktion
+    secure: process.env.NODE_ENV !== "development", // HTTPS-only außerhalb Dev
     sameSite: "strict",    // CSRF-Schutz
     maxAge: REFRESH_COOKIE_MAX_AGE_MS,
     path: "/api/auth",     // Nur für Auth-Endpunkte
@@ -49,8 +49,8 @@ export class AuthController {
     return this.authService.getProfile(this.extractUserId(req));
   }
 
-  // Max. 10 Login-Versuche pro 15 Minuten pro IP
-  @Throttle({ default: { ttl: 900000, limit: 10 } })
+  // Max. 3 Login-Versuche pro 15 Minuten pro IP (Brute-Force-Schutz)
+  @Throttle({ default: { ttl: 900000, limit: 3 } })
   @Post("login")
   async login(@Body() dto: LoginDto, @Req() req: Request, @Res({ passthrough: true }) res: Response) {
     const context = this.buildRequestContext(req);

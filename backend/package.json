@@ -1,6 +1,6 @@
 {
   "name": "kfz-parts-backend",
-  "version": "3.3.4",
+  "version": "3.3.5",
   "description": "Fleet spare parts inventory backend (NestJS)",
   "license": "MIT",
   "scripts": {
@@ -40,6 +40,7 @@
     "class-validator": "^0.14.3",
     "cookie-parser": "^1.4.7",
     "exceljs": "^4.4.0",
+    "file-type": "^22.0.0",
     "helmet": "^8.1.0",
     "mysql2": "^3.17.5",
     "nodemailer": "^7.0.13",
@@ -50,10 +51,10 @@
     "qrcode": "^1.5.3",
     "reflect-metadata": "^0.1.13",
     "rxjs": "^7.8.1",
+    "sharp": "^0.33.5",
     "socket.io": "^4.8.3",
     "socket.io-client": "^4.8.3",
     "typeorm": "^0.3.28",
-    "sharp": "^0.33.5",
     "web-push": "^3.6.7"
   },
   "devDependencies": {
@@ -63,9 +64,9 @@
     "@types/bcrypt": "^5.0.2",
     "@types/express": "^4.17.21",
     "@types/jest": "^29.5.11",
+    "@types/multer": "^1.4.12",
     "@types/node": "^20.19.33",
     "@types/passport-jwt": "^3.0.8",
-    "@types/multer": "^1.4.12",
     "@types/qrcode": "^1.5.5",
     "@types/sharp": "^0.31.1",
     "@types/socket.io": "^3.0.1",
