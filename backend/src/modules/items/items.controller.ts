@@ -18,6 +18,25 @@ import { PermissionsGuard } from "../access-control/guards/permissions.guard";
 import { Public } from "../auth/decorators/public.decorator";
 import { SkipThrottle } from "@nestjs/throttler";
 
+/**
+ * Prüft die Magic Bytes eines Buffers auf erlaubte Bildformate.
+ * Verhindert, dass ein Angreifer einen gefälschten MIME-Type sendet.
+ * JPEG: FF D8 FF | PNG: 89 50 4E 47 | WebP: RIFF....WEBP | GIF: GIF8
+ */
+function isAllowedImageBuffer(buf: Buffer): boolean {
+  if (buf.length < 12) return false;
+  // JPEG
+  if (buf[0] === 0xFF && buf[1] === 0xD8 && buf[2] === 0xFF) return true;
+  // PNG
+  if (buf[0] === 0x89 && buf[1] === 0x50 && buf[2] === 0x4E && buf[3] === 0x47) return true;
+  // GIF
+  if (buf[0] === 0x47 && buf[1] === 0x49 && buf[2] === 0x46 && buf[3] === 0x38) return true;
+  // WebP: "RIFF" at 0-3 and "WEBP" at 8-11
+  if (buf[0] === 0x52 && buf[1] === 0x49 && buf[2] === 0x46 && buf[3] === 0x46
+    && buf[8] === 0x57 && buf[9] === 0x45 && buf[10] === 0x42 && buf[11] === 0x50) return true;
+  return false;
+}
+
 @SkipThrottle()
 @Controller("items")
 @UseGuards(JwtAuthGuard, PermissionsGuard)
@@ -196,11 +215,8 @@ export class ItemsController {
   async uploadImage(@Param("id") id: string, @UploadedFile() file: Express.Multer.File, @Req() req: ItemsRequest) {
     if (!file) throw new BadRequestException("Keine Datei angegeben");
 
-    // Magic-Bytes prüfen – verhindert gefälschte MIME-Types
-    const { fileTypeFromBuffer } = await import("file-type");
-    const detectedType = await fileTypeFromBuffer(file.buffer);
-    const allowedMimes = ["image/jpeg", "image/png", "image/webp", "image/gif"];
-    if (!detectedType || !allowedMimes.includes(detectedType.mime)) {
+    // Magic-Bytes prüfen – verhindert gefälschte MIME-Types (keine externe Abhängigkeit nötig)
+    if (!isAllowedImageBuffer(file.buffer)) {
       throw new BadRequestException("Nur JPEG, PNG, WebP und GIF sind erlaubt (Dateiinhalt ungültig)");
     }
     try {
