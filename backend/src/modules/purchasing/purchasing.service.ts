@@ -200,6 +200,7 @@ export class PurchasingService {
   async update(id: string, payload: { status?: PurchaseOrderStatus; orderNumber?: string; note?: string }, branchId?: string | null) {
     const order = await this.findOne(id, branchId);
     const oldStatus = order.status;
+    const oldOrderNumber = order.orderNumber;
 
     if (payload.status) {
       order.status = payload.status;
@@ -247,9 +248,25 @@ export class PurchasingService {
     }
 
     const saved = await this.ordersRepository.save(order);
+
     if (payload.status === "ORDERED") {
-      await this.saveOrderPdfToStorage(saved);
+      // Erstmalige PDF-Erzeugung beim Bestellen
+      const full = await this.findOneWithRelations(saved.id);
+      await this.saveOrderPdfToStorage(full);
+    } else if (saved.status === "ORDERED" || saved.status === "ARCHIVED") {
+      // PDF aktualisieren wenn Bestellnummer oder Notiz geändert wurden
+      const orderNumberChanged = payload.orderNumber !== undefined && oldStatus === saved.status;
+      const noteChanged = payload.note !== undefined;
+      if (orderNumberChanged || noteChanged) {
+        if (orderNumberChanged) {
+          // Alte PDF-Datei (alter Dateiname) löschen
+          await this.deleteOrderPdfFromStorage(saved, oldOrderNumber ?? undefined);
+        }
+        const full = await this.findOneWithRelations(saved.id);
+        await this.saveOrderPdfToStorage(full);
+      }
     }
+
     this.invalidateSuggestionsCache();
     return saved;
   }
@@ -332,6 +349,7 @@ export class PurchasingService {
 
   async remove(id: string, branchId?: string | null): Promise<void> {
     const order = await this.findOne(id, branchId);
+    await this.deleteOrderPdfFromStorage(order);
     await this.ordersRepository.remove(order);
     this.invalidateSuggestionsCache();
   }
@@ -374,16 +392,8 @@ export class PurchasingService {
     if (orders.length === 0) return { deleted: 0 };
 
     // PDFs vom Dateisystem löschen
-    const storagePath = this.getPurchaseOrderStoragePath();
     for (const order of orders) {
-      try {
-        const year = this.getOrderDocumentYear(order);
-        const filename = this.buildStoredOrderFilename(order);
-        const fullPath = path.join(storagePath, year, filename);
-        await fs.unlink(fullPath);
-      } catch {
-        // Datei existiert nicht – ok
-      }
+      await this.deleteOrderPdfFromStorage(order);
     }
 
     await this.ordersRepository.remove(orders);
@@ -1313,10 +1323,6 @@ export class PurchasingService {
       .replace(/^_+|_+$/g, "");
   }
 
-  private getOrderDocumentYear(order: PurchaseOrder): string {
-    const referenceDate = order.orderedAt ?? order.createdAt ?? new Date();
-    return String(new Date(referenceDate).getFullYear());
-  }
 
   private buildStoredOrderFilename(order: PurchaseOrder): string {
     const safeOrderNumber = this.sanitizeStorageToken(order.orderNumber ?? order.id) || "Bestellung";
@@ -1330,6 +1336,40 @@ export class PurchasingService {
       && !filename.includes("/")
       && !filename.includes("\\")
     );
+  }
+
+  private async findOneWithRelations(id: string): Promise<PurchaseOrder> {
+    const order = await this.ordersRepository
+      .createQueryBuilder("order")
+      .leftJoinAndSelect("order.supplier", "supplier")
+      .leftJoinAndSelect("order.lines", "line")
+      .leftJoinAndSelect("line.item", "item")
+      .where("order.id = :id", { id })
+      .getOne();
+    if (!order) throw new NotFoundException("Purchase order not found");
+    return order;
+  }
+
+  private async deleteOrderPdfFromStorage(order: PurchaseOrder, overrideOrderNumber?: string): Promise<void> {
+    try {
+      const storagePath = this.getPurchaseOrderStoragePath();
+      const token = overrideOrderNumber ?? order.orderNumber ?? order.id;
+      const filename = `${this.sanitizeStorageToken(token) || "Bestellung"}.pdf`;
+      const refDate = new Date(order.orderedAt ?? order.createdAt ?? new Date());
+      const year = String(refDate.getFullYear());
+      const month = String(refDate.getMonth() + 1).padStart(2, "0");
+      const branchFolder = await this.getBranchFolder(order.branchId);
+
+      const candidates = [
+        path.join(storagePath, branchFolder, year, month, filename), // neue Struktur
+        path.join(storagePath, year, filename),                       // alte Struktur
+      ];
+      for (const fullPath of candidates) {
+        try { await fs.unlink(fullPath); } catch { /* nicht vorhanden – ok */ }
+      }
+    } catch (error) {
+      console.warn("[PurchasingService] PDF Löschung fehlgeschlagen:", error);
+    }
   }
 
   private async saveOrderPdfToStorage(order: PurchaseOrder, buffer?: Buffer): Promise<void> {
