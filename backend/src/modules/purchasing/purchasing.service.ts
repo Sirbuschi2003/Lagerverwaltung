@@ -200,7 +200,6 @@ export class PurchasingService {
   async update(id: string, payload: { status?: PurchaseOrderStatus; orderNumber?: string; note?: string }, branchId?: string | null) {
     const order = await this.findOne(id, branchId);
     const oldStatus = order.status;
-    const oldOrderNumber = order.orderNumber;
 
     if (payload.status) {
       order.status = payload.status;
@@ -250,21 +249,9 @@ export class PurchasingService {
     const saved = await this.ordersRepository.save(order);
 
     if (payload.status === "ORDERED") {
-      // Erstmalige PDF-Erzeugung beim Bestellen
+      // PDF beim erstmaligen Bestellen erzeugen
       const full = await this.findOneWithRelations(saved.id);
       await this.saveOrderPdfToStorage(full);
-    } else if (saved.status === "ORDERED" || saved.status === "ARCHIVED") {
-      // PDF aktualisieren wenn Bestellnummer oder Notiz geändert wurden
-      const orderNumberChanged = payload.orderNumber !== undefined && oldStatus === saved.status;
-      const noteChanged = payload.note !== undefined;
-      if (orderNumberChanged || noteChanged) {
-        if (orderNumberChanged) {
-          // Alte PDF-Datei (alter Dateiname) löschen
-          await this.deleteOrderPdfFromStorage(saved, oldOrderNumber ?? undefined);
-        }
-        const full = await this.findOneWithRelations(saved.id);
-        await this.saveOrderPdfToStorage(full);
-      }
     }
 
     this.invalidateSuggestionsCache();
