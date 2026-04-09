@@ -1,5 +1,5 @@
 import { BadRequestException, Injectable, NotFoundException } from "@nestjs/common";
-import { promises as fs } from "node:fs";
+import { promises as fs, Dirent } from "node:fs";
 import path from "node:path";
 import puppeteer from "puppeteer";
 import { InjectRepository } from "@nestjs/typeorm";
@@ -838,7 +838,7 @@ export class PurchasingService {
           const year = Number.parseInt(topEntry.name, 10);
           if (params?.year && year !== params.year) continue;
           const yearPath = path.join(storagePath, topEntry.name);
-          let files: Awaited<ReturnType<typeof fs.readdir>>;
+          let files: Dirent<string>[] = [];
           try { files = await fs.readdir(yearPath, { withFileTypes: true }); } catch { continue; }
           for (const file of files) {
             if (!file.isFile() || !this.isValidOrderDocumentFilename(file.name)) continue;
@@ -858,7 +858,7 @@ export class PurchasingService {
           // Neue Struktur: branchFolder/YYYY/MM/filename.pdf
           const branchFolderName = topEntry.name;
           const branchPath = path.join(storagePath, branchFolderName);
-          let yearDirs: Awaited<ReturnType<typeof fs.readdir>>;
+          let yearDirs: Dirent<string>[] = [];
           try { yearDirs = await fs.readdir(branchPath, { withFileTypes: true }); } catch { continue; }
 
           for (const yearDir of yearDirs) {
@@ -866,14 +866,14 @@ export class PurchasingService {
             const year = Number.parseInt(yearDir.name, 10);
             if (params?.year && year !== params.year) continue;
             const yearPath = path.join(branchPath, yearDir.name);
-            let monthDirs: Awaited<ReturnType<typeof fs.readdir>>;
+            let monthDirs: Dirent<string>[] = [];
             try { monthDirs = await fs.readdir(yearPath, { withFileTypes: true }); } catch { continue; }
 
             for (const monthDir of monthDirs) {
               if (!monthDir.isDirectory() || !/^\d{2}$/.test(monthDir.name)) continue;
               const month = Number.parseInt(monthDir.name, 10);
               const monthPath = path.join(yearPath, monthDir.name);
-              let files: Awaited<ReturnType<typeof fs.readdir>>;
+              let files: Dirent<string>[] = [];
               try { files = await fs.readdir(monthPath, { withFileTypes: true }); } catch { continue; }
 
               for (const file of files) {
