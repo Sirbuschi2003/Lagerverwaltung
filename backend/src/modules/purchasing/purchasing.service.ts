@@ -88,6 +88,7 @@ export class PurchasingService {
     const qb = this.ordersRepository
       .createQueryBuilder("order")
       .leftJoinAndSelect("order.supplier", "supplier")
+      .leftJoinAndSelect("order.branch", "branch")
       .leftJoinAndSelect("order.lines", "line")
       .leftJoinAndSelect("line.item", "item");
 

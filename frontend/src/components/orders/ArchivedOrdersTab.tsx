@@ -62,6 +62,8 @@ interface GroupedOrders {
 const ArchivedOrdersTab: React.FC = () => {
   const theme = useTheme();
   const hasPermission = useAuthStore((state: any) => state.hasPermission);
+  const user = useAuthStore((state: any) => state.user);
+  const isSuperAdmin = user?.branchId === null || user?.branchId === undefined;
   const canEdit = hasPermission("orders.edit");
   const canDelete = hasPermission("orders.delete");
 
@@ -297,6 +299,7 @@ const ArchivedOrdersTab: React.FC = () => {
                       <TableRow>
                         <TableCell>Bestellnummer</TableCell>
                         <TableCell>Lieferant</TableCell>
+                        {isSuperAdmin && <TableCell>Niederlassung</TableCell>}
                         <TableCell>Artikel</TableCell>
                         <TableCell>Erstellt</TableCell>
                         <TableCell>Bestellt</TableCell>
@@ -313,6 +316,16 @@ const ArchivedOrdersTab: React.FC = () => {
                             </Typography>
                           </TableCell>
                           <TableCell>{order.supplier?.name || "-"}</TableCell>
+                          {isSuperAdmin && (
+                            <TableCell>
+                              <Chip
+                                label={order.branch?.name || order.branch?.externalCode || "–"}
+                                size="small"
+                                variant="outlined"
+                                color="secondary"
+                              />
+                            </TableCell>
+                          )}
                           <TableCell>{order.lines.length} Artikel</TableCell>
                           <TableCell>{formatDate(order.createdAt)}</TableCell>
                           <TableCell>{formatDate(order.orderedAt)}</TableCell>

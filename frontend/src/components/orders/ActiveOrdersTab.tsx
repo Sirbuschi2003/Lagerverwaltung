@@ -74,6 +74,8 @@ const getOrderYear = (order: PurchaseOrderDto) => {
 const ActiveOrdersTab: React.FC = () => {
   const theme = useTheme();
   const hasPermission = useAuthStore((state: any) => state.hasPermission);
+  const user = useAuthStore((state: any) => state.user);
+  const isSuperAdmin = user?.branchId === null || user?.branchId === undefined;
   const canEdit = hasPermission("orders.edit");
   const canDelete = hasPermission("orders.delete");
   const canReceive = hasPermission("orders.receive");
@@ -372,6 +374,7 @@ const ActiveOrdersTab: React.FC = () => {
               <TableRow>
                 <TableCell>Bestellnummer</TableCell>
                 <TableCell>Lieferant</TableCell>
+                {isSuperAdmin && <TableCell>Niederlassung</TableCell>}
                 <TableCell>Status</TableCell>
                 <TableCell>Jahr</TableCell>
                 <TableCell>Artikel</TableCell>
@@ -389,6 +392,16 @@ const ActiveOrdersTab: React.FC = () => {
                     </Typography>
                   </TableCell>
                   <TableCell>{order.supplier?.name || "-"}</TableCell>
+                  {isSuperAdmin && (
+                    <TableCell>
+                      <Chip
+                        label={order.branch?.name || order.branch?.externalCode || "–"}
+                        size="small"
+                        variant="outlined"
+                        color="secondary"
+                      />
+                    </TableCell>
+                  )}
                   <TableCell>
                     <Chip label={statusMeta[order.status].label} color={statusMeta[order.status].color} size="small" />
                   </TableCell>

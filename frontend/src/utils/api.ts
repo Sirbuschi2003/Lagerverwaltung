@@ -733,6 +733,8 @@ export interface PurchaseOrderLineDto {
 export interface PurchaseOrderDto {
   id: string;
   supplier: SupplierDto;
+  branch?: { id: string; name: string; externalCode?: string | null } | null;
+  branchId?: string | null;
   status: PurchaseOrderStatus;
   orderNumber?: string | null;
   orderedAt?: string | null;
