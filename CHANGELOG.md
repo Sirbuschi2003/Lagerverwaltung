@@ -30,7 +30,7 @@ Alle Änderungen werden hier dokumentiert.
 - **Systemprotokolle: nur Super-Admin** — Alle Endpunkte unter `/api/logs` (Abrufen, Herunterladen, Statistiken, Konfiguration, Bereinigung) sind jetzt ausschließlich für Super-Admins (`branchId = null`) zugänglich. Branch-Manager erhalten 403.
 
 ---
-
+![alt text](image.png)
 ## 2026-04-08
 
 ### [3.3.5] – Sicherheitshärtung (NIS2-orientiert)
