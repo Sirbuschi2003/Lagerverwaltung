@@ -4,6 +4,18 @@ Alle Änderungen werden hier dokumentiert.
 
 ---
 
+## 2026-04-09
+
+### [3.3.8] – Bestellungen: Löschen aus Archiv
+
+#### Fehlerbehebungen
+- **TypeScript-Buildfehler** — `Dirent<string>` vs. `Dirent<NonSharedBuffer>` Typkonflikt in `listOrderDocuments()` behoben (Kompatibilität mit neueren `@types/node`-Versionen).
+
+#### Erweiterungen
+- **Archiv: Bestellungen löschen** — Benutzer mit der Berechtigung `orders.delete` können archivierte Bestellungen endgültig aus der Datenbank entfernen. Das PDF auf dem Server bleibt erhalten. Bestätigungsdialog verhindert versehentliches Löschen.
+
+---
+
 ## 2026-04-08 (3)
 
 ### [3.3.7] – Bestellungen: Firmendaten & Struktur
