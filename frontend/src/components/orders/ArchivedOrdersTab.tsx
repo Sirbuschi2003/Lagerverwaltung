@@ -28,8 +28,10 @@ import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import RefreshIcon from "@mui/icons-material/Refresh";
 import PictureAsPdfIcon from "@mui/icons-material/PictureAsPdf";
 import UnarchiveIcon from "@mui/icons-material/Unarchive";
+import DeleteIcon from "@mui/icons-material/Delete";
 
 import {
+  deletePurchaseOrder,
   fetchPurchaseOrderPdf,
   fetchPurchaseOrders,
   type PurchaseOrderDto,
@@ -61,6 +63,7 @@ const ArchivedOrdersTab: React.FC = () => {
   const theme = useTheme();
   const hasPermission = useAuthStore((state: any) => state.hasPermission);
   const canEdit = hasPermission("orders.edit");
+  const canDelete = hasPermission("orders.delete");
 
   const [orders, setOrders] = useState<PurchaseOrderDto[]>([]);
   const [loading, setLoading] = useState(false);
@@ -149,6 +152,17 @@ const ArchivedOrdersTab: React.FC = () => {
       .map(([year, yearOrders]) => ({ year, orders: yearOrders }))
       .sort((a, b) => b.year - a.year);
   }, [filteredOrders]);
+
+  const handleDelete = async (order: PurchaseOrderDto) => {
+    if (!window.confirm(`Bestellung ${order.orderNumber || order.id} wirklich endgültig löschen? Das PDF bleibt auf dem Server erhalten.`)) return;
+    try {
+      await deletePurchaseOrder(order.id);
+      setSuccessMessage("Bestellung gelöscht.");
+      await loadArchivedOrders();
+    } catch (err: any) {
+      alert(`Fehler beim Löschen: ${err?.response?.data?.message || err?.message || "Unbekannt"}`);
+    }
+  };
 
   const handleUnarchive = async (order: PurchaseOrderDto) => {
     if (!window.confirm("Bestellung wirklich aus Archiv wiederherstellen?")) return;
@@ -314,6 +328,13 @@ const ArchivedOrdersTab: React.FC = () => {
                                 <Tooltip title="Wiederherstellen">
                                   <IconButton size="small" color="primary" onClick={() => handleUnarchive(order)}>
                                     <UnarchiveIcon fontSize="small" />
+                                  </IconButton>
+                                </Tooltip>
+                              )}
+                              {canDelete && (
+                                <Tooltip title="Endgültig löschen">
+                                  <IconButton size="small" color="error" onClick={() => handleDelete(order)}>
+                                    <DeleteIcon fontSize="small" />
                                   </IconButton>
                                 </Tooltip>
                               )}
