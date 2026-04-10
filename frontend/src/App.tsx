@@ -29,7 +29,6 @@ import AdminMaintenancePage from "./pages/AdminMaintenancePage";
 import LocationsPage from "./pages/LocationsPage";
 import SuppliersPage from "./pages/SuppliersPage";
 import OrdersPage from "./pages/OrdersPage";
-import ReportsPage from "./pages/ReportsPage";
 import createAppTheme from "./styles/createTheme";
 import useAuthStore from "./store/useAuthStore";
 import useSystemConfigStore from "./store/useSystemConfigStore";
@@ -170,7 +169,6 @@ const AppContent = () => {
               {hasPermission("backup.access") && <Route path="backup" element={<BackupPage />} />}
               {hasPermission("logs.view") && <Route path="logs" element={<LogsManagementPage />} />}
               {hasPermission("movements.view") && <Route path="movements" element={<MovementHistoryPage />} />}
-              {(hasPermission("reports.view") || hasPermission("movements.view")) && <Route path="reports" element={<ReportsPage />} />}
               {hasPermission("logs.view") && <Route path="settings/logs" element={<LiveLogsPage />} />}
               {hasPermission("access.manage") && <Route path="access-control" element={<AccessControlPage />} />}
               {hasPermission("branches.manage") && <Route path="branches" element={<BranchesPage />} />}

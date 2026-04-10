@@ -2,6 +2,8 @@ import React, { useEffect, useMemo, useState } from "react";
 import {
   Box,
   Paper,
+  Tab,
+  Tabs,
   Typography,
   Stack,
   TextField,
@@ -22,8 +24,9 @@ import dayjs from "dayjs";
 import useItemsStore from "../store/useItemsStore";
 import useUsersStore from "../store/useUsersStore";
 import { fetchMovementHistory, cleanupMovements, MovementDto } from "../utils/api";
+import ReportsPage from "./ReportsPage";
 
-const MovementHistoryPage: React.FC = () => {
+const MovementHistoryTab: React.FC = () => {
   const { items, loadItems } = useItemsStore();
   const { users, loadUsers } = useUsersStore();
   const [filters, setFilters] = useState({
@@ -130,7 +133,7 @@ const MovementHistoryPage: React.FC = () => {
   }, []);
 
   return (
-    <Box sx={{ p: { xs: 1, sm: 2, md: 3 } }}>
+    <Box>
       <Typography variant="h5" sx={{ mb: 2 }}>
         Bewegungen (Historie)
       </Typography>
@@ -328,5 +331,27 @@ const ChipPair = ({ label, value, color }: { label: string; value: string; color
     <Typography variant="body2" color={color ? `${color}.main` : "text.primary"} sx={{ fontWeight: 600 }}>{value}</Typography>
   </Box>
 );
+
+const MovementHistoryPage: React.FC = () => {
+  const [tab, setTab] = useState(0);
+
+  return (
+    <Box sx={{ p: { xs: 1, sm: 2, md: 3 } }}>
+      <Tabs
+        value={tab}
+        onChange={(_, v) => setTab(v)}
+        sx={{ mb: 3, borderBottom: 1, borderColor: "divider" }}
+        variant="scrollable"
+        scrollButtons="auto"
+      >
+        <Tab label="Bewegungshistorie" />
+        <Tab label="Berichte & Analysen" />
+      </Tabs>
+
+      {tab === 0 && <MovementHistoryTab />}
+      {tab === 1 && <ReportsPage embedded />}
+    </Box>
+  );
+};
 
 export default MovementHistoryPage;

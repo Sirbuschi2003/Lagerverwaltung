@@ -36,7 +36,6 @@ import {
   Inventory2,
   QrCodeScanner,
   CorporateFare,
-  TrendingDown as TrendingDownIcon,
 } from "@mui/icons-material";
 import { useNavigate, useLocation } from "react-router-dom";
 import useAuthStore from "../store/useAuthStore";
@@ -69,8 +68,7 @@ const INVENTORY_MENU_ITEMS: MenuItem[] = [
   { id: "locations", label: "Lagerorte", path: "/locations", icon: <Inventory2 />, roles: ["MANAGER", "WAREHOUSE"], permissions: ["locations.view"] },
   { id: "items", label: "Artikel", path: "/items", icon: <Inventory />, roles: ["MANAGER", "WAREHOUSE", "TECHNICIAN"], permissions: ["items.view"] },
   { id: "orders", label: "Bestellungen", path: "/orders", icon: <LocalShipping />, roles: ["MANAGER", "WAREHOUSE"], permissions: ["orders.view"] },
-  { id: "movements", label: "Bewegungen", path: "/movements", icon: <TableChart />, roles: ["MANAGER"], permissions: ["movements.view"] },
-  { id: "reports", label: "Berichte & Analysen", path: "/reports", icon: <TrendingDownIcon />, roles: ["MANAGER", "WAREHOUSE"], permissions: ["movements.view"] },
+  { id: "movements", label: "Bewegungen & Berichte", path: "/movements", icon: <TableChart />, roles: ["MANAGER"], permissions: ["movements.view"] },
 ];
 
 const OTHER_MENU_ITEMS: MenuItem[] = [

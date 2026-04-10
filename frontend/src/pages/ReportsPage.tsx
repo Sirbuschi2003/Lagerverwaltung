@@ -433,20 +433,24 @@ const TABS = [
   { label: "Verbrauchstrend", icon: <ShowChartIcon /> },
 ];
 
-const ReportsPage: React.FC = () => {
+const ReportsPage: React.FC<{ embedded?: boolean }> = ({ embedded = false }) => {
   const [tab, setTab] = useState(0);
 
   return (
-    <Box sx={{ p: { xs: 1, sm: 2 } }}>
-      <Typography variant="h5" sx={{ fontWeight: 700, mb: 2 }}>
-        Berichte & Analysen
-      </Typography>
-      <Divider sx={{ mb: 2 }} />
+    <Box sx={embedded ? {} : { p: { xs: 1, sm: 2 } }}>
+      {!embedded && (
+        <>
+          <Typography variant="h5" sx={{ fontWeight: 700, mb: 2 }}>
+            Berichte & Analysen
+          </Typography>
+          <Divider sx={{ mb: 2 }} />
+        </>
+      )}
 
       <Tabs
         value={tab}
         onChange={(_, v) => setTab(v)}
-        sx={{ mb: 3 }}
+        sx={{ mb: 3, borderBottom: 1, borderColor: "divider" }}
         variant="scrollable"
         scrollButtons="auto"
       >
