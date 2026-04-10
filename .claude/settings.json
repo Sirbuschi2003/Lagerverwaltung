@@ -26,7 +26,8 @@
       "Bash(grep -h \"^\\\\s*@\\\\\\(Get\\\\|Post\\\\|Put\\\\|Delete\\\\|Patch\\\\\\)\" /c/Users/Thomas.Busche/Desktop/Code/Lagerverwaltung/backend/src/modules/*/\\\\*.controller.ts)",
       "Bash(git add:*)",
       "Bash(git commit -m ':*)",
-      "Bash(git push:*)"
+      "Bash(git push:*)",
+      "Bash(git commit:*)"
     ],
     "additionalDirectories": [
       "c:\\Users\\Thomas.Busche\\.claude\\projects\\c--Users-Thomas-Busche-Desktop-Code-Lagerverwaltung\\memory",
