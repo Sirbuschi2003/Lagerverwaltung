@@ -39,6 +39,9 @@ export class PurchaseOrder {
   @Column({ type: "varchar", length: 255, nullable: true })
   note!: string | null;
 
+  @Column({ type: "varchar", length: 128, nullable: true })
+  deliveryNoteNumber!: string | null;
+
   @OneToMany(() => PurchaseOrderLine, (line) => line.order, { cascade: true, eager: true })
   lines!: PurchaseOrderLine[];
 

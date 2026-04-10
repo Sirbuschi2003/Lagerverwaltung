@@ -260,7 +260,7 @@ export class PurchasingService {
 
   async receiveOrder(
     id: string,
-    payload: { lines: Array<{ lineId: string; receivedQuantity?: number }> },
+    payload: { lines: Array<{ lineId: string; receivedQuantity?: number }>; deliveryNoteNumber?: string },
     userId?: string,
     branchId?: string | null,
   ) {
@@ -327,6 +327,10 @@ export class PurchasingService {
       if (!order.orderedAt) {
         order.orderedAt = new Date();
       }
+    }
+
+    if (payload.deliveryNoteNumber !== undefined) {
+      order.deliveryNoteNumber = payload.deliveryNoteNumber.trim() || null;
     }
 
     const savedOrder = await this.ordersRepository.save(order);

@@ -148,6 +148,7 @@ const GoodsReceiptTab: React.FC = () => {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [receivedQuantities, setReceivedQuantities] = useState<Record<string, number>>({});
   const [receiving, setReceiving] = useState(false);
+  const [deliveryNoteNumber, setDeliveryNoteNumber] = useState("");
   const [barcodeInput, setBarcodeInput] = useState("");
   const [scanCandidate, setScanCandidate] = useState<ScanCandidate | null>(null);
   const [scanFeedback, setScanFeedback] = useState<string | null>(null);
@@ -267,6 +268,7 @@ const GoodsReceiptTab: React.FC = () => {
       quantities[line.id] = 0;
     });
     setReceivedQuantities(quantities);
+    setDeliveryNoteNumber(order.deliveryNoteNumber ?? "");
     setBarcodeInput("");
     setScanCandidate(null);
     setScanFeedback(null);
@@ -276,6 +278,7 @@ const GoodsReceiptTab: React.FC = () => {
   const handleCloseReceiptDialog = () => {
     setSelectedOrder(null);
     setReceivedQuantities({});
+    setDeliveryNoteNumber("");
     setBarcodeInput("");
     setScanCandidate(null);
     setScanFeedback(null);
@@ -390,7 +393,10 @@ const GoodsReceiptTab: React.FC = () => {
         return;
       }
 
-      const updated = await receivePurchaseOrder(selectedOrder.id, { lines });
+      const updated = await receivePurchaseOrder(selectedOrder.id, {
+        lines,
+        deliveryNoteNumber: deliveryNoteNumber.trim() || undefined,
+      });
       const allReceived = updated.lines.every(
         (line) => getRemainingQuantity(line.quantity, line.receivedQuantity) <= 0,
       );
@@ -498,6 +504,7 @@ const GoodsReceiptTab: React.FC = () => {
                       </Typography>
                       <Typography variant="body2" color="text.secondary">
                         {order.supplier?.name || "-"} | Jahr {getOrderYear(order)}
+                        {order.deliveryNoteNumber && ` | LS: ${order.deliveryNoteNumber}`}
                       </Typography>
                     </Box>
                     <Box sx={{ display: "flex", alignItems: "center", gap: 1, flexWrap: "wrap", justifyContent: "flex-end" }}>
@@ -527,6 +534,16 @@ const GoodsReceiptTab: React.FC = () => {
           <Alert severity="info" sx={{ mt: 1, mb: 2 }}>
             Ablauf: Artikel scannen, Vorschlagsmenge prüfen, mit "OK übernehmen" bestätigen und am Ende Wareneingang buchen.
           </Alert>
+
+          <TextField
+            label="Lieferschein-Nr. (optional)"
+            value={deliveryNoteNumber}
+            onChange={(event) => setDeliveryNoteNumber(event.target.value)}
+            size="small"
+            inputProps={{ maxLength: 128 }}
+            sx={{ mb: 2, width: { xs: "100%", sm: 320 } }}
+            autoComplete="off"
+          />
 
           <Stack direction={{ xs: "column", md: "row" }} spacing={1} sx={{ mb: 2 }}>
             <TextField

@@ -32,6 +32,7 @@ import { useNetworkStatus } from "../hooks/useNetworkStatus";
 import { useThemeMode } from "../hooks/useThemeMode";
 import { getAppHeaderStyles } from "../styles/componentStyles";
 import { ThemePresetId } from "../styles/designTokens";
+import NotificationCenter from "./NotificationCenter";
 
 interface AppHeaderProps {
   onMenuToggle: () => void;
@@ -205,6 +206,8 @@ const AppHeader: React.FC<AppHeaderProps> = ({ onMenuToggle, menuOpen }) => {
               </MenuItem>
             ))}
           </Menu>
+
+          <NotificationCenter />
 
           <Tooltip title={mode === "dark" ? "Hellmodus" : "Dunkelmodus"}>
             <IconButton onClick={toggleTheme} size="small" aria-label="theme toggle">

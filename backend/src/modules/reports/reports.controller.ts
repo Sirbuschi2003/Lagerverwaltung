@@ -1,4 +1,4 @@
-﻿import { Controller, Get, Query, Res, UseGuards, Req, ForbiddenException, Request } from "@nestjs/common";
+﻿import { Body, Controller, Get, ParseIntPipe, Put, Query, Res, UseGuards, Req, ForbiddenException, Request } from "@nestjs/common";
 import { Response } from 'express';
 
 import { Roles } from "../auth/decorators/roles.decorator";
@@ -81,6 +81,40 @@ export class ReportsController {
       res.setHeader('Content-Disposition', `attachment; filename="bestandsbericht_${new Date().toISOString().split('T')[0]}.pdf"`);
       res.send(pdfBuffer);
     }
+  }
+
+  @Get("consumption-trend")
+  @Roles("MANAGER", "WAREHOUSE")
+  async consumptionTrend(@Req() req: any, @Query("months") monthsParam?: string) {
+    const months = monthsParam === "6" ? 6 : 12;
+    return this.reportsService.consumptionTrend(months, req.user?.branchId);
+  }
+
+  @Get("slow-movers/settings")
+  @Roles("MANAGER", "WAREHOUSE")
+  async getSlowMoverSettings(@Req() req: any) {
+    const days = await this.reportsService.getSlowMoverThreshold(req.user?.branchId);
+    return { days };
+  }
+
+  @Put("slow-movers/settings")
+  @Roles("MANAGER")
+  async setSlowMoverSettings(@Req() req: any, @Body("days", ParseIntPipe) days: number) {
+    const saved = await this.reportsService.setSlowMoverThreshold(Math.max(1, Math.min(3650, days)), req.user?.branchId);
+    return { days: saved };
+  }
+
+  @Get("slow-movers")
+  @Roles("MANAGER", "WAREHOUSE")
+  async slowMovers(@Req() req: any, @Query("days") daysParam?: string) {
+    let days: number;
+    if (daysParam) {
+      const parsed = Number.parseInt(daysParam, 10);
+      days = Number.isNaN(parsed) || parsed < 1 ? await this.reportsService.getSlowMoverThreshold(req.user?.branchId) : parsed;
+    } else {
+      days = await this.reportsService.getSlowMoverThreshold(req.user?.branchId);
+    }
+    return this.reportsService.slowMoverReport(days, req.user?.branchId);
   }
 
   /**

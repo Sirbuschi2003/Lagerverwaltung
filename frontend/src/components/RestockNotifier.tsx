@@ -4,6 +4,7 @@ import { io, Socket } from "socket.io-client";
 import useAuthStore from "../store/useAuthStore";
 import { useNetworkStatus } from "../hooks/useNetworkStatus";
 import { fetchPushPublicKey, registerPushSubscription } from "../utils/api";
+import useNotificationStore from "../store/useNotificationStore";
 
 type RestockStatus = "PENDING" | "APPROVED" | "FULFILLED" | "CANCELLED";
 
@@ -21,6 +22,7 @@ const RestockNotifier: React.FC = () => {
   const token = useAuthStore((s) => s.token);
   const user = useAuthStore((s) => s.user);
   const { isOnline } = useNetworkStatus();
+  const { addNotification } = useNotificationStore();
   const [snackbar, setSnackbar] = useState<{ open: boolean; message: string }>({ open: false, message: "" });
   const lastStatuses = useRef<Record<string, RestockStatus>>({});
   const lastNotifiedAt = useRef<Record<string, number>>({});
@@ -164,6 +166,13 @@ const RestockNotifier: React.FC = () => {
 
           const qty = typeof req.quantityProvided === "number" ? req.quantityProvided : req.quantityNeeded;
           const msg = `${qty}x ${req.item.description} (${req.item.code}) bereitgestellt für ${req.vehicle.licensePlate}`;
+          // In Notification-Store schreiben (In-App History)
+          addNotification({
+            type: "RESTOCK_APPROVED",
+            title: "Artikel bereitgestellt",
+            message: msg,
+            link: "/my-vehicle",
+          });
           // Benachrichtigung immer über SW mit tag, damit zusammengefasst wird
           await triggerNotification(msg, req.status === "APPROVED" ? "restock-ready" : undefined);
           setSnackbar({ open: true, message: msg });

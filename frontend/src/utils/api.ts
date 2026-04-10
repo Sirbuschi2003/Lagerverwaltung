@@ -740,6 +740,7 @@ export interface PurchaseOrderDto {
   orderedAt?: string | null;
   receivedAt?: string | null;
   note?: string | null;
+  deliveryNoteNumber?: string | null;
   lines: PurchaseOrderLineDto[];
   createdAt: string;
   updatedAt: string;
@@ -818,7 +819,7 @@ export const updatePurchaseOrder = async (
 
 export const receivePurchaseOrder = async (
   id: string,
-  payload: { lines: Array<{ lineId: string; receivedQuantity?: number }> },
+  payload: { lines: Array<{ lineId: string; receivedQuantity?: number }>; deliveryNoteNumber?: string },
 ): Promise<PurchaseOrderDto> => {
   const response = await api.post<PurchaseOrderDto>(`/purchase-orders/${id}/receive`, payload);
   return response.data;
@@ -1889,4 +1890,45 @@ export const applyUpdate = async (): Promise<{ message: string }> => {
 export const fetchChangelog = async (): Promise<string> => {
   const response = await api.get<{ content: string }>("/update/changelog");
   return response.data.content;
+};
+
+// ── Reports ──────────────────────────────────────────────────────────────────
+
+export interface SlowMoverRow {
+  itemId: string;
+  code: string;
+  description: string;
+  descriptionSecondary: string | null;
+  manufacturer: string | null;
+  productGroup: string | null;
+  totalQuantity: number;
+  lastMovementAt: string | null;
+  daysSinceLastMovement: number | null;
+}
+
+export const fetchSlowMoverSettings = async (): Promise<{ days: number }> => {
+  const response = await api.get<{ days: number }>("/reports/slow-movers/settings");
+  return response.data;
+};
+
+export const saveSlowMoverSettings = async (days: number): Promise<{ days: number }> => {
+  const response = await api.put<{ days: number }>("/reports/slow-movers/settings", { days });
+  return response.data;
+};
+
+export const fetchSlowMovers = async (days?: number): Promise<SlowMoverRow[]> => {
+  const params = days !== undefined ? { days } : {};
+  const response = await api.get<SlowMoverRow[]>("/reports/slow-movers", { params });
+  return response.data;
+};
+
+export interface ConsumptionTrendEntry {
+  month: string; // "YYYY-MM"
+  checkouts: number;
+  checkins: number;
+}
+
+export const fetchConsumptionTrend = async (months: 6 | 12 = 12): Promise<ConsumptionTrendEntry[]> => {
+  const response = await api.get<ConsumptionTrendEntry[]>("/reports/consumption-trend", { params: { months } });
+  return response.data;
 };

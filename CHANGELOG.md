@@ -4,6 +4,23 @@ Alle Änderungen werden hier dokumentiert.
 
 ---
 
+## 2026-04-10
+
+### [3.3.9] – Berichte, Benachrichtigungen & Lieferschein
+
+#### Neue Features
+- **Berichte & Analysen** — Neue Seite `/reports` mit zwei Tabs:
+  - **Slow-Mover / Dead-Stock** — zeigt Artikel ohne Lagerbewegung seit X Tagen. Schwellwert ist pro Niederlassung frei konfigurierbar (MANAGER). Farbkodierung: rot ≥ 365 Tage, orange ≥ 180 Tage.
+  - **Verbrauchstrend** — monatliche Balkendiagramm-Übersicht der letzten 6 oder 12 Monate (Entnahmen rot / Eingänge grün) mit Zusammenfassung und Datentabelle inkl. Saldo.
+- **Benachrichtigungs-Center** — Glocken-Icon im Header mit rotem Badge (ungelesen-Zähler), scrollbarer History-Liste, relativer Zeitanzeige, "Alle gelesen" und "Alle löschen". Benachrichtigungen werden in localStorage persistiert (max. 50 Einträge). Restock-Ereignisse erscheinen automatisch in der History.
+- **Lieferschein-Nr. beim Wareneingang** — optionales Textfeld im Wareneingang-Dialog. Wird gespeichert und in der Bestellkarte angezeigt.
+
+#### Backend
+- Neue Endpoints: `GET/PUT /reports/slow-movers/settings`, `GET /reports/slow-movers`, `GET /reports/consumption-trend`
+- Migration `1744100000000-AddDeliveryNoteNumber` — neue Spalte `deliveryNoteNumber` in `purchase_orders`
+
+---
+
 ## 2026-04-09
 
 ### [3.3.8] – Bestellungen: Löschen aus Archiv
