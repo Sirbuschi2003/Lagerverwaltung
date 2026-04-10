@@ -1928,7 +1928,9 @@ export interface ConsumptionTrendEntry {
   checkins: number;
 }
 
-export const fetchConsumptionTrend = async (months: 6 | 12 = 12): Promise<ConsumptionTrendEntry[]> => {
-  const response = await api.get<ConsumptionTrendEntry[]>("/reports/consumption-trend", { params: { months } });
+export const fetchConsumptionTrend = async (months: 6 | 12 = 12, itemId?: string): Promise<ConsumptionTrendEntry[]> => {
+  const response = await api.get<ConsumptionTrendEntry[]>("/reports/consumption-trend", {
+    params: { months, ...(itemId ? { itemId } : {}) },
+  });
   return response.data;
 };

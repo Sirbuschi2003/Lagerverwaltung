@@ -154,7 +154,11 @@ export class ReportsService {
       .getMany();
   }
 
-  async consumptionTrend(months: 6 | 12, branchId?: string | null): Promise<Array<{ month: string; checkouts: number; checkins: number }>> {
+  async consumptionTrend(
+    months: 6 | 12,
+    branchId?: string | null,
+    itemId?: string | null,
+  ): Promise<Array<{ month: string; checkouts: number; checkins: number }>> {
     const now = new Date();
     const from = new Date(now.getFullYear(), now.getMonth() - months + 1, 1);
 
@@ -168,8 +172,10 @@ export class ReportsService {
       .groupBy("month")
       .orderBy("month", "ASC");
 
-    if (branchId) {
-      qb.leftJoin("mv.item", "item").andWhere("item.branchId = :branchId", { branchId });
+    if (branchId || itemId) {
+      qb.leftJoin("mv.item", "item");
+      if (branchId) qb.andWhere("item.branchId = :branchId", { branchId });
+      if (itemId) qb.andWhere("mv.itemId = :itemId", { itemId });
     }
 
     const raw: Array<{ month: string; checkouts: string; checkins: string }> = await qb.getRawMany();

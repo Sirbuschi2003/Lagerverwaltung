@@ -1,6 +1,7 @@
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Alert,
+  Autocomplete,
   Box,
   Button,
   Chip,
@@ -11,6 +12,7 @@ import {
   DialogTitle,
   Divider,
   InputAdornment,
+  MenuItem,
   Paper,
   Stack,
   Tab,
@@ -33,6 +35,8 @@ import {
   Refresh as RefreshIcon,
   TrendingDown as TrendingDownIcon,
   ShowChart as ShowChartIcon,
+  FilterList as FilterIcon,
+  Clear as ClearIcon,
 } from "@mui/icons-material";
 
 import {
@@ -44,6 +48,7 @@ import {
   type ConsumptionTrendEntry,
 } from "../utils/api";
 import useAuthStore from "../store/useAuthStore";
+import useItemsStore from "../store/useItemsStore";
 
 // ── Slow-Mover Tab ────────────────────────────────────────────────────────────
 
@@ -62,6 +67,12 @@ const SlowMoverTab: React.FC = () => {
   const [threshold, setThreshold] = useState<number>(90);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  // Filter-State
+  const [search, setSearch] = useState("");
+  const [filterManufacturer, setFilterManufacturer] = useState("");
+  const [filterGroup, setFilterGroup] = useState("");
+  const [filterNoStock, setFilterNoStock] = useState(false);
 
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [editDays, setEditDays] = useState<number>(90);
@@ -82,9 +93,7 @@ const SlowMoverTab: React.FC = () => {
     }
   }, []);
 
-  useEffect(() => {
-    void load();
-  }, [load]);
+  useEffect(() => { void load(); }, [load]);
 
   const handleSaveSettings = async () => {
     setSaving(true);
@@ -92,7 +101,6 @@ const SlowMoverTab: React.FC = () => {
       const saved = await saveSlowMoverSettings(editDays);
       setThreshold(saved.days);
       setSettingsOpen(false);
-      // Lade Daten neu mit neuem Schwellwert
       setLoading(true);
       const data = await fetchSlowMovers(saved.days);
       setRows(data);
@@ -104,6 +112,38 @@ const SlowMoverTab: React.FC = () => {
     }
   };
 
+  // Dropdown-Optionen aus den Daten ableiten
+  const manufacturers = useMemo(() => {
+    const set = new Set(rows.map((r) => r.manufacturer).filter(Boolean) as string[]);
+    return [...set].sort((a, b) => a.localeCompare(b, "de"));
+  }, [rows]);
+
+  const productGroups = useMemo(() => {
+    const set = new Set(rows.map((r) => r.productGroup).filter(Boolean) as string[]);
+    return [...set].sort((a, b) => a.localeCompare(b, "de"));
+  }, [rows]);
+
+  const filteredRows = useMemo(() => {
+    const q = search.toLowerCase().trim();
+    return rows.filter((row) => {
+      if (filterNoStock && row.totalQuantity > 0) return false;
+      if (filterManufacturer && row.manufacturer !== filterManufacturer) return false;
+      if (filterGroup && row.productGroup !== filterGroup) return false;
+      if (q) {
+        return (
+          row.code.toLowerCase().includes(q) ||
+          row.description.toLowerCase().includes(q) ||
+          (row.descriptionSecondary ?? "").toLowerCase().includes(q) ||
+          (row.manufacturer ?? "").toLowerCase().includes(q) ||
+          (row.productGroup ?? "").toLowerCase().includes(q)
+        );
+      }
+      return true;
+    });
+  }, [rows, search, filterManufacturer, filterGroup, filterNoStock]);
+
+  const hasFilter = search || filterManufacturer || filterGroup || filterNoStock;
+
   const formatDate = (iso: string | null) => {
     if (!iso) return "Nie bewegt";
     return new Date(iso).toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit", year: "numeric" });
@@ -111,11 +151,10 @@ const SlowMoverTab: React.FC = () => {
 
   return (
     <Box>
+      {/* Header */}
       <Stack direction="row" justifyContent="space-between" alignItems="center" flexWrap="wrap" gap={1} sx={{ mb: 2 }}>
         <Box>
-          <Typography variant="h6" sx={{ fontWeight: 700 }}>
-            Slow-Mover / Dead-Stock
-          </Typography>
+          <Typography variant="h6" sx={{ fontWeight: 700 }}>Slow-Mover / Dead-Stock</Typography>
           <Typography variant="body2" color="text.secondary">
             Artikel ohne Lagerbewegung seit mehr als <strong>{threshold} Tagen</strong>
           </Typography>
@@ -132,20 +171,67 @@ const SlowMoverTab: React.FC = () => {
         </Stack>
       </Stack>
 
-      {error && (
-        <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError(null)}>
-          {error}
-        </Alert>
-      )}
+      {/* Filter-Leiste */}
+      <Paper variant="outlined" sx={{ p: 1.5, mb: 2 }}>
+        <Stack direction={{ xs: "column", sm: "row" }} gap={1.5} flexWrap="wrap" alignItems="center">
+          <TextField
+            size="small"
+            placeholder="Suche: Artikelnr., Bezeichnung, Hersteller, Gruppe…"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            InputProps={{ startAdornment: <InputAdornment position="start"><FilterIcon fontSize="small" /></InputAdornment> }}
+            sx={{ minWidth: 280, flex: 2 }}
+          />
+          <TextField
+            select
+            size="small"
+            label="Hersteller"
+            value={filterManufacturer}
+            onChange={(e) => setFilterManufacturer(e.target.value)}
+            sx={{ minWidth: 160 }}
+          >
+            <MenuItem value="">Alle</MenuItem>
+            {manufacturers.map((m) => <MenuItem key={m} value={m}>{m}</MenuItem>)}
+          </TextField>
+          <TextField
+            select
+            size="small"
+            label="Produktgruppe"
+            value={filterGroup}
+            onChange={(e) => setFilterGroup(e.target.value)}
+            sx={{ minWidth: 160 }}
+          >
+            <MenuItem value="">Alle</MenuItem>
+            {productGroups.map((g) => <MenuItem key={g} value={g}>{g}</MenuItem>)}
+          </TextField>
+          <Button
+            size="small"
+            variant={filterNoStock ? "contained" : "outlined"}
+            onClick={() => setFilterNoStock((v) => !v)}
+            color={filterNoStock ? "warning" : "inherit"}
+          >
+            Bestand = 0
+          </Button>
+          {hasFilter && (
+            <Button
+              size="small"
+              startIcon={<ClearIcon />}
+              onClick={() => { setSearch(""); setFilterManufacturer(""); setFilterGroup(""); setFilterNoStock(false); }}
+            >
+              Filter zurücksetzen
+            </Button>
+          )}
+        </Stack>
+      </Paper>
+
+      {error && <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError(null)}>{error}</Alert>}
 
       {loading ? (
-        <Box sx={{ display: "flex", justifyContent: "center", py: 6 }}>
-          <CircularProgress />
-        </Box>
-      ) : rows.length === 0 ? (
+        <Box sx={{ display: "flex", justifyContent: "center", py: 6 }}><CircularProgress /></Box>
+      ) : filteredRows.length === 0 ? (
         <Paper sx={{ p: 4, textAlign: "center" }}>
           <Typography color="text.secondary">
-            Keine Slow-Mover gefunden – alle Artikel wurden in den letzten {threshold} Tagen bewegt.
+            {hasFilter ? "Keine Treffer für die aktuellen Filter." : `Keine Slow-Mover gefunden – alle Artikel wurden in den letzten ${threshold} Tagen bewegt.`}
           </Typography>
         </Paper>
       ) : (
@@ -163,7 +249,7 @@ const SlowMoverTab: React.FC = () => {
               </TableRow>
             </TableHead>
             <TableBody>
-              {rows.map((row) => {
+              {filteredRows.map((row) => {
                 const severity = getDaysSeverity(row.daysSinceLastMovement);
                 return (
                   <TableRow key={row.itemId} hover>
@@ -176,7 +262,11 @@ const SlowMoverTab: React.FC = () => {
                     </TableCell>
                     <TableCell>{row.manufacturer || "-"}</TableCell>
                     <TableCell>{row.productGroup || "-"}</TableCell>
-                    <TableCell align="right">{row.totalQuantity}</TableCell>
+                    <TableCell align="right">
+                      <Typography variant="body2" sx={{ fontWeight: row.totalQuantity === 0 ? 700 : 400, color: row.totalQuantity === 0 ? "warning.main" : "text.primary" }}>
+                        {row.totalQuantity}
+                      </Typography>
+                    </TableCell>
                     <TableCell>
                       <Typography variant="body2" color={row.lastMovementAt ? "text.primary" : "error.main"}>
                         {formatDate(row.lastMovementAt)}
@@ -184,11 +274,7 @@ const SlowMoverTab: React.FC = () => {
                     </TableCell>
                     <TableCell align="right">
                       <Tooltip title={row.daysSinceLastMovement === null ? "Noch nie bewegt" : `${row.daysSinceLastMovement} Tage`}>
-                        <Chip
-                          label={row.daysSinceLastMovement !== null ? `${row.daysSinceLastMovement} d` : "–"}
-                          color={severity}
-                          size="small"
-                        />
+                        <Chip label={row.daysSinceLastMovement !== null ? `${row.daysSinceLastMovement} d` : "–"} color={severity} size="small" />
                       </Tooltip>
                     </TableCell>
                   </TableRow>
@@ -199,9 +285,9 @@ const SlowMoverTab: React.FC = () => {
         </TableContainer>
       )}
 
-      {!loading && rows.length > 0 && (
+      {!loading && (
         <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: "block" }}>
-          {rows.length} Artikel gefunden · Rot: ≥ 365 Tage · Orange: ≥ 180 Tage · Blau: ≥ {threshold} Tage
+          {filteredRows.length} von {rows.length} Artikeln · Rot: ≥ 365 Tage · Orange: ≥ 180 Tage · Blau: ≥ {threshold} Tage
         </Typography>
       )}
 
@@ -219,9 +305,7 @@ const SlowMoverTab: React.FC = () => {
             value={editDays}
             onChange={(e) => setEditDays(Math.max(1, Math.min(3650, Number.parseInt(e.target.value, 10) || 1)))}
             inputProps={{ min: 1, max: 3650 }}
-            InputProps={{
-              endAdornment: <InputAdornment position="end">Tage</InputAdornment>,
-            }}
+            InputProps={{ endAdornment: <InputAdornment position="end">Tage</InputAdornment> }}
           />
         </DialogContent>
         <DialogActions>
@@ -244,16 +328,28 @@ const MONTH_LABELS: Record<string, string> = {
 
 const ConsumptionTrendTab: React.FC = () => {
   const theme = useTheme();
+  const { items, loadItems } = useItemsStore();
+
   const [months, setMonths] = useState<6 | 12>(12);
+  const [selectedItem, setSelectedItem] = useState<{ id: string; label: string } | null>(null);
   const [data, setData] = useState<ConsumptionTrendEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const load = useCallback(async (m: 6 | 12) => {
+  useEffect(() => {
+    if (items.length === 0) loadItems().catch(() => null);
+  }, [items.length, loadItems]);
+
+  const itemOptions = useMemo(
+    () => items.map((i) => ({ id: i.id, label: `${i.code} – ${i.description}` })),
+    [items],
+  );
+
+  const load = useCallback(async (m: 6 | 12, itemId?: string) => {
     setLoading(true);
     setError(null);
     try {
-      const result = await fetchConsumptionTrend(m);
+      const result = await fetchConsumptionTrend(m, itemId);
       setData(result);
     } catch (err: any) {
       setError(err?.response?.data?.message || err?.message || "Fehler beim Laden");
@@ -263,11 +359,10 @@ const ConsumptionTrendTab: React.FC = () => {
   }, []);
 
   useEffect(() => {
-    void load(months);
-  }, [load, months]);
+    void load(months, selectedItem?.id);
+  }, [load, months, selectedItem]);
 
   const maxVal = Math.max(...data.map((d) => Math.max(d.checkouts, d.checkins)), 1);
-
   const formatMonth = (key: string) => {
     const [year, month] = key.split("-");
     return `${MONTH_LABELS[month] ?? month} ${year}`;
@@ -278,14 +373,15 @@ const ConsumptionTrendTab: React.FC = () => {
 
   return (
     <Box>
-      <Stack direction="row" justifyContent="space-between" alignItems="center" flexWrap="wrap" gap={1} sx={{ mb: 2 }}>
+      {/* Header + Filter */}
+      <Stack direction="row" justifyContent="space-between" alignItems="flex-start" flexWrap="wrap" gap={1.5} sx={{ mb: 2 }}>
         <Box>
           <Typography variant="h6" sx={{ fontWeight: 700 }}>Verbrauchstrend</Typography>
           <Typography variant="body2" color="text.secondary">
-            Monatliche Lagerbewegungen (Entnahmen & Eingänge)
+            {selectedItem ? `Artikel: ${selectedItem.label}` : "Alle Artikel – monatliche Lagerbewegungen"}
           </Typography>
         </Box>
-        <Stack direction="row" gap={1} alignItems="center">
+        <Stack direction="row" gap={1} alignItems="center" flexWrap="wrap">
           <ToggleButtonGroup
             value={months}
             exclusive
@@ -295,15 +391,46 @@ const ConsumptionTrendTab: React.FC = () => {
             <ToggleButton value={6}>6 Monate</ToggleButton>
             <ToggleButton value={12}>12 Monate</ToggleButton>
           </ToggleButtonGroup>
-          <Button variant="outlined" startIcon={<RefreshIcon />} onClick={() => load(months)} size="small">
+          <Button variant="outlined" startIcon={<RefreshIcon />} onClick={() => load(months, selectedItem?.id)} size="small">
             Aktualisieren
           </Button>
         </Stack>
       </Stack>
 
-      {error && (
-        <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError(null)}>{error}</Alert>
-      )}
+      {/* Artikel-Filter */}
+      <Paper variant="outlined" sx={{ p: 1.5, mb: 2 }}>
+        <Stack direction={{ xs: "column", sm: "row" }} gap={1.5} alignItems="center">
+          <Autocomplete
+            options={itemOptions}
+            value={selectedItem}
+            onChange={(_, val) => setSelectedItem(val)}
+            getOptionLabel={(opt) => opt.label}
+            isOptionEqualToValue={(a, b) => a.id === b.id}
+            renderInput={(params) => (
+              <TextField
+                {...params}
+                size="small"
+                label="Artikel filtern (optional)"
+                placeholder="Artikelnr. oder Bezeichnung…"
+                InputProps={{ ...params.InputProps, startAdornment: <><FilterIcon fontSize="small" sx={{ ml: 0.5, mr: 0.5, color: "text.secondary" }} />{params.InputProps.startAdornment}</> }}
+              />
+            )}
+            sx={{ flex: 1, minWidth: 280 }}
+            clearOnEscape
+          />
+          {selectedItem && (
+            <Button
+              size="small"
+              startIcon={<ClearIcon />}
+              onClick={() => setSelectedItem(null)}
+            >
+              Alle Artikel
+            </Button>
+          )}
+        </Stack>
+      </Paper>
+
+      {error && <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError(null)}>{error}</Alert>}
 
       {loading ? (
         <Box sx={{ display: "flex", justifyContent: "center", py: 6 }}><CircularProgress /></Box>
@@ -327,6 +454,15 @@ const ConsumptionTrendTab: React.FC = () => {
                 {data.length > 0 ? Math.round(totalCheckouts / data.length) : 0}
               </Typography>
             </Paper>
+            {selectedItem && (
+              <Paper variant="outlined" sx={{ p: 2, minWidth: 160, borderColor: "primary.main" }}>
+                <Typography variant="caption" color="text.secondary">Netto-Verbrauch</Typography>
+                <Typography variant="h5" sx={{ fontWeight: 700, color: totalCheckouts - totalCheckins >= 0 ? "error.main" : "success.main" }}>
+                  {totalCheckouts - totalCheckins >= 0 ? "-" : "+"}{Math.abs(totalCheckouts - totalCheckins)}
+                </Typography>
+                <Typography variant="caption" color="text.secondary">Entnahmen minus Eingänge</Typography>
+              </Paper>
+            )}
           </Stack>
 
           {/* Balkendiagramm */}
@@ -336,36 +472,13 @@ const ConsumptionTrendTab: React.FC = () => {
                 const checkoutHeight = Math.round((entry.checkouts / maxVal) * 180);
                 const checkinHeight = Math.round((entry.checkins / maxVal) * 180);
                 return (
-                  <Box
-                    key={entry.month}
-                    sx={{ display: "flex", flexDirection: "column", alignItems: "center", minWidth: 52, flex: 1 }}
-                  >
+                  <Box key={entry.month} sx={{ display: "flex", flexDirection: "column", alignItems: "center", minWidth: 52, flex: 1 }}>
                     <Box sx={{ display: "flex", alignItems: "flex-end", gap: 0.5, height: 190 }}>
                       <Tooltip title={`Entnahmen: ${entry.checkouts}`}>
-                        <Box
-                          sx={{
-                            width: 18,
-                            height: checkoutHeight || 2,
-                            bgcolor: theme.palette.error.main,
-                            borderRadius: "3px 3px 0 0",
-                            opacity: 0.85,
-                            cursor: "default",
-                            transition: "height 0.3s",
-                          }}
-                        />
+                        <Box sx={{ width: 18, height: checkoutHeight || 2, bgcolor: theme.palette.error.main, borderRadius: "3px 3px 0 0", opacity: 0.85, cursor: "default", transition: "height 0.3s" }} />
                       </Tooltip>
                       <Tooltip title={`Eingänge: ${entry.checkins}`}>
-                        <Box
-                          sx={{
-                            width: 18,
-                            height: checkinHeight || 2,
-                            bgcolor: theme.palette.success.main,
-                            borderRadius: "3px 3px 0 0",
-                            opacity: 0.85,
-                            cursor: "default",
-                            transition: "height 0.3s",
-                          }}
-                        />
+                        <Box sx={{ width: 18, height: checkinHeight || 2, bgcolor: theme.palette.success.main, borderRadius: "3px 3px 0 0", opacity: 0.85, cursor: "default", transition: "height 0.3s" }} />
                       </Tooltip>
                     </Box>
                     <Typography variant="caption" sx={{ mt: 0.5, fontSize: 10, textAlign: "center", whiteSpace: "nowrap" }}>
@@ -387,7 +500,7 @@ const ConsumptionTrendTab: React.FC = () => {
             </Stack>
           </Paper>
 
-          {/* Tabelle */}
+          {/* Datentabelle */}
           <TableContainer component={Paper} variant="outlined" sx={{ mt: 2 }}>
             <Table size="small">
               <TableHead>
@@ -407,10 +520,7 @@ const ConsumptionTrendTab: React.FC = () => {
                       <TableCell align="right" sx={{ color: "error.main", fontWeight: 600 }}>{entry.checkouts}</TableCell>
                       <TableCell align="right" sx={{ color: "success.main", fontWeight: 600 }}>{entry.checkins}</TableCell>
                       <TableCell align="right">
-                        <Typography
-                          variant="body2"
-                          sx={{ fontWeight: 600, color: saldo >= 0 ? "success.main" : "error.main" }}
-                        >
+                        <Typography variant="body2" sx={{ fontWeight: 600, color: saldo >= 0 ? "success.main" : "error.main" }}>
                           {saldo >= 0 ? "+" : ""}{saldo}
                         </Typography>
                       </TableCell>
@@ -440,9 +550,7 @@ const ReportsPage: React.FC<{ embedded?: boolean }> = ({ embedded = false }) => 
     <Box sx={embedded ? {} : { p: { xs: 1, sm: 2 } }}>
       {!embedded && (
         <>
-          <Typography variant="h5" sx={{ fontWeight: 700, mb: 2 }}>
-            Berichte & Analysen
-          </Typography>
+          <Typography variant="h5" sx={{ fontWeight: 700, mb: 2 }}>Berichte & Analysen</Typography>
           <Divider sx={{ mb: 2 }} />
         </>
       )}

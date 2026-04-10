@@ -85,9 +85,13 @@ export class ReportsController {
 
   @Get("consumption-trend")
   @Roles("MANAGER", "WAREHOUSE")
-  async consumptionTrend(@Req() req: any, @Query("months") monthsParam?: string) {
+  async consumptionTrend(
+    @Req() req: any,
+    @Query("months") monthsParam?: string,
+    @Query("itemId") itemId?: string,
+  ) {
     const months = monthsParam === "6" ? 6 : 12;
-    return this.reportsService.consumptionTrend(months, req.user?.branchId);
+    return this.reportsService.consumptionTrend(months, req.user?.branchId, itemId || null);
   }
 
   @Get("slow-movers/settings")
