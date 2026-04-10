@@ -43,7 +43,7 @@ import {
   type SlowMoverRow,
   type ConsumptionTrendEntry,
 } from "../utils/api";
-import { useAuthStore } from "../store/useAuthStore";
+import useAuthStore from "../store/useAuthStore";
 
 // ── Slow-Mover Tab ────────────────────────────────────────────────────────────
 
