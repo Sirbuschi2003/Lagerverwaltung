@@ -32,6 +32,10 @@ export class CreateUserDto {
   branchId?: string | null;
 
   @IsOptional()
+  @IsString()
+  warehouseId?: string | null;
+
+  @IsOptional()
   refreshInterval?: number;
 }
 

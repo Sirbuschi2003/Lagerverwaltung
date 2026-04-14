@@ -2,7 +2,7 @@
 import type { Request } from "express";
 
 interface UsersRequest extends Request {
-  user?: { id?: string; role?: string; branchId?: string | null };
+  user?: { id?: string; role?: string; branchId?: string | null; warehouseId?: string | null };
 }
 
 import { CurrentUser } from "../auth/decorators/current-user.decorator";
@@ -31,7 +31,8 @@ export class UsersController {
   @Roles("MANAGER")
   @Permissions("users.view")
   findAll(@Req() req: UsersRequest) {
-    return this.usersService.findAll(req.user?.branchId);
+    // Manager ohne warehouseId sieht alle User seiner Niederlassung
+    return this.usersService.findAll(req.user?.branchId, undefined);
   }
 
   @Get("me")
@@ -72,7 +73,9 @@ export class UsersController {
     const branchId = currentUser.branchId !== null
       ? (dto.branchId !== undefined ? dto.branchId : currentUser.branchId)
       : (dto.branchId !== undefined ? dto.branchId : null);
-    return this.usersService.create({ ...dto, branchId });
+    // warehouseId: immer aus DTO (Manager bestimmt das Lager beim Anlegen)
+    const warehouseId = dto.warehouseId ?? null;
+    return this.usersService.create({ ...dto, branchId, warehouseId } as any);
   }
 
   @Patch(":id")
@@ -82,7 +85,7 @@ export class UsersController {
     if (currentUser.role !== "MANAGER" && currentUser.id !== id) {
       throw new ForbiddenException("Keine Berechtigung");
     }
-    return this.usersService.update(id, dto);
+    return this.usersService.update(id, dto as any);
   }
 
   @Delete(":id")

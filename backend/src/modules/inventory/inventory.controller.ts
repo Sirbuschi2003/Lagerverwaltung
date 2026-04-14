@@ -18,7 +18,7 @@ import { FileInterceptor } from "@nestjs/platform-express";
 import { Request } from "express";
 
 interface InventoryRequest extends Request {
-  user?: { id?: string; role?: string; username?: string; vehicleId?: string | null; branchId?: string | null };
+  user?: { id?: string; role?: string; username?: string; vehicleId?: string | null; branchId?: string | null; warehouseId?: string | null };
 }
 
 import { Roles } from "../auth/decorators/roles.decorator";
@@ -54,13 +54,13 @@ export class InventoryController {
   @Get()
   @Roles("MANAGER", "WAREHOUSE", "TECHNICIAN")
   findSessions(@Req() req: InventoryRequest) {
-    return this.inventoryService.findSessions(req.user?.branchId);
+    return this.inventoryService.findSessions(req.user?.branchId, req.user?.warehouseId);
   }
 
   @Post("start")
   @Roles("MANAGER")
   startSession(@Body() dto: StartInventoryDto, @Req() req: InventoryRequest) {
-    return this.inventoryService.startSession({ ...dto, branchId: req.user?.branchId });
+    return this.inventoryService.startSession({ ...dto, branchId: req.user?.branchId, warehouseId: req.user?.warehouseId });
   }
 
   @Post("line")

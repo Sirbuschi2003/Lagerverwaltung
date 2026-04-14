@@ -30,7 +30,7 @@ import EditIcon from "@mui/icons-material/Edit";
 import useUsersStore from "../store/useUsersStore";
 import useVehiclesStore from "../store/useVehiclesStore";
 import useAuthStore from "../store/useAuthStore";
-import { fetchBranches, type BranchDto, type CreateUserRequest, type UpdateUserRequest, type UserDto } from "../utils/api";
+import { fetchBranches, fetchWarehouses, type BranchDto, type WarehouseDto, type CreateUserRequest, type UpdateUserRequest, type UserDto } from "../utils/api";
 
 const initialForm: CreateUserRequest = {
   username: "",
@@ -40,6 +40,7 @@ const initialForm: CreateUserRequest = {
   role: "TECHNICIAN",
   vehicleId: undefined,
   branchId: undefined,
+  warehouseId: undefined,
 };
 
 const UsersPage = () => {
@@ -57,6 +58,7 @@ const UsersPage = () => {
   const [deleteTarget, setDeleteTarget] = useState<UserDto | null>(null);
   const [availableRoles, setAvailableRoles] = useState<Array<{ id: number; name: string }>>([]);
   const [branches, setBranches] = useState<BranchDto[]>([]);
+  const [warehouses, setWarehouses] = useState<WarehouseDto[]>([]);
 
   useEffect(() => {
     void loadUsers();
@@ -64,6 +66,9 @@ const UsersPage = () => {
     void loadAvailableRoles();
     if (isSuperAdmin) {
       fetchBranches().then(setBranches).catch(() => {});
+    } else if (user?.branchId) {
+      // Branch-Manager: Lager seiner Niederlassung laden
+      fetchWarehouses({ branchId: user.branchId }).then(setWarehouses).catch(() => {});
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -112,7 +117,13 @@ const UsersPage = () => {
       role: u.role,
       vehicleId: u.vehicleId ?? undefined,
       branchId: u.branchId ?? undefined,
+      warehouseId: (u as any).warehouseId ?? undefined,
     });
+    // Lager der Niederlassung des Benutzers laden
+    const branchToLoad = u.branchId ?? user?.branchId;
+    if (branchToLoad) {
+      fetchWarehouses({ branchId: branchToLoad }).then(setWarehouses).catch(() => {});
+    }
     setError(null);
     setOpen(true);
   };
@@ -141,7 +152,19 @@ const UsersPage = () => {
 
   const handleBranchChange = (event: SelectChangeEvent<string>) => {
     const value = event.target.value;
-    setForm((prev: any) => ({ ...prev, branchId: value === "superadmin" ? null : value || undefined }));
+    const newBranchId = value === "superadmin" ? null : value || undefined;
+    setForm((prev: any) => ({ ...prev, branchId: newBranchId, warehouseId: undefined }));
+    // Lager der gewählten Niederlassung laden
+    if (newBranchId) {
+      fetchWarehouses({ branchId: newBranchId }).then(setWarehouses).catch(() => {});
+    } else {
+      setWarehouses([]);
+    }
+  };
+
+  const handleWarehouseChange = (event: SelectChangeEvent<string>) => {
+    const value = event.target.value;
+    setForm((prev: any) => ({ ...prev, warehouseId: value === "none" ? null : value || undefined }));
   };
 
   const validate = () => {
@@ -174,6 +197,7 @@ const UsersPage = () => {
           email: form.email?.trim() || undefined,
           role: form.role,
           vehicleId: form.vehicleId ?? null,
+          warehouseId: form.warehouseId ?? null,
         };
         if (isSuperAdmin && form.branchId !== undefined) {
           payload.branchId = form.branchId;
@@ -191,6 +215,7 @@ const UsersPage = () => {
           role: form.role,
           vehicleId: form.vehicleId,
           branchId: form.branchId,
+          warehouseId: form.warehouseId ?? null,
         };
         await addUser(payload);
       }
@@ -251,6 +276,7 @@ const UsersPage = () => {
               <TableCell>Benutzername</TableCell>
               <TableCell>Rolle</TableCell>
               {isSuperAdmin && <TableCell>Niederlassung</TableCell>}
+              <TableCell>Lager</TableCell>
               <TableCell>Fahrzeug</TableCell>
               <TableCell align="right">Aktionen</TableCell>
             </TableRow>
@@ -276,6 +302,18 @@ const UsersPage = () => {
                       )}
                     </TableCell>
                   )}
+                  <TableCell>
+                    {(u as any).warehouseId ? (
+                      <Chip
+                        label={warehouses.find((w) => w.id === (u as any).warehouseId)?.name ?? (u as any).warehouseId}
+                        size="small"
+                        color="primary"
+                        variant="outlined"
+                      />
+                    ) : (
+                      <Typography variant="body2" color="text.secondary">–</Typography>
+                    )}
+                  </TableCell>
                   <TableCell>{vehicle ? `${vehicle.licensePlate} - ${vehicle.description}` : "-"}</TableCell>
                   <TableCell align="right">
                     <Tooltip title="Bearbeiten">
@@ -383,6 +421,26 @@ const UsersPage = () => {
                       {branches.map((b) => (
                         <MenuItem key={b.id} value={b.id}>
                           {b.name}
+                        </MenuItem>
+                      ))}
+                    </Select>
+                  </FormControl>
+                </Grid>
+              )}
+              {/* Lager-Zuweisung: sichtbar wenn Niederlassung gewählt und Lager vorhanden */}
+              {(form.branchId || (!isSuperAdmin && warehouses.length > 0)) && warehouses.length > 0 && (
+                <Grid item xs={12} sm={isSuperAdmin ? 6 : 6}>
+                  <FormControl fullWidth>
+                    <InputLabel>Lager</InputLabel>
+                    <Select
+                      value={form.warehouseId ?? "none"}
+                      label="Lager"
+                      onChange={handleWarehouseChange}
+                    >
+                      <MenuItem value="none"><em>Kein Lager (Manager sieht alle)</em></MenuItem>
+                      {warehouses.map((w) => (
+                        <MenuItem key={w.id} value={w.id}>
+                          {w.name}{w.code ? ` (${w.code})` : ""}
                         </MenuItem>
                       ))}
                     </Select>

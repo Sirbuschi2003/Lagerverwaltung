@@ -14,8 +14,14 @@ export class UsersService {
     private readonly repository: Repository<User>,
   ) {}
 
-  findAll(branchId?: string | null): Promise<User[]> {
-    const where = branchId ? { branchId } : {};
+  findAll(branchId?: string | null, warehouseId?: string | null): Promise<User[]> {
+    // Manager ohne Warehouse-Zuweisung sieht alle User seiner Niederlassung
+    const where: Record<string, unknown> = {};
+    if (warehouseId) {
+      where.warehouseId = warehouseId;
+    } else if (branchId) {
+      where.branchId = branchId;
+    }
     return this.repository.find({ where, order: { displayName: "ASC" } });
   }
 
@@ -56,6 +62,7 @@ export class UsersService {
       role: dto.role,
       vehicleId: dto.vehicleId ?? null,
       branchId: dto.branchId ?? null,
+      warehouseId: (dto as any).warehouseId ?? null,
     });
     return this.repository.save(entity);
   }
@@ -69,6 +76,7 @@ export class UsersService {
       vehicleId: dto.vehicleId ?? null,
     };
     if (dto.branchId !== undefined) updateData.branchId = dto.branchId;
+    if ((dto as any).warehouseId !== undefined) updateData.warehouseId = (dto as any).warehouseId;
     const entity = await this.repository.preload(updateData);
 
     if (!entity) {

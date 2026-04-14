@@ -11,6 +11,7 @@
 import { InventoryLine } from "./inventory-line.entity";
 import { InventoryVehicleStatus } from "./inventory-vehicle-status.entity";
 import { Branch } from "../../branches/entities/branch.entity";
+import { Warehouse } from "../../warehouses/entities/warehouse.entity";
 
 export enum InventorySessionStatus {
   DRAFT = "DRAFT",
@@ -79,6 +80,14 @@ export class InventorySession {
   @ManyToOne(() => Branch, { nullable: true, onDelete: "RESTRICT", eager: false })
   @JoinColumn({ name: "branchId" })
   branch!: Branch | null;
+
+  /** Lager, das inventarisiert wird */
+  @Column({ type: "char", length: 36, nullable: true })
+  warehouseId!: string | null;
+
+  @ManyToOne(() => Warehouse, { nullable: true, onDelete: "SET NULL", eager: false })
+  @JoinColumn({ name: "warehouseId" })
+  warehouseObj!: Warehouse | null;
 
   @CreateDateColumn()
   createdAt!: Date;

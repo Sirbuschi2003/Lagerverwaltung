@@ -27,11 +27,15 @@
       "Bash(git add:*)",
       "Bash(git commit -m ':*)",
       "Bash(git push:*)",
-      "Bash(git commit:*)"
+      "Bash(git commit:*)",
+      "Bash(grep -E \"\\\\.\\(ts|tsx|js|jsx\\)$\")",
+      "Bash(grep -E \"\\\\.\\(tsx|ts\\)$\")",
+      "Bash(grep -i \"\\\\.\\(ts|js\\)$\")"
     ],
     "additionalDirectories": [
       "c:\\Users\\Thomas.Busche\\.claude\\projects\\c--Users-Thomas-Busche-Desktop-Code-Lagerverwaltung\\memory",
-      "c:\\Users\\Thomas.Busche\\Desktop\\Code\\Lagerverwaltung\\.github"
+      "c:\\Users\\Thomas.Busche\\Desktop\\Code\\Lagerverwaltung\\.github",
+      "c:\\Users\\Thomas.Busche\\Desktop\\Code\\Lagerverwaltung\\backend\\src\\modules\\warehouses"
     ]
   }
 }

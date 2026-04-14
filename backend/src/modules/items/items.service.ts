@@ -113,7 +113,7 @@ export class ItemsService {
     private readonly loggingService: LoggingService,
   ) {}
 
-  async findAll(params?: { page?: number; limit?: number; search?: string; manufacturer?: string; productGroup?: string; branchId?: string | null }) {
+  async findAll(params?: { page?: number; limit?: number; search?: string; manufacturer?: string; productGroup?: string; branchId?: string | null; warehouseId?: string | null }) {
     try {
       const page = Math.max(1, Number(params?.page) || 1);
       // Höheres Limit zulassen, damit Offline-Sync den kompletten Artikelstamm holen kann.
@@ -132,7 +132,10 @@ export class ItemsService {
         .addOrderBy("item.productGroup", "ASC")
         .addOrderBy("item.description", "ASC");
 
-      if (params?.branchId) {
+      // Lager-Filterung hat Vorrang: Benutzer mit warehouseId sieht nur sein Lager
+      if (params?.warehouseId) {
+        qb.andWhere("item.warehouseId = :warehouseId", { warehouseId: params.warehouseId });
+      } else if (params?.branchId) {
         qb.andWhere("item.branchId = :branchId", { branchId: params.branchId });
       }
 
@@ -232,13 +235,14 @@ export class ItemsService {
     return this.repository.count({ where: branchId ? { branchId } : undefined });
   }
 
-  async exportItemsCsv(params?: { search?: string; manufacturer?: string; productGroup?: string; branchId?: string | null }): Promise<Buffer> {
+  async exportItemsCsv(params?: { search?: string; manufacturer?: string; productGroup?: string; branchId?: string | null; warehouseId?: string | null }): Promise<Buffer> {
     const { items } = await this.findAll({
       limit: 200000,
       search: params?.search,
       manufacturer: params?.manufacturer,
       productGroup: params?.productGroup,
       branchId: params?.branchId,
+      warehouseId: params?.warehouseId,
     });
 
     const headers = [
@@ -352,9 +356,10 @@ export class ItemsService {
     }
   }
 
-  async create(dto: CreateItemDto & { branchId?: string | null }): Promise<Item> {
-    const { alternateCodes, storageLocationId, supplierId, price, packSize, orderQuantity, currentQuantity: _currentQuantity, branchId, ...rest } = dto;
+  async create(dto: CreateItemDto & { branchId?: string | null; warehouseId?: string | null }): Promise<Item> {
+    const { alternateCodes, storageLocationId, supplierId, price, packSize, orderQuantity, currentQuantity: _currentQuantity, branchId, warehouseId, ...rest } = dto;
     const effectiveBranchId = branchId ?? null;
+    const effectiveWarehouseId = warehouseId ?? null;
     const existsWhere: Record<string, unknown> = { code: rest.code };
     if (effectiveBranchId) existsWhere.branchId = effectiveBranchId;
     else existsWhere.branchId = IsNull();
@@ -375,6 +380,7 @@ export class ItemsService {
       packSize: packSize !== undefined ? packSize : null,
       orderQuantity: orderQuantity !== undefined && Number(orderQuantity) > 0 ? orderQuantity : null,
       branchId: effectiveBranchId,
+      warehouseId: effectiveWarehouseId,
     });
     const codes = sanitizeCodes(alternateCodes);
     if (codes.length > 0) {
@@ -390,8 +396,8 @@ export class ItemsService {
     return this.repository.save(entity);
   }
 
-  async previewBulk(dtos: CreateItemDto[], branchId?: string | null): Promise<BulkImportPreviewResult> {
-    const analysis = await this.analyzeBulkImport(dtos, branchId);
+  async previewBulk(dtos: CreateItemDto[], branchId?: string | null, warehouseId?: string | null): Promise<BulkImportPreviewResult> {
+    const analysis = await this.analyzeBulkImport(dtos, branchId, warehouseId);
     return {
       created: analysis.created,
       updated: analysis.updated,
@@ -401,8 +407,8 @@ export class ItemsService {
     };
   }
 
-  async createBulk(dtos: CreateItemDto[], branchId?: string | null): Promise<{ created: number; updated: number; skipped: number; errors: string[] }> {
-    const analysis = await this.analyzeBulkImport(dtos, branchId);
+  async createBulk(dtos: CreateItemDto[], branchId?: string | null, warehouseId?: string | null): Promise<{ created: number; updated: number; skipped: number; errors: string[] }> {
+    const analysis = await this.analyzeBulkImport(dtos, branchId, warehouseId);
     const result = {
       created: 0,
       updated: 0,
@@ -424,6 +430,7 @@ export class ItemsService {
       const entity = this.repository.create({
         code: normalized.code,
         branchId: branchId ?? null,
+        warehouseId: warehouseId ?? null,
         description: normalized.description,
         descriptionSecondary: normalized.descriptionSecondary,
         manufacturer: normalized.manufacturer,
@@ -530,7 +537,7 @@ export class ItemsService {
     return result;
   }
 
-  private async analyzeBulkImport(dtos: CreateItemDto[], branchId?: string | null): Promise<BulkImportAnalysis> {
+  private async analyzeBulkImport(dtos: CreateItemDto[], branchId?: string | null, warehouseId?: string | null): Promise<BulkImportAnalysis> {
     const result: BulkImportAnalysis = {
       created: 0,
       updated: 0,
@@ -872,11 +879,18 @@ export class ItemsService {
     );
   }
 
-  async removeAll(branchId?: string | null): Promise<{ deleted: number }> {
+  async removeAll(branchId?: string | null, warehouseId?: string | null): Promise<{ deleted: number }> {
     try {
       this.logger.log("Starte removeAll-Operation");
 
-      const whereClause = branchId ? { branchId } : { branchId: IsNull() };
+      let whereClause: Record<string, unknown>;
+      if (warehouseId) {
+        whereClause = { warehouseId };
+      } else if (branchId) {
+        whereClause = { branchId };
+      } else {
+        whereClause = { branchId: IsNull() };
+      }
       const itemCount = await this.repository.count({ where: whereClause });
       this.logger.log(`Gefundene Artikel vor Loeschung: ${itemCount}`);
 
