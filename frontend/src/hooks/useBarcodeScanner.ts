@@ -9,7 +9,7 @@ interface UseBarcodeScannerProps {
   cooldownMs?: number;
 }
 
-const PREFERRED_DEVICE_KEY = "kfz-app-preferred-camera";
+const PREFERRED_DEVICE_KEY = "lv-app-preferred-camera";
 const PREFERRED_DEVICE_VERSION = 3;
 const SCAN_INTERVAL_MS = 80;
 const MIN_ACCEPTABLE_CAMERA_SCORE = 600;

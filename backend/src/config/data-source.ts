@@ -15,7 +15,7 @@ export const AppDataSource = new DataSource({
   port: configService.get('DB_PORT', 3306),
   username: configService.get('DB_USER', 'root'),
   password: configService.get('DB_PASSWORD', ''),
-  database: configService.get('DB_NAME', 'kfz_verwaltung'),
+  database: configService.get('DB_NAME', 'lagerverwaltung'),
   entities: [
     isTs
       ? join(__dirname, '..', '**', '*.entity.ts')

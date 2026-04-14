@@ -1,6 +1,6 @@
 ﻿import { offlineStorage } from "../store/useOfflineStorage";
 
-const STORAGE_PREFIX = "kfz-offline-";
+const STORAGE_PREFIX = "lv-offline-";
 const MIGRATION_FLAG = `${STORAGE_PREFIX}migrated-idb-v1`;
 
 const getStorageKey = (key: string) => `${STORAGE_PREFIX}${key}`;

@@ -815,7 +815,7 @@ export class InventoryTemplateService {
     const totalsCtx = (context.totals ?? {}) as any;
     const companyCtx = (context.company ?? {}) as any;
 
-    const companyName = companyCtx?.name || "KFZ Teilelager";
+    const companyName = companyCtx?.name || "Lagerverwaltung";
     const technicianName = sessionCtx?.vehicle?.technician?.displayName || sessionCtx?.createdBy || "";
     const vehiclePlate = sessionCtx?.vehicle?.licensePlate || "";
 

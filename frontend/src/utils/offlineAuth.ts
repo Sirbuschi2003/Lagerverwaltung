@@ -14,8 +14,8 @@ interface OfflineCredentials {
   lastSync: number;
 }
 
-const OFFLINE_CREDS_KEY = 'kfz-offline-credentials';
-const OFFLINE_TOKEN_KEY = 'kfz-offline-token';
+const OFFLINE_CREDS_KEY = 'lv-offline-credentials';
+const OFFLINE_TOKEN_KEY = 'lv-offline-token';
 
 interface OfflineTokenPayload extends Record<string, unknown> {
   exp?: number;

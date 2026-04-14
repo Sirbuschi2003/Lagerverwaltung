@@ -131,7 +131,7 @@ const BackupPage = () => {
       }
       
       const backup = await response.json();
-      const filename = `kfz-backup-${new Date().toISOString().split('T')[0]}.json`;
+      const filename = `lagerverwaltung-backup-${new Date().toISOString().split('T')[0]}.json`;
       const blob = new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json' });
       const url = window.URL.createObjectURL(blob);
       const link = document.createElement('a');

@@ -115,7 +115,7 @@ const useAuthStore = create<AuthState>()(
           // Refresh-Token wird jetzt als HttpOnly-Cookie vom Backend verwaltet (sicherer als localStorage)
 
           // Alte Cache-Keys bereinigen
-          localStorage.removeItem('kfz-offline-vehicleId');
+          localStorage.removeItem('lv-offline-vehicleId');
 
           api.defaults.headers.common.Authorization = `Bearer ${accessToken}`;
           set({ token: accessToken, refreshToken: null, user, lastActivity: Date.now() });
@@ -213,9 +213,9 @@ const useAuthStore = create<AuthState>()(
         SecurityLogger.logSecurityEvent('logout', { userId: get().user?.id });
 
         // Benutzer-abhaengige Cache-Keys bereinigen
-        localStorage.removeItem('kfz-offline-vehicleId');
+        localStorage.removeItem('lv-offline-vehicleId');
         Object.keys(localStorage).forEach(key => {
-          if (key.startsWith('kfz-offline-vehicleId-')) {
+          if (key.startsWith('lv-offline-vehicleId-')) {
             localStorage.removeItem(key);
           }
         });

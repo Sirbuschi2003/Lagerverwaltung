@@ -13,9 +13,9 @@ services:
       - --authentication-policy=caching_sha2_password
     environment:
       MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-changeMeRoot}
-      MYSQL_DATABASE: ${MYSQL_DATABASE:-kfz_parts}
-      MYSQL_USER: ${MYSQL_USER:-kfzparts}
-      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-kfzparts}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-lagerverwaltung}
+      MYSQL_USER: ${MYSQL_USER:-lagerverwaltung}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-lagerverwaltung}
     volumes:
       - mysql_data:/var/lib/mysql
     ports:
@@ -46,9 +46,9 @@ services:
       PORT: 3000
       DB_HOST: mysql
       DB_PORT: 3306
-      DB_USER: ${MYSQL_USER:-kfzparts}
-      DB_PASSWORD: ${MYSQL_PASSWORD:-kfzparts}
-      DB_NAME: ${MYSQL_DATABASE:-kfz_parts}
+      DB_USER: ${MYSQL_USER:-lagerverwaltung}
+      DB_PASSWORD: ${MYSQL_PASSWORD:-lagerverwaltung}
+      DB_NAME: ${MYSQL_DATABASE:-lagerverwaltung}
       DB_SYNCHRONIZE: false
       DB_MIGRATIONS_RUN: true
       JWT_SECRET: ${BACKEND_JWT_SECRET:-super-secret}

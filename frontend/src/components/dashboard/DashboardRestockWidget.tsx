@@ -86,12 +86,12 @@ const DashboardRestockWidget: React.FC = () => {
 
   const vehicleId = useMemo(() => {
     if (user?.vehicleId) {
-      const cacheKey = `kfz-offline-vehicleId-${user.id}`;
+      const cacheKey = `lv-offline-vehicleId-${user.id}`;
       localStorage.setItem(cacheKey, user.vehicleId);
       return user.vehicleId;
     }
     if (user?.id) {
-      const cacheKey = `kfz-offline-vehicleId-${user.id}`;
+      const cacheKey = `lv-offline-vehicleId-${user.id}`;
       return localStorage.getItem(cacheKey);
     }
     return null;
@@ -123,7 +123,7 @@ const DashboardRestockWidget: React.FC = () => {
       return;
     }
 
-    const cacheKey = `kfz-dashboard-stock-${vehicleId}`;
+    const cacheKey = `lv-dashboard-stock-${vehicleId}`;
 
     if (!navigator.onLine) {
       try {

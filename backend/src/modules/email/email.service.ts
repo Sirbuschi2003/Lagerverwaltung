@@ -176,15 +176,15 @@ export class EmailService {
   async sendTestEmail(to: string, branchId?: string | null): Promise<void> {
     await this.sendEmail({
       to,
-      subject: 'KFZ Teilelager - Test Email',
+      subject: 'Lagerverwaltung - Test Email',
       html: `
         <h2>Email-Test erfolgreich</h2>
-        <p>Diese Test-Email wurde erfolgreich vom KFZ Teilelager System gesendet.</p>
+        <p>Diese Test-Email wurde erfolgreich vom Lagerverwaltung System gesendet.</p>
         <p><strong>Zeitstempel:</strong> ${new Date().toLocaleString('de-DE')}</p>
         <hr>
-        <p><small>KFZ Teilelager System</small></p>
+        <p><small>Lagerverwaltung System</small></p>
       `,
-      text: `Email-Test erfolgreich\n\nZeitstempel: ${new Date().toLocaleString('de-DE')}\n\nKFZ Teilelager System`,
+      text: `Email-Test erfolgreich\n\nZeitstempel: ${new Date().toLocaleString('de-DE')}\n\nLagerverwaltung System`,
     }, branchId);
   }
 
@@ -195,17 +195,17 @@ export class EmailService {
     const resetUrl = `${process.env.FRONTEND_URL || 'http://localhost:3000'}/reset-password?token=${resetToken}`;
     await this.sendEmail({
       to,
-      subject: 'KFZ Teilelager - Passwort zurücksetzen',
+      subject: 'Lagerverwaltung - Passwort zurücksetzen',
       html: `
         <h2>Passwort zurücksetzen</h2>
         <p>Hallo <strong>${username}</strong>,</p>
-        <p>Sie haben eine Passwort-Zurücksetzung für Ihr KFZ Teilelager Konto angefordert.</p>
+        <p>Sie haben eine Passwort-Zurücksetzung für Ihr Lagerverwaltung Konto angefordert.</p>
         <p><a href="${resetUrl}" style="background-color: #1976d2; color: white; padding: 10px 20px; text-decoration: none; border-radius: 4px;">Passwort zurücksetzen</a></p>
         <p>Dieser Link ist für <strong>24 Stunden</strong> gültig.</p>
         <hr>
-        <p><small>KFZ Teilelager System</small></p>
+        <p><small>Lagerverwaltung System</small></p>
       `,
-      text: `Passwort zurücksetzen\n\nHallo ${username},\n\n${resetUrl}\n\nKFZ Teilelager System`,
+      text: `Passwort zurücksetzen\n\nHallo ${username},\n\n${resetUrl}\n\nLagerverwaltung System`,
     });
   }
 

@@ -126,7 +126,7 @@ export class ExportService {
 
   async exportInventoryProtocolXlsx(session: InventorySession, movements: StockMovement[]): Promise<Buffer> {
     const wb = new ExcelJS.Workbook();
-    wb.creator = 'KFZ Teilelager';
+    wb.creator = 'Lagerverwaltung';
     wb.created = new Date();
 
     // Blatt 1: Inventur-Positionen
@@ -224,7 +224,7 @@ export class ExportService {
     async exportVehicleStockQrCatalogToPdf(stockLevels: StockLevel[], meta?: { vehicle?: string; technician?: string }): Promise<Buffer> {
       const company = await this.systemConfigService.getCompanyConfig();
       const tpl = await this.systemConfigService.getVehicleQrTemplateConfig();
-      const effectiveTitle = (tpl.title?.trim() || (company.name?.trim() || "KFZ Teilelager") + " - QR-Katalog (Wagenbestand)");
+      const effectiveTitle = (tpl.title?.trim() || (company.name?.trim() || "Lagerverwaltung") + " - QR-Katalog (Wagenbestand)");
       const items = stockLevels
         .filter(l => !!l.item)
         .map(l => l.item!)
@@ -404,7 +404,7 @@ export class ExportService {
 
   async exportItemsQrCatalogToPdf(items: Item[]): Promise<Buffer> {
     const company = await this.systemConfigService.getCompanyConfig();
-    const title = (company.name?.trim() || "KFZ Teilelager") + " - QR-Katalog";
+    const title = (company.name?.trim() || "Lagerverwaltung") + " - QR-Katalog";
 
     // Sortierung nach Hersteller, Warengruppe, Beschreibung
     const sorted = [...items].sort((a, b) =>
@@ -505,7 +505,7 @@ export class ExportService {
     groups: ReturnType<typeof groupInventoryLines>,
     company: { name: string | null; logoDataUrl: string | null },
   ) {
-    const title = company.name?.trim() || "KFZ Teilelager";
+    const title = company.name?.trim() || "Lagerverwaltung";
 
     const renderPageHeader = () => {
       if (company.logoDataUrl) {
@@ -746,7 +746,7 @@ export class ExportService {
       </head>
       <body>
         <div class="header">
-          <h1>KFZ Teilelager - Bewegungsbericht</h1>
+          <h1>Lagerverwaltung - Bewegungsbericht</h1>
           <div class="date">Erstellt am: ${new Date().toLocaleString('de-DE')}</div>
         </div>
         <table>
@@ -808,7 +808,7 @@ export class ExportService {
       </head>
       <body>
         <div class="header">
-          <h1>KFZ Teilelager - Bestandsbericht</h1>
+          <h1>Lagerverwaltung - Bestandsbericht</h1>
           <div class="date">Erstellt am: ${new Date().toLocaleString('de-DE')}</div>
         </div>
         <table>
@@ -870,7 +870,7 @@ export class ExportService {
       </head>
       <body>
         <div class="header">
-          <h1>KFZ Teilelager - Inventurbericht</h1>
+          <h1>Lagerverwaltung - Inventurbericht</h1>
           <div class="date">Erstellt am: ${new Date().toLocaleString('de-DE')}</div>
         </div>
         <div class="session-info">
@@ -947,7 +947,7 @@ export class ExportService {
     }
 
     // Prepare template data
-    const title = (company.name?.trim() || "KFZ Teilelager") + " - QR-Katalog";
+    const title = (company.name?.trim() || "Lagerverwaltung") + " - QR-Katalog";
     const subtitle = `Erstellt am ${new Date().toLocaleString('de-DE')}`;
 
     // Replace placeholders using simple string replacement (Mustache-style)

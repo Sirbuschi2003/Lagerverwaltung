@@ -12,7 +12,7 @@ interface DashboardState {
   loadSummary: () => Promise<void>;
 }
 
-const CACHE_KEY = "kfz-dashboard-summary";
+const CACHE_KEY = "lv-dashboard-summary";
 
 const defaultSummary: DashboardSummary = {
   totalItems: 0,

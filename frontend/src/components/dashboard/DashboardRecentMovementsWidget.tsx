@@ -26,7 +26,7 @@ const DashboardRecentMovementsWidget: React.FC = () => {
   useEffect(() => {
     if (!userId) return;
 
-    const cacheKey = `kfz-dashboard-movements-${userId}`;
+    const cacheKey = `lv-dashboard-movements-${userId}`;
 
     if (!navigator.onLine) {
       try {

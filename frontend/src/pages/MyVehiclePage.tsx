@@ -208,14 +208,14 @@ const MyVehiclePage = () => {
     // Zuerst versuche vom user Objekt
     if (user?.vehicleId) {
       // SICHERHEITSFIX: Benutzerabhängiger Cache-Key
-      const cacheKey = `kfz-offline-vehicleId-${user.id}`;
+      const cacheKey = `lv-offline-vehicleId-${user.id}`;
       localStorage.setItem(cacheKey, user.vehicleId);
       return user.vehicleId;
     }
     
     // Fallback auf localStorage NUR für denselben Benutzer
     if (user?.id) {
-      const cacheKey = `kfz-offline-vehicleId-${user.id}`;
+      const cacheKey = `lv-offline-vehicleId-${user.id}`;
       const cached = localStorage.getItem(cacheKey);
       console.log('[MyVehiclePage] VehicleId from user:', user?.vehicleId, 'from user-specific cache:', cached);
       return cached;

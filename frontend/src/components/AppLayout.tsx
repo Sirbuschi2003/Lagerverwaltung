@@ -24,13 +24,13 @@ const AppLayout = () => {
 
   const getVehicleId = () => {
     if (user?.vehicleId && user?.id) {
-      const cacheKey = `kfz-offline-vehicleId-${user.id}`;
+      const cacheKey = `lv-offline-vehicleId-${user.id}`;
       localStorage.setItem(cacheKey, user.vehicleId);
       return user.vehicleId;
     }
 
     if (user?.id) {
-      const cacheKey = `kfz-offline-vehicleId-${user.id}`;
+      const cacheKey = `lv-offline-vehicleId-${user.id}`;
       return localStorage.getItem(cacheKey);
     }
 

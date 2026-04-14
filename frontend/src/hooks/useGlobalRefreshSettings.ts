@@ -7,7 +7,7 @@ export interface RefreshSettings {
   lastUpdated: Date;
 }
 
-const STORAGE_KEY = 'kfz-refresh-settings';
+const STORAGE_KEY = 'lv-refresh-settings';
 const DEFAULT_INTERVAL = 15000; // 15 Sekunden
 
 /**

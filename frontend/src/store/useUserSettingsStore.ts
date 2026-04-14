@@ -2,7 +2,7 @@ import { create } from "zustand";
 import { fetchUserSettings, saveUserSettings } from "../utils/api";
 
 const PRIVACY_LS_KEY = "privacyAcceptedVersion";
-const SETTINGS_LS_KEY = "kfz-user-settings";
+const SETTINGS_LS_KEY = "lv-user-settings";
 
 export type DashboardWidgetId = "kpi" | "quick-actions" | "restock" | "recent-movements";
 

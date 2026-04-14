@@ -36,7 +36,7 @@ interface NavigatorWithConnection extends Navigator {
   };
 }
 
-const DB_NAME = "kfz-parts-offline";
+const DB_NAME = "lagerverwaltung-offline";
 const STORE_NAME = "movements";
 
 const getDb = async (): Promise<IDBPDatabase> => {

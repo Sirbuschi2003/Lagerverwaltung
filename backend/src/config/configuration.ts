@@ -1,14 +1,14 @@
 export default () => ({
   app: {
-    name: "KFZ Parts Inventory",
+    name: "Lagerverwaltung",
     port: parseInt(process.env.PORT ?? "3000", 10),
   },
   database: {
     host: process.env.DB_HOST ?? "mysql",
     port: parseInt(process.env.DB_PORT ?? "3306", 10),
-    user: process.env.DB_USER ?? "kfzparts",
-    password: process.env.DB_PASSWORD ?? "kfzparts",
-    name: process.env.DB_NAME ?? "kfz_parts",
+    user: process.env.DB_USER ?? "lagerverwaltung",
+    password: process.env.DB_PASSWORD ?? "lagerverwaltung",
+    name: process.env.DB_NAME ?? "lagerverwaltung",
     synchronize: (process.env.DB_SYNCHRONIZE ?? "false").toLowerCase() === "true",
     migrationsRun: (process.env.DB_MIGRATIONS_RUN ?? "true").toLowerCase() === "true",
   },

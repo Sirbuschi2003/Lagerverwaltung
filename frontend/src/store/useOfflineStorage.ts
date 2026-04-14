@@ -1,6 +1,6 @@
 import { openDB, IDBPDatabase } from "idb";
 
-const DB_NAME = "kfz-parts-cache";
+const DB_NAME = "lagerverwaltung-cache";
 const DB_VERSION = 1;
 
 interface CacheEntry<T = any> {
