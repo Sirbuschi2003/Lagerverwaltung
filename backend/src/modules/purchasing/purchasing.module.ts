@@ -6,6 +6,7 @@ import { LocationsModule } from "../locations/locations.module";
 import { StockModule } from "../stock/stock.module";
 import { SuppliersModule } from "../suppliers/suppliers.module";
 import { Branch } from "../branches/entities/branch.entity";
+import { Location } from "../locations/entities/location.entity";
 import { StockLevel } from "../stock/entities/stock-level.entity";
 import { Supplier } from "../suppliers/entities/supplier.entity";
 import { Item } from "../items/entities/item.entity";
@@ -20,7 +21,7 @@ import { LoggingModule } from "../logging/logging.module";
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([PurchaseOrder, PurchaseOrderLine, Supplier, StockLevel, Item, Branch]),
+    TypeOrmModule.forFeature([PurchaseOrder, PurchaseOrderLine, Supplier, StockLevel, Item, Branch, Location]),
     AccessControlModule,
     EmailModule,
     ItemsModule,

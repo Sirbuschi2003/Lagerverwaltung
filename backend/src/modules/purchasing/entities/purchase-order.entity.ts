@@ -12,6 +12,7 @@ import {
 import { Supplier } from "../../suppliers/entities/supplier.entity";
 import { PurchaseOrderLine } from "./purchase-order-line.entity";
 import { Branch } from "../../branches/entities/branch.entity";
+import { Location } from "../../locations/entities/location.entity";
 
 export const PURCHASE_ORDER_STATUSES = ["DRAFT", "ORDERED", "RECEIVED", "CANCELLED", "ARCHIVED"] as const;
 export type PurchaseOrderStatus = (typeof PURCHASE_ORDER_STATUSES)[number];
@@ -51,6 +52,13 @@ export class PurchaseOrder {
   @ManyToOne(() => Branch, { nullable: true, onDelete: "RESTRICT", eager: false })
   @JoinColumn({ name: "branchId" })
   branch!: Branch | null;
+
+  @Column({ type: "char", length: 36, nullable: true })
+  locationId!: string | null;
+
+  @ManyToOne(() => Location, { nullable: true, onDelete: "SET NULL", eager: false })
+  @JoinColumn({ name: "locationId" })
+  location!: Location | null;
 
   @CreateDateColumn()
   createdAt!: Date;

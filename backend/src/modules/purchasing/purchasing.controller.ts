@@ -87,7 +87,9 @@ export class PurchasingController {
   @Post()
   @Permissions("orders.create")
   create(@Body() dto: CreatePurchaseOrderDto, @Req() req: PurchasingRequest) {
-    return this.purchasingService.create({ ...dto, branchId: req.user?.branchId });
+    // Erstes Lager des Benutzers als Zuordnung speichern (null = kein Lager-Filter)
+    const locationId = req.user?.locationIds?.length ? req.user.locationIds[0] : null;
+    return this.purchasingService.create({ ...dto, branchId: req.user?.branchId, locationId });
   }
 
   @Patch(":id")

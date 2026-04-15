@@ -68,6 +68,8 @@ export class PurchasingService {
     private readonly itemsRepository: Repository<Item>,
     @InjectRepository(Branch)
     private readonly branchesRepository: Repository<Branch>,
+    @InjectRepository(Location)
+    private readonly locationsRepository: Repository<Location>,
     private readonly itemsService: ItemsService,
     private readonly locationsService: LocationsService,
     private readonly stockService: StockService,
@@ -94,6 +96,14 @@ export class PurchasingService {
 
     if (params?.branchId) {
       qb.andWhere("order.branchId = :branchId", { branchId: params.branchId });
+    }
+
+    // Lager-Filter: nur Bestellungen des eigenen Lagers oder ohne Lager-Zuordnung
+    if (params?.locationIds?.length) {
+      qb.andWhere(
+        "(order.locationId IN (:...locationIds) OR order.locationId IS NULL)",
+        { locationIds: params.locationIds },
+      );
     }
 
     if (params?.status) {
@@ -143,6 +153,7 @@ export class PurchasingService {
     note?: string;
     lines: Array<{ itemId: string; quantity: number; packSize?: number }>;
     branchId?: string | null;
+    locationId?: string | null;
   }) {
     const supplier = await this.supplierRepository.findOne({ where: { id: payload.supplierId } });
     if (!supplier) {
@@ -183,6 +194,7 @@ export class PurchasingService {
       note: payload.note?.trim() || null,
       lines,
       branchId: payload.branchId ?? null,
+      locationId: payload.locationId ?? null,
     });
 
     const saved = await this.ordersRepository.save(order);
@@ -813,7 +825,7 @@ export class PurchasingService {
     }
 
     try {
-      // Lookup-Map: relPath → Supplier-Info (sowohl neue als auch alte Pfade)
+      // Lookup-Map: relPath → Supplier-Info (neue, mittlere und alte Pfade)
       const fileToSupplier = new Map<string, { supplierId: string | null; supplierName: string | null }>();
       const allOrders = await this.ordersRepository.find({ where: branchId ? { branchId } : undefined });
       for (const order of allOrders) {
@@ -822,10 +834,13 @@ export class PurchasingService {
         const year = String(refDate.getFullYear());
         const month = String(refDate.getMonth() + 1).padStart(2, '0');
         const branchFolder = await this.getBranchFolder(order.branchId);
+        const locationFolder = await this.getLocationFolder(order.locationId);
         const entry = { supplierId: order.supplier?.id ?? null, supplierName: order.supplier?.name ?? null };
-        // Neuer Pfad: branchFolder/YYYY/MM/filename.pdf
+        // Aktuelle Struktur: branchFolder/locationFolder/YYYY/MM/filename.pdf
+        fileToSupplier.set(`${branchFolder}/${locationFolder}/${year}/${month}/${filename}`, entry);
+        // Mittlere Struktur (ohne Lager): branchFolder/YYYY/MM/filename.pdf
         fileToSupplier.set(`${branchFolder}/${year}/${month}/${filename}`, entry);
-        // Alter Pfad (Rückwärtskompatibilität): YYYY/filename.pdf
+        // Älteste Struktur: YYYY/filename.pdf
         fileToSupplier.set(`${year}/${filename}`, entry);
       }
 
@@ -857,40 +872,77 @@ export class PurchasingService {
             });
           }
         } else {
-          // Neue Struktur: branchFolder/YYYY/MM/filename.pdf
+          // Struktur: branchFolder/[locationFolder/]YYYY/MM/filename.pdf
           const branchFolderName = topEntry.name;
           const branchPath = path.join(storagePath, branchFolderName);
-          let yearDirs: Dirent<string>[] = [];
-          try { yearDirs = await fs.readdir(branchPath, { withFileTypes: true }); } catch { continue; }
+          let branchSubDirs: Dirent<string>[] = [];
+          try { branchSubDirs = await fs.readdir(branchPath, { withFileTypes: true }); } catch { continue; }
 
-          for (const yearDir of yearDirs) {
-            if (!yearDir.isDirectory() || !/^\d{4}$/.test(yearDir.name)) continue;
-            const year = Number.parseInt(yearDir.name, 10);
-            if (params?.year && year !== params.year) continue;
-            const yearPath = path.join(branchPath, yearDir.name);
-            let monthDirs: Dirent<string>[] = [];
-            try { monthDirs = await fs.readdir(yearPath, { withFileTypes: true }); } catch { continue; }
+          for (const branchSub of branchSubDirs) {
+            if (!branchSub.isDirectory()) continue;
 
-            for (const monthDir of monthDirs) {
-              if (!monthDir.isDirectory() || !/^\d{2}$/.test(monthDir.name)) continue;
-              const month = Number.parseInt(monthDir.name, 10);
-              const monthPath = path.join(yearPath, monthDir.name);
-              let files: Dirent<string>[] = [];
-              try { files = await fs.readdir(monthPath, { withFileTypes: true }); } catch { continue; }
-
-              for (const file of files) {
-                if (!file.isFile() || !this.isValidOrderDocumentFilename(file.name)) continue;
-                const relPath = `${branchFolderName}/${yearDir.name}/${monthDir.name}/${file.name}`;
-                const mappedSupplier = fileToSupplier.get(relPath);
-                if (params?.supplierId && mappedSupplier?.supplierId !== params.supplierId) continue;
-                const stats = await fs.stat(path.join(monthPath, file.name));
-                documents.push({
-                  year, month, filename: file.name, path: relPath, size: stats.size,
-                  created: stats.mtime.toISOString(),
-                  supplierId: mappedSupplier?.supplierId ?? null,
-                  supplierName: mappedSupplier?.supplierName ?? null,
-                  branchFolder: branchFolderName,
-                });
+            if (/^\d{4}$/.test(branchSub.name)) {
+              // Mittlere Struktur: branchFolder/YYYY/MM/filename.pdf
+              const year = Number.parseInt(branchSub.name, 10);
+              if (params?.year && year !== params.year) continue;
+              const yearPath = path.join(branchPath, branchSub.name);
+              let monthDirs: Dirent<string>[] = [];
+              try { monthDirs = await fs.readdir(yearPath, { withFileTypes: true }); } catch { continue; }
+              for (const monthDir of monthDirs) {
+                if (!monthDir.isDirectory() || !/^\d{2}$/.test(monthDir.name)) continue;
+                const month = Number.parseInt(monthDir.name, 10);
+                const monthPath = path.join(yearPath, monthDir.name);
+                let files: Dirent<string>[] = [];
+                try { files = await fs.readdir(monthPath, { withFileTypes: true }); } catch { continue; }
+                for (const file of files) {
+                  if (!file.isFile() || !this.isValidOrderDocumentFilename(file.name)) continue;
+                  const relPath = `${branchFolderName}/${branchSub.name}/${monthDir.name}/${file.name}`;
+                  const mappedSupplier = fileToSupplier.get(relPath);
+                  if (params?.supplierId && mappedSupplier?.supplierId !== params.supplierId) continue;
+                  const stats = await fs.stat(path.join(monthPath, file.name));
+                  documents.push({
+                    year, month, filename: file.name, path: relPath, size: stats.size,
+                    created: stats.mtime.toISOString(),
+                    supplierId: mappedSupplier?.supplierId ?? null,
+                    supplierName: mappedSupplier?.supplierName ?? null,
+                    branchFolder: branchFolderName,
+                  });
+                }
+              }
+            } else {
+              // Aktuelle Struktur: branchFolder/locationFolder/YYYY/MM/filename.pdf
+              const locationFolderName = branchSub.name;
+              const locationPath = path.join(branchPath, locationFolderName);
+              let yearDirs: Dirent<string>[] = [];
+              try { yearDirs = await fs.readdir(locationPath, { withFileTypes: true }); } catch { continue; }
+              for (const yearDir of yearDirs) {
+                if (!yearDir.isDirectory() || !/^\d{4}$/.test(yearDir.name)) continue;
+                const year = Number.parseInt(yearDir.name, 10);
+                if (params?.year && year !== params.year) continue;
+                const yearPath = path.join(locationPath, yearDir.name);
+                let monthDirs: Dirent<string>[] = [];
+                try { monthDirs = await fs.readdir(yearPath, { withFileTypes: true }); } catch { continue; }
+                for (const monthDir of monthDirs) {
+                  if (!monthDir.isDirectory() || !/^\d{2}$/.test(monthDir.name)) continue;
+                  const month = Number.parseInt(monthDir.name, 10);
+                  const monthPath = path.join(yearPath, monthDir.name);
+                  let files: Dirent<string>[] = [];
+                  try { files = await fs.readdir(monthPath, { withFileTypes: true }); } catch { continue; }
+                  for (const file of files) {
+                    if (!file.isFile() || !this.isValidOrderDocumentFilename(file.name)) continue;
+                    const relPath = `${branchFolderName}/${locationFolderName}/${yearDir.name}/${monthDir.name}/${file.name}`;
+                    const mappedSupplier = fileToSupplier.get(relPath);
+                    if (params?.supplierId && mappedSupplier?.supplierId !== params.supplierId) continue;
+                    const stats = await fs.stat(path.join(monthPath, file.name));
+                    documents.push({
+                      year, month, filename: file.name, path: relPath, size: stats.size,
+                      created: stats.mtime.toISOString(),
+                      supplierId: mappedSupplier?.supplierId ?? null,
+                      supplierName: mappedSupplier?.supplierName ?? null,
+                      branchFolder: branchFolderName,
+                    });
+                  }
+                }
               }
             }
           }
@@ -1304,6 +1356,17 @@ export class PurchasingService {
     return code || name || '_ALLGEMEIN';
   }
 
+  /** Ordnername für ein Lager (sicher für Dateisystem), z.B. "002_Tonerlager" */
+  private async getLocationFolder(locationId: string | null | undefined): Promise<string> {
+    if (!locationId) return '_ALLE_LAGER';
+    const loc = await this.locationsRepository.findOne({ where: { id: locationId } });
+    if (!loc) return '_ALLE_LAGER';
+    const code = this.sanitizeStorageToken(loc.code).substring(0, 10).toUpperCase();
+    const name = this.sanitizeStorageToken(loc.name ?? '').substring(0, 20);
+    if (code && name) return `${code}_${name}`;
+    return code || name || '_ALLE_LAGER';
+  }
+
   private getPurchaseOrderStoragePath(): string {
     return (process.env.PURCHASE_ORDER_STORAGE_PATH || "/app/purchase-orders").trim();
   }
@@ -1350,10 +1413,12 @@ export class PurchasingService {
       const year = String(refDate.getFullYear());
       const month = String(refDate.getMonth() + 1).padStart(2, "0");
       const branchFolder = await this.getBranchFolder(order.branchId);
+      const locationFolder = await this.getLocationFolder(order.locationId);
 
       const candidates = [
-        path.join(storagePath, branchFolder, year, month, filename), // neue Struktur
-        path.join(storagePath, year, filename),                       // alte Struktur
+        path.join(storagePath, branchFolder, locationFolder, year, month, filename), // aktuelle Struktur
+        path.join(storagePath, branchFolder, year, month, filename),                 // alte Struktur (ohne Lager)
+        path.join(storagePath, year, filename),                                      // älteste Struktur
       ];
       for (const fullPath of candidates) {
         try { await fs.unlink(fullPath); } catch { /* nicht vorhanden – ok */ }
@@ -1372,12 +1437,13 @@ export class PurchasingService {
       const year = String(refDate.getFullYear());
       const month = String(refDate.getMonth() + 1).padStart(2, '0');
       const branchFolder = await this.getBranchFolder(order.branchId);
-      const targetDir = path.join(storagePath, branchFolder, year, month);
+      const locationFolder = await this.getLocationFolder(order.locationId);
+      const targetDir = path.join(storagePath, branchFolder, locationFolder, year, month);
 
       await fs.mkdir(targetDir, { recursive: true });
       const fullPath = path.join(targetDir, filename);
       await fs.writeFile(fullPath, pdfBuffer);
-      console.log(`[PurchasingService] PDF gespeichert: ${branchFolder}/${year}/${month}/${filename}`);
+      console.log(`[PurchasingService] PDF gespeichert: ${branchFolder}/${locationFolder}/${year}/${month}/${filename}`);
     } catch (error) {
       console.warn("[PurchasingService] PDF Ablage fehlgeschlagen:", error);
     }
