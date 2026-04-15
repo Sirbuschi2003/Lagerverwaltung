@@ -21,6 +21,7 @@ interface AuthState {
   login: (params: { username: string; password: string }) => Promise<void>;
   logout: () => void;
   refreshProfile: () => Promise<void>;
+  refreshAccessToken: () => Promise<void>;
   updateUserRefreshInterval: (userId: string, interval: number) => Promise<void>;
   checkTokenValidity: () => boolean;
   updateLastActivity: () => void;
@@ -241,6 +242,20 @@ const useAuthStore = create<AuthState>()(
           return permission.some((perm) => permissions.includes(perm));
         }
         return permissions.includes(permission);
+      },
+
+      refreshAccessToken: async () => {
+        if (!navigator.onLine) return;
+        try {
+          const response = await api.post<{ accessToken: string; user: UserProfile }>("/auth/refresh", {}, { withCredentials: true });
+          const { accessToken, user } = response.data;
+          if (!validateAuthToken(accessToken)) return;
+          SecureTokenManager.setToken(accessToken, 8);
+          api.defaults.headers.common.Authorization = `Bearer ${accessToken}`;
+          set({ token: accessToken, user, lastActivity: Date.now() });
+        } catch {
+          // Refresh fehlgeschlagen – bestehende Session behalten
+        }
       },
 
       refreshProfile: async () => {

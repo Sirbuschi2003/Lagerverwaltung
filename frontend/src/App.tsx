@@ -46,6 +46,7 @@ import { initializeNetworkStatus } from "./store/useNetworkStore";
 const AppContent = () => {
   const token = useAuthStore((state) => state.token);
   const hasPermission = useAuthStore((state) => state.hasPermission);
+  const refreshAccessToken = useAuthStore((state) => state.refreshAccessToken);
   const { mode, preset } = useThemeMode();
   
   // Globales Logging aktivieren
@@ -81,6 +82,8 @@ const AppContent = () => {
     // Beim ersten Rendern oder wenn online wird, lade Artikel
     if (isOnline && !initialSyncDone.current) {
       console.log('[App] Backend erreichbar - lade Artikelstammdaten (initial)');
+      // JWT refreshen damit locationIds immer aktuell sind (z.B. nach Lagerzuweisung)
+      void refreshAccessToken();
       useItemsStore.getState().loadItems();
       initialSyncDone.current = true;
     } else if (isOnline) {
