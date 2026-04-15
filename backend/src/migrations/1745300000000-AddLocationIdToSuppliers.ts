@@ -27,13 +27,31 @@ export class AddLocationIdToSuppliers1745300000000 implements MigrationInterface
     return Number(result[0]?.cnt ?? 0) > 0;
   }
 
+  /** Returns the FK constraint name on suppliers.branchId → branches.id, or null if not found */
+  private async getBranchFkName(queryRunner: QueryRunner): Promise<string | null> {
+    const rows: Array<{ CONSTRAINT_NAME: string }> = await queryRunner.query(
+      `SELECT kcu.CONSTRAINT_NAME FROM information_schema.key_column_usage kcu
+       JOIN information_schema.table_constraints tc
+         ON tc.constraint_schema = kcu.constraint_schema
+        AND tc.table_name = kcu.table_name
+        AND tc.constraint_name = kcu.constraint_name
+       WHERE kcu.table_schema = DATABASE()
+         AND kcu.table_name = 'suppliers'
+         AND kcu.column_name = 'branchId'
+         AND kcu.referenced_table_name = 'branches'
+         AND tc.constraint_type = 'FOREIGN KEY'
+       LIMIT 1`,
+    );
+    return rows[0]?.CONSTRAINT_NAME ?? null;
+  }
+
   async up(queryRunner: QueryRunner): Promise<void> {
-    // Add locationId column (skip if already exists)
+    // 1. Add locationId column (skip if already exists)
     if (!(await this.columnExists(queryRunner, "suppliers", "locationId"))) {
       await queryRunner.query(`ALTER TABLE \`suppliers\` ADD \`locationId\` char(36) NULL`);
     }
 
-    // Add FK to locations (skip if already exists)
+    // 2. Add FK to locations (skip if already exists)
     if (!(await this.fkExists(queryRunner, "suppliers", "FK_suppliers_location"))) {
       await queryRunner.createForeignKey(
         "suppliers",
@@ -47,22 +65,55 @@ export class AddLocationIdToSuppliers1745300000000 implements MigrationInterface
       );
     }
 
-    // Create new index FIRST (FK on branchId needs at least one index starting with branchId)
+    // 3. Create new index FIRST (needed as replacement for FK support on branchId)
     if (!(await this.indexExists(queryRunner, "suppliers", "IDX_suppliers_branch_location"))) {
       await queryRunner.query(
         `CREATE INDEX \`IDX_suppliers_branch_location\` ON \`suppliers\` (\`branchId\`, \`locationId\`)`,
       );
     }
 
-    // Now drop old unique index – safe because FK can now use IDX_suppliers_branch_location
+    // 4. Drop the old unique index (branchId, name) — but first we must drop the FK on branchId
+    //    because MySQL uses IDX_suppliers_branch_name to enforce that FK
     if (await this.indexExists(queryRunner, "suppliers", "IDX_suppliers_branch_name")) {
+      const branchFkName = await this.getBranchFkName(queryRunner);
+      if (branchFkName) {
+        // Temporarily drop the FK so we can drop the index
+        await queryRunner.query(`ALTER TABLE \`suppliers\` DROP FOREIGN KEY \`${branchFkName}\``);
+      }
+
       await queryRunner.query(`DROP INDEX \`IDX_suppliers_branch_name\` ON \`suppliers\``);
+
+      if (branchFkName) {
+        // Recreate the FK — MySQL will now use IDX_suppliers_branch_location to support it
+        await queryRunner.query(
+          `ALTER TABLE \`suppliers\` ADD CONSTRAINT \`${branchFkName}\` FOREIGN KEY (\`branchId\`) REFERENCES \`branches\` (\`id\`) ON DELETE RESTRICT`,
+        );
+      }
     }
   }
 
   async down(queryRunner: QueryRunner): Promise<void> {
     if (await this.indexExists(queryRunner, "suppliers", "IDX_suppliers_branch_location")) {
+      // Drop FK temporarily to allow index manipulation
+      const branchFkName = await this.getBranchFkName(queryRunner);
+      if (branchFkName) {
+        await queryRunner.query(`ALTER TABLE \`suppliers\` DROP FOREIGN KEY \`${branchFkName}\``);
+      }
+
       await queryRunner.query(`DROP INDEX \`IDX_suppliers_branch_location\` ON \`suppliers\``);
+
+      // Restore unique index
+      if (!(await this.indexExists(queryRunner, "suppliers", "IDX_suppliers_branch_name"))) {
+        await queryRunner.query(
+          `CREATE UNIQUE INDEX \`IDX_suppliers_branch_name\` ON \`suppliers\` (\`branchId\`, \`name\`)`,
+        );
+      }
+
+      if (branchFkName) {
+        await queryRunner.query(
+          `ALTER TABLE \`suppliers\` ADD CONSTRAINT \`${branchFkName}\` FOREIGN KEY (\`branchId\`) REFERENCES \`branches\` (\`id\`) ON DELETE RESTRICT`,
+        );
+      }
     }
 
     if (await this.fkExists(queryRunner, "suppliers", "FK_suppliers_location")) {
@@ -73,12 +124,6 @@ export class AddLocationIdToSuppliers1745300000000 implements MigrationInterface
 
     if (await this.columnExists(queryRunner, "suppliers", "locationId")) {
       await queryRunner.dropColumn("suppliers", "locationId");
-    }
-
-    if (!(await this.indexExists(queryRunner, "suppliers", "IDX_suppliers_branch_name"))) {
-      await queryRunner.query(
-        `CREATE UNIQUE INDEX \`IDX_suppliers_branch_name\` ON \`suppliers\` (\`branchId\`, \`name\`)`,
-      );
     }
   }
 }
