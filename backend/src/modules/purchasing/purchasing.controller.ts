@@ -25,6 +25,7 @@ export class PurchasingController {
     return this.purchasingService.getSuggestions(
       req.user?.branchId,
       refresh === "true" || refresh === "1",
+      req.user?.locationIds,
     );
   }
 

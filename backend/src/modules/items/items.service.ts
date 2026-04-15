@@ -237,7 +237,19 @@ export class ItemsService {
     }
   }
 
-  async countItems(branchId?: string | null): Promise<number> {
+  async countItems(branchId?: string | null, locationIds?: string[]): Promise<number> {
+    if (locationIds?.length) {
+      const qb = this.repository
+        .createQueryBuilder("item")
+        .leftJoin("item.storageLocation", "storageLocation")
+        .leftJoin("storageLocation.parent", "slParent");
+      if (branchId) qb.where("item.branchId = :branchId", { branchId });
+      qb.andWhere(
+        "(storageLocation.id IN (:...locationIds) OR slParent.id IN (:...locationIds))",
+        { locationIds },
+      );
+      return qb.getCount();
+    }
     return this.repository.count({ where: branchId ? { branchId } : undefined });
   }
 

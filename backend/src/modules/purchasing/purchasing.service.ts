@@ -539,9 +539,9 @@ export class PurchasingService {
     }
   }
 
-  async getSuggestions(branchId: string | null | undefined, refresh = false) {
-    // Cache-Check pro Niederlassung (überspringen wenn refresh=true)
-    const cacheKey = branchId ?? "ALL";
+  async getSuggestions(branchId: string | null | undefined, refresh = false, locationIds?: string[]) {
+    // Cache-Check pro Niederlassung (+ Lager wenn vorhanden)
+    const cacheKey = (branchId ?? "ALL") + (locationIds?.length ? `_${locationIds.sort().join(",")}` : "");
     const now = Date.now();
     const cached = this.suggestionsCacheMap.get(cacheKey);
     if (!refresh && cached && (now - cached.timestamp) < this.SUGGESTIONS_CACHE_TTL) {
@@ -572,11 +572,27 @@ export class PurchasingService {
       }
     });
 
-    // Nur Artikel dieser Niederlassung laden
-    const itemEntities = await this.itemsRepository.find({
-      where: { targetStock: MoreThan(0), ...(branchId ? { branchId } : {}) },
-      relations: ["storageLocation", "supplier"],
-    });
+    // Nur Artikel dieser Niederlassung laden (+ Lager-Filter falls vorhanden)
+    let itemEntities: Item[];
+    if (locationIds?.length) {
+      const qb = this.itemsRepository
+        .createQueryBuilder("item")
+        .leftJoinAndSelect("item.storageLocation", "storageLocation")
+        .leftJoin("storageLocation.parent", "slParent")
+        .leftJoinAndSelect("item.supplier", "supplier")
+        .where("item.targetStock > 0");
+      if (branchId) qb.andWhere("item.branchId = :branchId", { branchId });
+      qb.andWhere(
+        "(storageLocation.id IN (:...locationIds) OR slParent.id IN (:...locationIds))",
+        { locationIds },
+      );
+      itemEntities = await qb.getMany();
+    } else {
+      itemEntities = await this.itemsRepository.find({
+        where: { targetStock: MoreThan(0), ...(branchId ? { branchId } : {}) },
+        relations: ["storageLocation", "supplier"],
+      });
+    }
     const allLocations = await this.locationsService.findAll({ includeVehicles: true, branchId: branchId ?? undefined });
     const defaultWarehouse = allLocations.find((location) => location.type === "WAREHOUSE") ?? null;
     const locationById = new Map<string, Location>();
