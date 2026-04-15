@@ -82,10 +82,12 @@ const AppContent = () => {
     // Beim ersten Rendern oder wenn online wird, lade Artikel
     if (isOnline && !initialSyncDone.current) {
       console.log('[App] Backend erreichbar - lade Artikelstammdaten (initial)');
-      // JWT refreshen damit locationIds immer aktuell sind (z.B. nach Lagerzuweisung)
-      void refreshAccessToken();
-      useItemsStore.getState().loadItems();
       initialSyncDone.current = true;
+      // JWT erst refreshen (damit locationIds aktuell sind), dann Artikel laden
+      void (async () => {
+        await refreshAccessToken();
+        useItemsStore.getState().loadItems();
+      })();
     } else if (isOnline) {
       console.log('[App] Backend erreichbar - lade Artikelstammdaten');
       useItemsStore.getState().loadItems();
