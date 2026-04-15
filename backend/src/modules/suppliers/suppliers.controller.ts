@@ -2,7 +2,7 @@ import { Body, Controller, Delete, Get, Param, Patch, Post, Req, UseGuards } fro
 import type { Request } from "express";
 
 interface SuppliersRequest extends Request {
-  user?: { id?: string; role?: string; branchId?: string | null };
+  user?: { id?: string; role?: string; branchId?: string | null; locationIds?: string[] };
 }
 
 import { JwtAuthGuard } from "../auth/guards/jwt-auth.guard";
@@ -20,7 +20,7 @@ export class SuppliersController {
   @Get()
   @Permissions("suppliers.view")
   findAll(@Req() req: SuppliersRequest) {
-    return this.suppliersService.findAll(req.user?.branchId);
+    return this.suppliersService.findAll(req.user?.branchId, req.user?.locationIds);
   }
 
   @Get(":id")
@@ -32,7 +32,8 @@ export class SuppliersController {
   @Post()
   @Permissions("suppliers.create")
   create(@Body() dto: CreateSupplierDto, @Req() req: SuppliersRequest) {
-    return this.suppliersService.create(dto, req.user?.branchId);
+    const locationId = req.user?.locationIds?.length ? req.user.locationIds[0] : null;
+    return this.suppliersService.create(dto, req.user?.branchId, locationId);
   }
 
   @Patch(":id")

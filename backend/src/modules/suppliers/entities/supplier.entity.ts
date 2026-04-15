@@ -8,6 +8,7 @@ import {
   UpdateDateColumn,
 } from "typeorm";
 import { Branch } from "../../branches/entities/branch.entity";
+import { Location } from "../../locations/entities/location.entity";
 
 @Entity({ name: "suppliers" })
 export class Supplier {
@@ -24,6 +25,13 @@ export class Supplier {
   @ManyToOne(() => Branch, { nullable: true, onDelete: "RESTRICT", eager: false })
   @JoinColumn({ name: "branchId" })
   branch!: Branch | null;
+
+  @Column({ type: "char", length: 36, nullable: true })
+  locationId!: string | null;
+
+  @ManyToOne(() => Location, { nullable: true, onDelete: "SET NULL", eager: false })
+  @JoinColumn({ name: "locationId" })
+  location!: Location | null;
 
   @Column({ type: "varchar", length: 255, nullable: true })
   addressLine1!: string | null;

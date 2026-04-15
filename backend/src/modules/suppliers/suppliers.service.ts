@@ -11,9 +11,21 @@ export class SuppliersService {
     private readonly repository: Repository<Supplier>,
   ) {}
 
-  findAll(branchId?: string | null): Promise<Supplier[]> {
-    const where = branchId ? { branchId } : {};
-    return this.repository.find({ where, order: { name: "ASC" } });
+  findAll(branchId?: string | null, locationIds?: string[]): Promise<Supplier[]> {
+    const qb = this.repository.createQueryBuilder("supplier").orderBy("supplier.name", "ASC");
+
+    if (branchId) {
+      qb.andWhere("supplier.branchId = :branchId", { branchId });
+    }
+
+    if (locationIds?.length) {
+      qb.andWhere(
+        "(supplier.locationId IN (:...locationIds) OR supplier.locationId IS NULL)",
+        { locationIds },
+      );
+    }
+
+    return qb.getMany();
   }
 
   findOne(id: string, branchId?: string | null): Promise<Supplier | null> {
@@ -22,7 +34,7 @@ export class SuppliersService {
     return this.repository.findOne({ where });
   }
 
-  async create(data: Partial<Supplier>, branchId?: string | null): Promise<Supplier> {
+  async create(data: Partial<Supplier>, branchId?: string | null, locationId?: string | null): Promise<Supplier> {
     const entity = this.repository.create({
       name: data.name?.trim(),
       addressLine1: data.addressLine1?.trim() || null,
@@ -36,6 +48,7 @@ export class SuppliersService {
       phone: data.phone?.trim() || null,
       notes: data.notes?.trim() || null,
       branchId: branchId ?? null,
+      locationId: locationId ?? null,
     });
     return this.repository.save(entity);
   }
