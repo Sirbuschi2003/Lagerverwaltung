@@ -25,6 +25,11 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
   async validate(payload: JwtPayload) {
     // Load the full user from the database
     const user = await this.usersService.findOneById(payload.sub);
-    return user;
+    if (!user) return null;
+    // Expose locationIds as flat array so controllers can read req.user.locationIds
+    return {
+      ...user,
+      locationIds: user.locations?.map((l) => l.id) ?? [],
+    };
   }
 }
