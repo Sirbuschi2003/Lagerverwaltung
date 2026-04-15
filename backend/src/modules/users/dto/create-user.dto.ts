@@ -1,4 +1,4 @@
-﻿import { IsEmail, IsNotEmpty, IsOptional, IsString, MaxLength } from "class-validator";
+import { IsArray, IsEmail, IsNotEmpty, IsOptional, IsString, IsUUID, MaxLength } from "class-validator";
 
 import { UserRole } from "../entities/user.entity";
 
@@ -31,11 +31,12 @@ export class CreateUserDto {
   @IsString()
   branchId?: string | null;
 
+  /** IDs der WAREHOUSE-Lagerorte, die dieser Benutzer sehen darf (leer = alle) */
   @IsOptional()
-  @IsString()
-  warehouseId?: string | null;
+  @IsArray()
+  @IsUUID("4", { each: true })
+  locationIds?: string[];
 
   @IsOptional()
   refreshInterval?: number;
 }
-

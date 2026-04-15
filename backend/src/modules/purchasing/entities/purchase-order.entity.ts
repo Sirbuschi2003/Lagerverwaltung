@@ -12,7 +12,6 @@ import {
 import { Supplier } from "../../suppliers/entities/supplier.entity";
 import { PurchaseOrderLine } from "./purchase-order-line.entity";
 import { Branch } from "../../branches/entities/branch.entity";
-import { Warehouse } from "../../warehouses/entities/warehouse.entity";
 
 export const PURCHASE_ORDER_STATUSES = ["DRAFT", "ORDERED", "RECEIVED", "CANCELLED", "ARCHIVED"] as const;
 export type PurchaseOrderStatus = (typeof PURCHASE_ORDER_STATUSES)[number];
@@ -52,14 +51,6 @@ export class PurchaseOrder {
   @ManyToOne(() => Branch, { nullable: true, onDelete: "RESTRICT", eager: false })
   @JoinColumn({ name: "branchId" })
   branch!: Branch | null;
-
-  /** Lager, für das diese Bestellung aufgegeben wurde */
-  @Column({ type: "char", length: 36, nullable: true })
-  warehouseId!: string | null;
-
-  @ManyToOne(() => Warehouse, { nullable: true, onDelete: "SET NULL", eager: false })
-  @JoinColumn({ name: "warehouseId" })
-  warehouseObj!: Warehouse | null;
 
   @CreateDateColumn()
   createdAt!: Date;

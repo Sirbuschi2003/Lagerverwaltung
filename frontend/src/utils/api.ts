@@ -105,36 +105,11 @@ export interface AuthProfileDto {
   email?: string | null;
   vehicleId?: string | null;
   branchId?: string | null;
-  warehouseId?: string | null;
+  /** IDs der zugewiesenen WAREHOUSE-Lagerorte (leer = alle sichtbar) */
+  locationIds?: string[];
   refreshInterval?: number;
   permissions: string[];
   permissionOverrides?: string[];
-}
-
-export interface WarehouseDto {
-  id: string;
-  name: string;
-  code?: string | null;
-  description?: string | null;
-  branchId?: string | null;
-  active: boolean;
-  createdAt: string;
-  updatedAt: string;
-}
-
-export interface CreateWarehouseRequest {
-  name: string;
-  code?: string | null;
-  description?: string | null;
-  branchId?: string | null;
-  active?: boolean;
-}
-
-export interface UpdateWarehouseRequest {
-  name?: string;
-  code?: string | null;
-  description?: string | null;
-  active?: boolean;
 }
 
 export interface BranchDto {
@@ -455,6 +430,7 @@ export const fetchLocations = async (params?: {
   type?: string;
   parentId?: string | null;
   includeVehicles?: boolean;
+  branchId?: string;
 }): Promise<LocationDto[]> => {
   const response = await api.get<LocationDto[]>("/locations", { params });
   return response.data;
@@ -532,25 +508,6 @@ export const fetchBranches = async (): Promise<BranchDto[]> => {
   return response.data;
 };
 
-// ── Warehouses ────────────────────────────────────────────────────────────────
-export const fetchWarehouses = async (params?: { branchId?: string }): Promise<WarehouseDto[]> => {
-  const response = await api.get<WarehouseDto[]>("/warehouses", { params });
-  return response.data;
-};
-
-export const createWarehouse = async (data: CreateWarehouseRequest): Promise<WarehouseDto> => {
-  const response = await api.post<WarehouseDto>("/warehouses", data);
-  return response.data;
-};
-
-export const updateWarehouse = async (id: string, data: UpdateWarehouseRequest): Promise<WarehouseDto> => {
-  const response = await api.patch<WarehouseDto>(`/warehouses/${id}`, data);
-  return response.data;
-};
-
-export const deleteWarehouse = async (id: string): Promise<void> => {
-  await api.delete(`/warehouses/${id}`);
-};
 
 export const createBranch = async (payload: {
   name: string;
@@ -598,7 +555,8 @@ export interface UserDto {
   role: string;
   vehicleId?: string | null;
   branchId?: string | null;
-  warehouseId?: string | null;
+  /** Zugewiesene WAREHOUSE-Lagerorte */
+  locations?: Array<{ id: string; code: string; name: string | null }>;
   refreshInterval?: number;
 }
 
@@ -610,7 +568,8 @@ export interface CreateUserRequest {
   role: string;
   vehicleId?: string;
   branchId?: string | null;
-  warehouseId?: string | null;
+  /** IDs der zugewiesenen WAREHOUSE-Lagerorte */
+  locationIds?: string[];
   refreshInterval?: number;
 }
 
@@ -626,7 +585,8 @@ export interface UpdateUserRequest {
   role?: string;
   vehicleId?: string | null;
   branchId?: string | null;
-  warehouseId?: string | null;
+  /** IDs der zugewiesenen WAREHOUSE-Lagerorte */
+  locationIds?: string[];
   refreshInterval?: number;
 }
 

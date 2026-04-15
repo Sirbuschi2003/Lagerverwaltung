@@ -151,7 +151,7 @@ export class AuthService {
       role: user.role,
       displayName: user.displayName,
       branchId: user.branchId ?? null,
-      warehouseId: user.warehouseId ?? null,
+      locationIds: user.locations?.map(l => l.id) ?? [],
     };
 
     const refreshPayload = { ...payload, tokenType: "refresh" };
@@ -190,7 +190,7 @@ export class AuthService {
         role: user.role,
         displayName: user.displayName,
         branchId: user.branchId ?? null,
-        warehouseId: user.warehouseId ?? null,
+        locationIds: user.locations?.map(l => l.id) ?? [],
       };
       const refreshPayload = { ...payload, tokenType: "refresh" };
       const refreshExpiresIn =
@@ -389,7 +389,7 @@ export class AuthService {
       email: user.email ?? null,
       vehicleId: user.vehicleId ?? null,
       branchId: user.branchId ?? null,
-      warehouseId: user.warehouseId ?? null,
+      locationIds: user.locations?.map(l => l.id) ?? [],
       permissions: permissionBundle.permissions,
       permissionOverrides: permissionBundle.overrides,
       permissionDenials: permissionBundle.denials,

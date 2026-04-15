@@ -70,12 +70,9 @@ export class InventoryService {
     this.hmacSecret = `inventory-checksum-v1:${secret}`;
   }
 
-  findSessions(branchId?: string | null, warehouseId?: string | null) {
-    // Lager-Filterung hat Vorrang: Benutzer mit warehouseId sieht nur Inventur seines Lagers
+  findSessions(branchId?: string | null) {
     const where: Record<string, unknown> = {};
-    if (warehouseId) {
-      where.warehouseId = warehouseId;
-    } else if (branchId) {
+    if (branchId) {
       where.branchId = branchId;
     }
     return this.sessionsRepository.find({
@@ -152,7 +149,7 @@ export class InventoryService {
     };
   }
 
-  async startSession(dto: StartInventoryDto & { branchId?: string | null; warehouseId?: string | null }) {
+  async startSession(dto: StartInventoryDto & { branchId?: string | null }) {
     const session = this.sessionsRepository.create({
       name: dto.name,
       createdBy: dto.createdBy,
@@ -161,7 +158,6 @@ export class InventoryService {
       completedAt: null,
       status: InventorySessionStatus.DRAFT,
       branchId: dto.branchId ?? null,
-      warehouseId: dto.warehouseId ?? null,
     });
     return this.sessionsRepository.save(session);
   }

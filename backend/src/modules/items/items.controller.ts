@@ -5,7 +5,7 @@ import { plainToInstance } from "class-transformer";
 import type { Request, Response } from "express";
 
 interface ItemsRequest extends Request {
-  user?: { id?: string; username?: string; role?: string; branchId?: string | null; warehouseId?: string | null };
+  user?: { id?: string; username?: string; role?: string; branchId?: string | null; locationIds?: string[] };
 }
 
 import { CreateItemDto } from "./dto/create-item.dto";
@@ -73,7 +73,7 @@ export class ItemsController {
         manufacturer,
         productGroup,
         branchId: req.user?.branchId,
-        warehouseId: req.user?.warehouseId,
+        locationIds: req.user?.locationIds,
       });
 
       return {
@@ -105,7 +105,7 @@ export class ItemsController {
   async create(@Body() dto: CreateItemDto, @Req() req: ItemsRequest) {
     try {
       this.logger.debug(`Erstelle neuen Artikel: ${dto.code}`);
-      return await this.itemsService.create({ ...dto, branchId: req.user?.branchId, warehouseId: req.user?.warehouseId });
+      return await this.itemsService.create({ ...dto, branchId: req.user?.branchId });
     } catch (error) {
       this.logger.error(`Fehler beim Erstellen des Artikels: ${error instanceof Error ? error.message : String(error)}`);
       if (error instanceof Error && error.message.includes('bereits vergeben')) {
@@ -120,7 +120,7 @@ export class ItemsController {
   async createBulk(@Body() dto: CreateItemDto[], @Req() req: ItemsRequest) {
     try {
       this.logger.debug(`Erstelle ${dto?.length || 0} Artikel in Bulk`);
-      return await this.itemsService.createBulk(dto, req.user?.branchId, req.user?.warehouseId);
+      return await this.itemsService.createBulk(dto, req.user?.branchId);
     } catch (error) {
       this.logger.error(`Fehler beim Bulk-Erstellen: ${error instanceof Error ? error.message : String(error)}`);
       throw new InternalServerErrorException('Bulk-Import konnte nicht durchgeführt werden');
@@ -141,7 +141,7 @@ export class ItemsController {
   }> {
     try {
       this.logger.debug(`Preview fuer ${dto?.length || 0} Artikel in Bulk`);
-      return await this.itemsService.previewBulk(dto, req.user?.branchId, req.user?.warehouseId);
+      return await this.itemsService.previewBulk(dto, req.user?.branchId);
     } catch (error) {
       this.logger.error(`Fehler beim Bulk-Preview: ${error instanceof Error ? error.message : String(error)}`);
       throw new InternalServerErrorException("Bulk-Preview konnte nicht durchgeführt werden");
@@ -153,7 +153,7 @@ export class ItemsController {
   async removeAll(@Req() req: ItemsRequest) {
     try {
       this.logger.debug("[ItemsController] removeAll endpoint called");
-      const result = await this.itemsService.removeAll(req.user?.branchId, req.user?.warehouseId);
+      const result = await this.itemsService.removeAll(req.user?.branchId);
       this.logger.log(`[ItemsController] removeAll completed: ${result.deleted} items deleted`);
       return result;
     } catch (error) {
@@ -177,7 +177,7 @@ export class ItemsController {
         manufacturer,
         productGroup,
         branchId: req.user?.branchId,
-        warehouseId: req.user?.warehouseId,
+        locationIds: req.user?.locationIds,
       });
       const date = new Date().toISOString().split("T")[0];
       res.setHeader("Content-Type", "text/csv; charset=utf-8");

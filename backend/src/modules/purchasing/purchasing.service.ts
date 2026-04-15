@@ -81,7 +81,7 @@ export class PurchasingService {
     this.suggestionsCacheMap.clear();
   }
 
-  async findAll(params?: PurchaseOrderQueryParams & { branchId?: string | null; warehouseId?: string | null }) {
+  async findAll(params?: PurchaseOrderQueryParams & { branchId?: string | null; locationIds?: string[] }) {
     const sortBy = params?.sortBy ?? "createdAt";
     const sortDir = params?.sortDir === "ASC" ? "ASC" : "DESC";
 
@@ -92,10 +92,7 @@ export class PurchasingService {
       .leftJoinAndSelect("order.lines", "line")
       .leftJoinAndSelect("line.item", "item");
 
-    // Lager-Filterung hat Vorrang vor Niederlassung
-    if (params?.warehouseId) {
-      qb.andWhere("order.warehouseId = :warehouseId", { warehouseId: params.warehouseId });
-    } else if (params?.branchId) {
+    if (params?.branchId) {
       qb.andWhere("order.branchId = :branchId", { branchId: params.branchId });
     }
 
@@ -146,7 +143,6 @@ export class PurchasingService {
     note?: string;
     lines: Array<{ itemId: string; quantity: number; packSize?: number }>;
     branchId?: string | null;
-    warehouseId?: string | null;
   }) {
     const supplier = await this.supplierRepository.findOne({ where: { id: payload.supplierId } });
     if (!supplier) {
@@ -187,7 +183,6 @@ export class PurchasingService {
       note: payload.note?.trim() || null,
       lines,
       branchId: payload.branchId ?? null,
-      warehouseId: payload.warehouseId ?? null,
     });
 
     const saved = await this.ordersRepository.save(order);

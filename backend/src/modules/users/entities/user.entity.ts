@@ -1,6 +1,15 @@
-import { Column, Entity, Index, JoinColumn, ManyToOne, PrimaryGeneratedColumn } from "typeorm";
+import {
+  Column,
+  Entity,
+  Index,
+  JoinColumn,
+  JoinTable,
+  ManyToMany,
+  ManyToOne,
+  PrimaryGeneratedColumn,
+} from "typeorm";
 import { Branch } from "../../branches/entities/branch.entity";
-import { Warehouse } from "../../warehouses/entities/warehouse.entity";
+import { Location } from "../../locations/entities/location.entity";
 
 // Legacy: kept for backward compatibility but not enforced
 export const USER_ROLES = ["TECHNICIAN", "WAREHOUSE", "MANAGER"] as const;
@@ -37,13 +46,17 @@ export class User {
   @JoinColumn({ name: "branchId" })
   branch!: Branch | null;
 
-  /** Lager-Zuweisung (null = Manager sieht alle Lager der Niederlassung) */
-  @Column({ type: "char", length: 36, nullable: true })
-  warehouseId!: string | null;
-
-  @ManyToOne(() => Warehouse, { nullable: true, onDelete: "SET NULL", eager: false })
-  @JoinColumn({ name: "warehouseId" })
-  warehouse!: Warehouse | null;
+  /**
+   * Lager-Zuweisung: welche WAREHOUSE-Lagerorte dieser Benutzer sehen darf.
+   * Leer = Manager sieht alle Lager der Niederlassung.
+   */
+  @ManyToMany(() => Location, { eager: true, onDelete: "CASCADE" })
+  @JoinTable({
+    name: "user_locations",
+    joinColumn: { name: "userId", referencedColumnName: "id" },
+    inverseJoinColumn: { name: "locationId", referencedColumnName: "id" },
+  })
+  locations!: Location[];
 
   @Column({ type: "int", nullable: true, default: 15 })
   refreshInterval!: number | null;
@@ -51,4 +64,3 @@ export class User {
   @Column({ type: "json", nullable: true, default: null })
   settings!: object | null;
 }
-

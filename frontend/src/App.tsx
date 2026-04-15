@@ -25,7 +25,6 @@ import EmailSettingsPage from "./pages/EmailSettingsPage";
 import MovementHistoryPage from "./pages/MovementHistoryPage";
 import AccessControlPage from "./pages/AccessControlPage";
 import BranchesPage from "./pages/BranchesPage";
-import WarehousesPage from "./pages/WarehousesPage";
 import AdminMaintenancePage from "./pages/AdminMaintenancePage";
 import LocationsPage from "./pages/LocationsPage";
 import SuppliersPage from "./pages/SuppliersPage";
@@ -173,7 +172,6 @@ const AppContent = () => {
               {hasPermission("logs.view") && <Route path="settings/logs" element={<LiveLogsPage />} />}
               {hasPermission("access.manage") && <Route path="access-control" element={<AccessControlPage />} />}
               {hasPermission("branches.manage") && <Route path="branches" element={<BranchesPage />} />}
-              {hasPermission("branches.manage") && <Route path="warehouses" element={<WarehousesPage />} />}
               <Route path="*" element={<Navigate to="/" replace />} />
             </Route>
           )}

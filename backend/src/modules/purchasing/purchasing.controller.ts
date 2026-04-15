@@ -2,7 +2,7 @@ import { BadRequestException, Body, Controller, Delete, Get, Param, Patch, Post,
 import type { Request } from "express";
 
 interface PurchasingRequest extends Request {
-  user?: { id?: string; role?: string; vehicleId?: string | null; branchId?: string | null; warehouseId?: string | null };
+  user?: { id?: string; role?: string; vehicleId?: string | null; branchId?: string | null; locationIds?: string[] };
 }
 
 import { JwtAuthGuard } from "../auth/guards/jwt-auth.guard";
@@ -46,7 +46,7 @@ export class PurchasingController {
       sortBy: sortBy as any,
       sortDir: sortDir as any,
       branchId: req.user?.branchId,
-      warehouseId: req.user?.warehouseId,
+      locationIds: req.user?.locationIds,
     });
   }
 
@@ -87,7 +87,7 @@ export class PurchasingController {
   @Post()
   @Permissions("orders.create")
   create(@Body() dto: CreatePurchaseOrderDto, @Req() req: PurchasingRequest) {
-    return this.purchasingService.create({ ...dto, branchId: req.user?.branchId, warehouseId: req.user?.warehouseId });
+    return this.purchasingService.create({ ...dto, branchId: req.user?.branchId });
   }
 
   @Patch(":id")

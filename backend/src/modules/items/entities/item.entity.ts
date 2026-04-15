@@ -15,7 +15,6 @@ import { ItemCode } from "./item-code.entity";
 import { Location } from "../../locations/entities/location.entity";
 import { Supplier } from "../../suppliers/entities/supplier.entity";
 import { Branch } from "../../branches/entities/branch.entity";
-import { Warehouse } from "../../warehouses/entities/warehouse.entity";
 
 @Entity({ name: "items" })
 export class Item {
@@ -39,14 +38,6 @@ export class Item {
   @ManyToOne(() => Branch, { nullable: true, onDelete: "RESTRICT", eager: false })
   @JoinColumn({ name: "branchId" })
   branch!: Branch | null;
-
-  /** Lager-Zugehörigkeit (null = für alle Lager dieser Niederlassung sichtbar) */
-  @Column({ type: "char", length: 36, nullable: true })
-  warehouseId!: string | null;
-
-  @ManyToOne(() => Warehouse, { nullable: true, onDelete: "SET NULL", eager: false })
-  @JoinColumn({ name: "warehouseId" })
-  warehouse!: Warehouse | null;
 
   @Column({ type: "varchar", length: 255 })
   description!: string;

@@ -113,7 +113,7 @@ export class ItemsService {
     private readonly loggingService: LoggingService,
   ) {}
 
-  async findAll(params?: { page?: number; limit?: number; search?: string; manufacturer?: string; productGroup?: string; branchId?: string | null; warehouseId?: string | null }) {
+  async findAll(params?: { page?: number; limit?: number; search?: string; manufacturer?: string; productGroup?: string; branchId?: string | null; locationIds?: string[] }) {
     try {
       const page = Math.max(1, Number(params?.page) || 1);
       // Höheres Limit zulassen, damit Offline-Sync den kompletten Artikelstamm holen kann.
@@ -132,9 +132,15 @@ export class ItemsService {
         .addOrderBy("item.productGroup", "ASC")
         .addOrderBy("item.description", "ASC");
 
-      // Lager-Filterung hat Vorrang: Benutzer mit warehouseId sieht nur sein Lager
-      if (params?.warehouseId) {
-        qb.andWhere("item.warehouseId = :warehouseId", { warehouseId: params.warehouseId });
+      // Lager-Filterung: Benutzer mit Lager-Zuweisung sieht nur Artikel deren Lagerort
+      // direkt einem der zugewiesenen Lager entspricht, oder ein Kind/Enkelelement davon ist.
+      if (params?.locationIds?.length) {
+        qb.leftJoin("storageLocation.parent", "slParent")
+          .leftJoin("slParent.parent", "slGrandparent")
+          .andWhere(
+            "(storageLocation.id IN (:...locationIds) OR slParent.id IN (:...locationIds) OR slGrandparent.id IN (:...locationIds))",
+            { locationIds: params.locationIds }
+          );
       } else if (params?.branchId) {
         qb.andWhere("item.branchId = :branchId", { branchId: params.branchId });
       }
@@ -235,14 +241,14 @@ export class ItemsService {
     return this.repository.count({ where: branchId ? { branchId } : undefined });
   }
 
-  async exportItemsCsv(params?: { search?: string; manufacturer?: string; productGroup?: string; branchId?: string | null; warehouseId?: string | null }): Promise<Buffer> {
+  async exportItemsCsv(params?: { search?: string; manufacturer?: string; productGroup?: string; branchId?: string | null; locationIds?: string[] }): Promise<Buffer> {
     const { items } = await this.findAll({
       limit: 200000,
       search: params?.search,
       manufacturer: params?.manufacturer,
       productGroup: params?.productGroup,
       branchId: params?.branchId,
-      warehouseId: params?.warehouseId,
+      locationIds: params?.locationIds,
     });
 
     const headers = [
@@ -356,10 +362,9 @@ export class ItemsService {
     }
   }
 
-  async create(dto: CreateItemDto & { branchId?: string | null; warehouseId?: string | null }): Promise<Item> {
-    const { alternateCodes, storageLocationId, supplierId, price, packSize, orderQuantity, currentQuantity: _currentQuantity, branchId, warehouseId, ...rest } = dto;
+  async create(dto: CreateItemDto & { branchId?: string | null }): Promise<Item> {
+    const { alternateCodes, storageLocationId, supplierId, price, packSize, orderQuantity, currentQuantity: _currentQuantity, branchId, ...rest } = dto;
     const effectiveBranchId = branchId ?? null;
-    const effectiveWarehouseId = warehouseId ?? null;
     const existsWhere: Record<string, unknown> = { code: rest.code };
     if (effectiveBranchId) existsWhere.branchId = effectiveBranchId;
     else existsWhere.branchId = IsNull();
@@ -380,7 +385,6 @@ export class ItemsService {
       packSize: packSize !== undefined ? packSize : null,
       orderQuantity: orderQuantity !== undefined && Number(orderQuantity) > 0 ? orderQuantity : null,
       branchId: effectiveBranchId,
-      warehouseId: effectiveWarehouseId,
     });
     const codes = sanitizeCodes(alternateCodes);
     if (codes.length > 0) {
@@ -396,8 +400,8 @@ export class ItemsService {
     return this.repository.save(entity);
   }
 
-  async previewBulk(dtos: CreateItemDto[], branchId?: string | null, warehouseId?: string | null): Promise<BulkImportPreviewResult> {
-    const analysis = await this.analyzeBulkImport(dtos, branchId, warehouseId);
+  async previewBulk(dtos: CreateItemDto[], branchId?: string | null): Promise<BulkImportPreviewResult> {
+    const analysis = await this.analyzeBulkImport(dtos, branchId);
     return {
       created: analysis.created,
       updated: analysis.updated,
@@ -407,8 +411,8 @@ export class ItemsService {
     };
   }
 
-  async createBulk(dtos: CreateItemDto[], branchId?: string | null, warehouseId?: string | null): Promise<{ created: number; updated: number; skipped: number; errors: string[] }> {
-    const analysis = await this.analyzeBulkImport(dtos, branchId, warehouseId);
+  async createBulk(dtos: CreateItemDto[], branchId?: string | null): Promise<{ created: number; updated: number; skipped: number; errors: string[] }> {
+    const analysis = await this.analyzeBulkImport(dtos, branchId);
     const result = {
       created: 0,
       updated: 0,
@@ -430,7 +434,6 @@ export class ItemsService {
       const entity = this.repository.create({
         code: normalized.code,
         branchId: branchId ?? null,
-        warehouseId: warehouseId ?? null,
         description: normalized.description,
         descriptionSecondary: normalized.descriptionSecondary,
         manufacturer: normalized.manufacturer,
@@ -537,7 +540,7 @@ export class ItemsService {
     return result;
   }
 
-  private async analyzeBulkImport(dtos: CreateItemDto[], branchId?: string | null, warehouseId?: string | null): Promise<BulkImportAnalysis> {
+  private async analyzeBulkImport(dtos: CreateItemDto[], branchId?: string | null): Promise<BulkImportAnalysis> {
     const result: BulkImportAnalysis = {
       created: 0,
       updated: 0,
@@ -879,14 +882,12 @@ export class ItemsService {
     );
   }
 
-  async removeAll(branchId?: string | null, warehouseId?: string | null): Promise<{ deleted: number }> {
+  async removeAll(branchId?: string | null): Promise<{ deleted: number }> {
     try {
       this.logger.log("Starte removeAll-Operation");
 
       let whereClause: Record<string, unknown>;
-      if (warehouseId) {
-        whereClause = { warehouseId };
-      } else if (branchId) {
+      if (branchId) {
         whereClause = { branchId };
       } else {
         whereClause = { branchId: IsNull() };

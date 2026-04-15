@@ -24,12 +24,17 @@ export class LocationsController {
     @Query("type") type?: string,
     @Query("parentId") parentId?: string,
     @Query("includeVehicles") includeVehicles?: string,
+    @Query("branchId") branchIdParam?: string,
   ) {
+    // Super-Admin (branchId=null im JWT) darf branchId per Query-Param übergeben
+    const branchId = req.user?.branchId !== null
+      ? req.user?.branchId
+      : (branchIdParam ?? null);
     return this.locationsService.findAll({
       type,
       parentId,
       includeVehicles: includeVehicles === "true",
-      branchId: req.user?.branchId,
+      branchId,
     });
   }
 

@@ -86,7 +86,6 @@ const SETTINGS_ITEMS: MenuItem[] = [
   { id: "settings-logs", label: "Systemprotokolle", path: "/logs", icon: <Analytics />, roles: ["MANAGER"], permissions: ["logs.view"] },
   { id: "settings-access", label: "Benutzer & Fahrzeuge", path: "/access-control", icon: <AdminPanelSettings />, roles: ["MANAGER"], permissions: ["access.manage"] },
   { id: "settings-branches", label: "Niederlassungen", path: "/branches", icon: <CorporateFare />, roles: ["MANAGER"], permissions: ["branches.manage"], superAdminOnly: true },
-  { id: "settings-warehouses", label: "Lager", path: "/warehouses", icon: <Warehouse />, roles: ["MANAGER"], permissions: ["branches.manage"] },
   { id: "settings-maintenance", label: "Wartung & Update", path: "/settings/maintenance", icon: <Build />, roles: ["MANAGER"], permissions: ["settings.company"], superAdminOnly: true },
 ];
 
