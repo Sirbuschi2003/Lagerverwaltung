@@ -13,6 +13,7 @@ import {
   Grid,
   IconButton,
   InputLabel,
+  ListItemText,
   MenuItem,
   Paper,
   Select,
@@ -27,8 +28,8 @@ import {
 } from "@mui/material";
 import DeleteIcon from "@mui/icons-material/Delete";
 import EditIcon from "@mui/icons-material/Edit";
-import type { CreateUserRequest, UpdateUserRequest, UserDto, VehicleDto, RolePermissionsDto, BranchDto } from "../../utils/api";
-import { createUser, updateUser, deleteUser, fetchUsers, fetchVehicles, fetchRolesList, fetchBranches } from "../../utils/api";
+import type { CreateUserRequest, UpdateUserRequest, UserDto, VehicleDto, RolePermissionsDto, BranchDto, LocationDto } from "../../utils/api";
+import { createUser, updateUser, deleteUser, fetchUsers, fetchVehicles, fetchRolesList, fetchBranches, fetchLocations } from "../../utils/api";
 import useAuthStore from "../../store/useAuthStore";
 
 const initialForm: CreateUserRequest = {
@@ -39,6 +40,7 @@ const initialForm: CreateUserRequest = {
   role: "",
   vehicleId: undefined,
   branchId: undefined,
+  locationIds: [],
 };
 
 const UsersManagement: React.FC = () => {
@@ -53,6 +55,7 @@ const UsersManagement: React.FC = () => {
   const [isSubmitting, setSubmitting] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<UserDto | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [warehouseLocations, setWarehouseLocations] = useState<LocationDto[]>([]);
 
   const currentUser = useAuthStore((s) => s.user);
   const isSuperAdmin = currentUser?.branchId === null || currentUser?.branchId === undefined;
@@ -89,15 +92,28 @@ const UsersManagement: React.FC = () => {
     [users],
   );
 
+  const loadWarehouseLocations = async (branchId: string) => {
+    try {
+      const all = await fetchLocations({ branchId });
+      setWarehouseLocations(all.filter((l) => l.type === "WAREHOUSE"));
+    } catch {
+      setWarehouseLocations([]);
+    }
+  };
+
   const getBranchName = (branchId?: string | null) => {
     if (!branchId) return null;
     return branches.find((b) => b.id === branchId)?.name ?? branchId;
   };
 
   const handleOpenCreate = () => {
-    setForm({ ...initialForm, role: roles.length > 0 ? roles[0].name : "" });
+    setForm({ ...initialForm, role: roles.length > 0 ? roles[0].name : "", locationIds: [] });
     setEditingUser(null);
     setError(null);
+    setWarehouseLocations([]);
+    if (!isSuperAdmin && currentUser?.branchId) {
+      void loadWarehouseLocations(currentUser.branchId);
+    }
     setOpen(true);
   };
 
@@ -111,7 +127,10 @@ const UsersManagement: React.FC = () => {
       role: user.role,
       vehicleId: user.vehicleId ?? undefined,
       branchId: user.branchId,
+      locationIds: user.locations?.map((l) => l.id) ?? [],
     });
+    const branchToLoad = user.branchId ?? currentUser?.branchId;
+    if (branchToLoad) void loadWarehouseLocations(branchToLoad);
     setError(null);
     setOpen(true);
   };
@@ -139,7 +158,18 @@ const UsersManagement: React.FC = () => {
 
   const handleBranchChange = (event: SelectChangeEvent<string>) => {
     const value = event.target.value;
-    setForm((prev: any) => ({ ...prev, branchId: value === "super" ? null : value }));
+    const newBranchId = value === "super" ? null : value;
+    setForm((prev: any) => ({ ...prev, branchId: newBranchId, locationIds: [] }));
+    if (newBranchId) void loadWarehouseLocations(newBranchId);
+    else setWarehouseLocations([]);
+  };
+
+  const handleLocationIdsChange = (event: SelectChangeEvent<string[]>) => {
+    const value = event.target.value;
+    setForm((prev: any) => ({
+      ...prev,
+      locationIds: typeof value === "string" ? value.split(",") : value,
+    }));
   };
 
   const validate = () => {
@@ -169,6 +199,7 @@ const UsersManagement: React.FC = () => {
           email: form.email?.trim() || undefined,
           role: form.role,
           vehicleId: form.vehicleId ?? null,
+          locationIds: form.locationIds ?? [],
         };
         if (isSuperAdmin) {
           payload.branchId = form.branchId ?? null;
@@ -185,6 +216,7 @@ const UsersManagement: React.FC = () => {
           email: form.email?.trim() || undefined,
           role: form.role,
           vehicleId: form.vehicleId,
+          locationIds: form.locationIds ?? [],
         };
         if (isSuperAdmin) {
           payload.branchId = form.branchId ?? null;
@@ -256,6 +288,7 @@ const UsersManagement: React.FC = () => {
                 {isSuperAdmin && (
                   <TableCell sx={{ fontWeight: 600, color: "#fff" }}>Niederlassung</TableCell>
                 )}
+                <TableCell sx={{ fontWeight: 600, color: "#fff" }}>Lager</TableCell>
                 <TableCell sx={{ fontWeight: 600, color: "#fff" }}>Fahrzeug</TableCell>
                 <TableCell sx={{ fontWeight: 600, color: "#fff" }} align="right">
                   Aktionen
@@ -280,6 +313,17 @@ const UsersManagement: React.FC = () => {
                         )}
                       </TableCell>
                     )}
+                    <TableCell>
+                      {user.locations && user.locations.length > 0 ? (
+                        <Box sx={{ display: "flex", gap: 0.5, flexWrap: "wrap" }}>
+                          {user.locations.map((l) => (
+                            <Chip key={l.id} label={l.name ?? l.code} size="small" variant="outlined" color="primary" />
+                          ))}
+                        </Box>
+                      ) : (
+                        <Typography variant="body2" color="text.secondary">Alle</Typography>
+                      )}
+                    </TableCell>
                     <TableCell>
                       {vehicle ? `${vehicle.licensePlate} - ${vehicle.description}` : "-"}
                     </TableCell>
@@ -398,6 +442,44 @@ const UsersManagement: React.FC = () => {
                   </FormControl>
                 </Grid>
               )}
+              <Grid item xs={12}>
+                <FormControl fullWidth>
+                  <InputLabel id="lager-label">Lager (Mehrfachauswahl)</InputLabel>
+                  <Select
+                    labelId="lager-label"
+                    multiple
+                    value={Array.isArray(form.locationIds) ? form.locationIds : []}
+                    onChange={handleLocationIdsChange}
+                    label="Lager (Mehrfachauswahl)"
+                    displayEmpty
+                    renderValue={(selected) => {
+                      const ids = selected as string[];
+                      if (ids.length === 0) return <em style={{ fontStyle: "normal" }}>Alle Lager (kein Filter)</em>;
+                      return (
+                        <Box sx={{ display: "flex", flexWrap: "wrap", gap: 0.5 }}>
+                          {ids.map((id) => {
+                            const loc = warehouseLocations.find((l) => l.id === id);
+                            return <Chip key={id} label={loc?.name ?? loc?.code ?? id} size="small" />;
+                          })}
+                        </Box>
+                      );
+                    }}
+                  >
+                    {warehouseLocations.length === 0 ? (
+                      <MenuItem disabled><em>Keine Lager vorhanden – bitte zuerst unter Lagerorte anlegen</em></MenuItem>
+                    ) : (
+                      warehouseLocations.map((l) => (
+                        <MenuItem key={l.id} value={l.id}>
+                          <ListItemText primary={l.name ?? l.code} secondary={l.code} />
+                        </MenuItem>
+                      ))
+                    )}
+                  </Select>
+                </FormControl>
+                <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5, display: "block" }}>
+                  Leer lassen = Benutzer sieht alle Lager der Niederlassung
+                </Typography>
+              </Grid>
               <Grid item xs={12} sm={6}>
                 <FormControl fullWidth>
                   <InputLabel>Fahrzeug (optional)</InputLabel>
