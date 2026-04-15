@@ -47,16 +47,16 @@ export class AddLocationIdToSuppliers1745300000000 implements MigrationInterface
       );
     }
 
-    // Drop old unique index (branchId, name) if it exists
-    if (await this.indexExists(queryRunner, "suppliers", "IDX_suppliers_branch_name")) {
-      await queryRunner.query(`DROP INDEX \`IDX_suppliers_branch_name\` ON \`suppliers\``);
-    }
-
-    // New performance index (skip if already exists)
+    // Create new index FIRST (FK on branchId needs at least one index starting with branchId)
     if (!(await this.indexExists(queryRunner, "suppliers", "IDX_suppliers_branch_location"))) {
       await queryRunner.query(
         `CREATE INDEX \`IDX_suppliers_branch_location\` ON \`suppliers\` (\`branchId\`, \`locationId\`)`,
       );
+    }
+
+    // Now drop old unique index – safe because FK can now use IDX_suppliers_branch_location
+    if (await this.indexExists(queryRunner, "suppliers", "IDX_suppliers_branch_name")) {
+      await queryRunner.query(`DROP INDEX \`IDX_suppliers_branch_name\` ON \`suppliers\``);
     }
   }
 
