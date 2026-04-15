@@ -115,10 +115,13 @@ export class SetupService {
           id: u.id,
           username: u.username,
           displayName: u.displayName,
+          email: u.email ?? null,
           passwordHash: u.passwordHash,
           role: u.role,
-          vehicleId: u.vehicleId,
+          vehicleId: u.vehicleId ?? null,
+          branchId: u.branchId ?? null,
           refreshInterval: u.refreshInterval,
+          locationIds: (u as any).locations?.map((l: any) => l.id) ?? [],
         })),
         items: items.map((item) => ({
           ...item,
@@ -207,13 +210,25 @@ export class SetupService {
       await this.purchaseOrderRepository.clear();
       await this.itemRepository.clear();
       await this.supplierRepository.clear();
+      await this.dataSource.query('DELETE FROM user_locations');
       await this.locationRepository.clear();
       await this.vehicleRepository.clear();
       await this.userRepository.clear();
 
       // Stelle Daten wieder her
       if (data.users?.length > 0) {
-        await this.userRepository.save(data.users);
+        await this.userRepository.save(data.users.map((u: any) => ({
+          id: u.id,
+          username: u.username,
+          displayName: u.displayName,
+          email: u.email ?? null,
+          passwordHash: u.passwordHash,
+          role: u.role,
+          vehicleId: u.vehicleId ?? null,
+          branchId: u.branchId ?? null,
+          refreshInterval: u.refreshInterval,
+          locations: [],
+        })));
       }
 
       if (data.vehicles?.length > 0) {
@@ -243,6 +258,18 @@ export class SetupService {
 
         if (locationsWithParent.length > 0) {
           await this.locationRepository.save(locationsWithParent);
+        }
+      }
+
+      // Stelle Benutzer-Lager-Zuordnungen wieder her (user_locations)
+      if (data.users?.length > 0) {
+        for (const userData of data.users) {
+          if (Array.isArray(userData.locationIds) && userData.locationIds.length > 0) {
+            await this.userRepository.save({
+              id: userData.id,
+              locations: userData.locationIds.map((lid: string) => ({ id: lid })),
+            });
+          }
         }
       }
 

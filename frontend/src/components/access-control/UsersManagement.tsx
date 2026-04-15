@@ -444,7 +444,7 @@ const UsersManagement: React.FC = () => {
               )}
               <Grid item xs={12}>
                 <FormControl fullWidth>
-                  <InputLabel id="lager-label">Lager (Mehrfachauswahl)</InputLabel>
+                  <InputLabel id="lager-label" shrink>Lager (Mehrfachauswahl)</InputLabel>
                   <Select
                     labelId="lager-label"
                     multiple

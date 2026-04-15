@@ -357,7 +357,7 @@ const UsersPage = () => {
               {/* Lager-Zuweisung: Multi-Select mit WAREHOUSE-Lagerorten */}
               <Grid item xs={12}>
                 <FormControl fullWidth>
-                  <InputLabel id="lager-select-label">Lager (Mehrfachauswahl)</InputLabel>
+                  <InputLabel id="lager-select-label" shrink>Lager (Mehrfachauswahl)</InputLabel>
                   <Select
                     labelId="lager-select-label"
                     multiple
