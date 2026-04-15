@@ -14,9 +14,16 @@ import { StockMovement } from "../stock/entities/stock-movement.entity";
 import { InventorySession } from "../inventory/entities/inventory-session.entity";
 import { InventoryLine } from "../inventory/entities/inventory-line.entity";
 import { SystemConfig } from "../logging/entities/system-config.entity";
+import { BranchConfig } from "../logging/entities/branch-config.entity";
 import { Supplier } from "../suppliers/entities/supplier.entity";
 import { PurchaseOrder } from "../purchasing/entities/purchase-order.entity";
 import { PurchaseOrderLine } from "../purchasing/entities/purchase-order-line.entity";
+import { Branch } from "../branches/entities/branch.entity";
+import { Role } from "../access-control/entities/role.entity";
+import { Permission } from "../access-control/entities/permission.entity";
+import { RolePermission } from "../access-control/entities/role-permission.entity";
+import { UserPermission } from "../access-control/entities/user-permission.entity";
+import { ItemCode } from "../items/entities/item-code.entity";
 import { LoggingService } from "../logging/services/logging.service";
 
 @Injectable()
@@ -52,6 +59,20 @@ export class SetupService {
     private readonly purchaseOrderRepository: Repository<PurchaseOrder>,
     @InjectRepository(PurchaseOrderLine)
     private readonly purchaseOrderLineRepository: Repository<PurchaseOrderLine>,
+    @InjectRepository(Branch)
+    private readonly branchRepository: Repository<Branch>,
+    @InjectRepository(BranchConfig)
+    private readonly branchConfigRepository: Repository<BranchConfig>,
+    @InjectRepository(Role)
+    private readonly roleRepository: Repository<Role>,
+    @InjectRepository(Permission)
+    private readonly permissionRepository: Repository<Permission>,
+    @InjectRepository(RolePermission)
+    private readonly rolePermissionRepository: Repository<RolePermission>,
+    @InjectRepository(UserPermission)
+    private readonly userPermissionRepository: Repository<UserPermission>,
+    @InjectRepository(ItemCode)
+    private readonly itemCodeRepository: Repository<ItemCode>,
     private readonly loggingService: LoggingService,
   ) {
     // Starte automatisches Backup beim Initialisieren (mit Verzögerung, damit DB ready ist)
@@ -76,6 +97,14 @@ export class SetupService {
       stockMovements,
       inventorySessions,
       inventoryLines,
+      branches,
+      branchConfigs,
+      systemConfigs,
+      roles,
+      permissions,
+      rolePermissions,
+      userPermissions,
+      itemCodes,
     ] = await Promise.all([
       this.userRepository.find(),
       this.itemRepository.find({ relations: ["storageLocation", "supplier"] }),
@@ -105,12 +134,27 @@ export class SetupService {
         .leftJoinAndSelect('il.vehicle', 'vehicle')
         .leftJoinAndSelect('il.location', 'location')
         .getMany(),
+      this.branchRepository.find(),
+      this.branchConfigRepository.find(),
+      this.configRepository.find(),
+      this.roleRepository.find(),
+      this.permissionRepository.find(),
+      this.rolePermissionRepository.find(),
+      this.userPermissionRepository.find(),
+      this.itemCodeRepository.find({ relations: ["item"] }),
     ]);
 
     return {
-      version: '1.0',
+      version: '2.0',
       timestamp: new Date().toISOString(),
       data: {
+        branches,
+        branchConfigs,
+        systemConfigs,
+        roles,
+        permissions,
+        rolePermissions,
+        userPermissions,
         users: users.map(u => ({
           id: u.id,
           username: u.username,
@@ -190,6 +234,13 @@ export class SetupService {
           countedQuantity: il.countedQuantity,
           note: il.note,
         })),
+        itemCodes: itemCodes.map(ic => ({
+          id: ic.id,
+          branchId: ic.branchId,
+          code: ic.code,
+          kind: ic.kind,
+          itemId: (ic as any).item?.id ?? null,
+        })),
       },
     };
   }
@@ -208,14 +259,42 @@ export class SetupService {
       await this.stockLevelRepository.clear();
       await this.purchaseOrderLineRepository.clear();
       await this.purchaseOrderRepository.clear();
+      await this.itemCodeRepository.clear();
       await this.itemRepository.clear();
       await this.supplierRepository.clear();
+      await this.userPermissionRepository.clear();
+      await this.rolePermissionRepository.clear();
       await this.dataSource.query('DELETE FROM user_locations');
       await this.locationRepository.clear();
       await this.vehicleRepository.clear();
       await this.userRepository.clear();
+      await this.branchConfigRepository.clear();
+      await this.configRepository.clear();
+      await this.roleRepository.clear();
+      await this.permissionRepository.clear();
+      await this.branchRepository.clear();
 
-      // Stelle Daten wieder her
+      // Stelle Daten wieder her – Reihenfolge: unabhängige Tabellen zuerst
+      if (data.branches?.length > 0) {
+        await this.branchRepository.save(data.branches);
+      }
+
+      if (data.permissions?.length > 0) {
+        await this.permissionRepository.save(data.permissions);
+      }
+
+      if (data.roles?.length > 0) {
+        await this.roleRepository.save(data.roles);
+      }
+
+      if (data.systemConfigs?.length > 0) {
+        await this.configRepository.save(data.systemConfigs);
+      }
+
+      if (data.branchConfigs?.length > 0) {
+        await this.branchConfigRepository.save(data.branchConfigs);
+      }
+
       if (data.users?.length > 0) {
         await this.userRepository.save(data.users.map((u: any) => ({
           id: u.id,
@@ -287,6 +366,24 @@ export class SetupService {
           };
         });
         await this.itemRepository.save(itemsToSave);
+      }
+
+      if (data.itemCodes?.length > 0) {
+        await this.itemCodeRepository.save(data.itemCodes.map((ic: any) => ({
+          id: ic.id,
+          branchId: ic.branchId,
+          code: ic.code,
+          kind: ic.kind,
+          item: ic.itemId ? { id: ic.itemId } : null,
+        })));
+      }
+
+      if (data.rolePermissions?.length > 0) {
+        await this.rolePermissionRepository.save(data.rolePermissions);
+      }
+
+      if (data.userPermissions?.length > 0) {
+        await this.userPermissionRepository.save(data.userPermissions);
       }
 
       if (data.purchaseOrders?.length > 0) {
