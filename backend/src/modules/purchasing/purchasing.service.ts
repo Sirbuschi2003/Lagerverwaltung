@@ -1097,7 +1097,7 @@ export class PurchasingService {
     html = replaceConditional(html, "supplierPhone", supplier?.phone);
     html = replaceConditional(html, "supplierCustomerNumber", supplier?.customerNumber);
 
-    html = replaceSimple(html, "title", escapeHtml("Bestellung"));
+    html = replaceSimple(html, "title", escapeHtml(orderNumber));
     html = replaceSimple(html, "companyName", escapeHtml(company.name ?? "Lagerverwaltung"));
     html = replaceSimple(html, "companyLogo", company.logoDataUrl ?? "");
     html = replaceSimple(html, "companyAddressLine1", escapeHtml(company.addressLine1 ?? ""));
