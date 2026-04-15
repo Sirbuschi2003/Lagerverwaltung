@@ -30,7 +30,11 @@
       "Bash(git commit:*)",
       "Bash(grep -E \"\\\\.\\(ts|tsx|js|jsx\\)$\")",
       "Bash(grep -E \"\\\\.\\(tsx|ts\\)$\")",
-      "Bash(grep -i \"\\\\.\\(ts|js\\)$\")"
+      "Bash(grep -i \"\\\\.\\(ts|js\\)$\")",
+      "Bash(ls /c/Users/Thomas.Busche/Desktop/Code/Lagerverwaltung/docker-compose*.yml)",
+      "Bash(git reset:*)",
+      "WebFetch(domain:api.github.com)",
+      "Bash(ls /c/Users/Thomas.Busche/Desktop/Code/Lagerverwaltung/frontend/public/sw* /c/Users/Thomas.Busche/Desktop/Code/Lagerverwaltung/frontend/src/sw*)"
     ],
     "additionalDirectories": [
       "c:\\Users\\Thomas.Busche\\.claude\\projects\\c--Users-Thomas-Busche-Desktop-Code-Lagerverwaltung\\memory",
