@@ -24,7 +24,6 @@ const useOfflineStore = create<OfflineState>()((set, get) => ({
   syncInProgress: false,
   
   setOnlineStatus: (online: boolean) => {
-    console.log(`[OfflineStore] Status: ${online ? 'Online' : 'Offline'}`);
     set({ isOnline: online });
     
     if (online) {
@@ -47,9 +46,7 @@ const useOfflineStore = create<OfflineState>()((set, get) => ({
       const hasData = items.length > 0 || vehicles.length > 0;
       set({ hasOfflineData: hasData });
       
-      console.log(`[OfflineStore] Offline-Daten verfügbar: ${hasData}`);
     } catch (err) {
-      console.error('[OfflineStore] Fehler beim Prüfen der Offline-Daten:', err);
       set({ hasOfflineData: false });
     }
   },

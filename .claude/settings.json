@@ -34,7 +34,13 @@
       "Bash(ls /c/Users/Thomas.Busche/Desktop/Code/Lagerverwaltung/docker-compose*.yml)",
       "Bash(git reset:*)",
       "WebFetch(domain:api.github.com)",
-      "Bash(ls /c/Users/Thomas.Busche/Desktop/Code/Lagerverwaltung/frontend/public/sw* /c/Users/Thomas.Busche/Desktop/Code/Lagerverwaltung/frontend/src/sw*)"
+      "Bash(ls /c/Users/Thomas.Busche/Desktop/Code/Lagerverwaltung/frontend/public/sw* /c/Users/Thomas.Busche/Desktop/Code/Lagerverwaltung/frontend/src/sw*)",
+      "Bash(grep -E \"\\(^[^/]*$|/[^/]*$\\)\")",
+      "Bash(find backend/src frontend/src -type f \\\\\\( -name \"*.ts\" -o -name \"*.tsx\" \\\\\\) -exec basename {} \\\\;)",
+      "Bash(xargs ls:*)",
+      "Bash(find . -type f \\\\\\( -name \"*.png\" -o -name \"*.jpg\" -o -name \"*.jpeg\" -o -name \"*.gif\" \\\\\\) -exec ls -lh {} \\\\;)",
+      "Bash(xargs wc:*)",
+      "Bash(grep -E \"\\\\.original$|schema\\\\.sql|image\\\\.png|generate-handbuch\")"
     ],
     "additionalDirectories": [
       "c:\\Users\\Thomas.Busche\\.claude\\projects\\c--Users-Thomas-Busche-Desktop-Code-Lagerverwaltung\\memory",

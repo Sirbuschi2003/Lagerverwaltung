@@ -138,7 +138,6 @@ const useAuthStore = create<AuthState>()(
             });
           } catch (err) {
             // Offline-Credentials konnten nicht gespeichert werden – Online-Login trotzdem erfolgreich
-            console.warn('[Auth] Offline-Credentials konnten nicht gespeichert werden:', (err as Error).message);
           }
 
           // Profil nach Login aktualisieren

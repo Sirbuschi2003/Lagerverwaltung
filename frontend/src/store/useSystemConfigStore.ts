@@ -58,7 +58,6 @@ const useSystemConfigStore = create<SystemConfigState>((set, get) => ({
         hasLoaded: true,
       });
     } catch (error) {
-      console.warn("[SystemConfigStore] Laden der Firmendaten fehlgeschlagen:", error);
       set({ companyName: null, companyLogo: null, hasLoaded: true });
     } finally {
       set({ isLoading: false });
@@ -82,7 +81,6 @@ const useSystemConfigStore = create<SystemConfigState>((set, get) => ({
         hasLoaded: true,
       });
     } catch (error) {
-      console.warn("[SystemConfigStore] Laden der branch-spezifischen Firmendaten fehlgeschlagen:", error);
     } finally {
       set({ isLoading: false });
     }
@@ -106,7 +104,6 @@ const useSystemConfigStore = create<SystemConfigState>((set, get) => ({
       });
       return config;
     } catch (error) {
-      console.error("[SystemConfigStore] Speichern der Firmendaten fehlgeschlagen:", error);
       throw error;
     } finally {
       set({ isLoading: false });

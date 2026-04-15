@@ -16,7 +16,6 @@ export class AddRestockColumns1697196002000 implements MigrationInterface {
           type: "timestamp",
           isNullable: true,
         }));
-        console.log("Added readyAt column to restock_requests");
       }
 
       // Check if preparedById column exists
@@ -28,7 +27,6 @@ export class AddRestockColumns1697196002000 implements MigrationInterface {
           length: "36",
           isNullable: true,
         }));
-        console.log("Added preparedById column to restock_requests");
       }
     }
   }

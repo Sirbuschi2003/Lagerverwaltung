@@ -27,7 +27,6 @@ const useUsersStore = create<UsersState>((set, get) => ({
       const data = await fetchUsers();
       set({ users: data, isLoading: false });
     } catch (error) {
-      console.error("Benutzer konnten nicht geladen werden", error);
       set({ isLoading: false });
     }
   },

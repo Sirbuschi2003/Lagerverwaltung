@@ -37,7 +37,6 @@ const useReportsStore = create<ReportsState>((set, get) => ({
       });
       set({ consumption: response.data });
     } catch (error) {
-      console.warn("Offline: Verbrauchsdaten nicht verf?gbar", error);
     }
   },
 }));

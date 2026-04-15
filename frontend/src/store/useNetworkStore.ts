@@ -38,13 +38,11 @@ let lastCheckPromise: Promise<boolean> | null = null;
 export async function checkBackendReachability(): Promise<boolean> {
   // Wenn bereits ein Check läuft, warte auf das Ergebnis
   if (isCheckingGlobal && lastCheckPromise) {
-    console.log('[NetworkStore] Check läuft bereits, warte auf Ergebnis...');
     return lastCheckPromise;
   }
 
   // Schnell-Check: Browser offline?
   if (!navigator.onLine) {
-    console.log('[NetworkStore] Browser offline, überspringe API-Check');
     useNetworkStore.getState().setOnline(false);
     useNetworkStore.getState().setLastCheck(new Date());
     return false;
@@ -71,7 +69,6 @@ export async function checkBackendReachability(): Promise<boolean> {
       clearTimeout(timeoutId);
       const isOnline = response.ok;
       
-      console.log('[NetworkStore] Backend-Check erfolgreich:', isOnline);
       useNetworkStore.getState().setOnline(isOnline);
       useNetworkStore.getState().setLastCheck(new Date());
       useNetworkStore.getState().setChecking(false);
@@ -81,7 +78,6 @@ export async function checkBackendReachability(): Promise<boolean> {
       
       return isOnline;
     } catch (error) {
-      console.log('[NetworkStore] Backend nicht erreichbar');
       useNetworkStore.getState().setOnline(false);
       useNetworkStore.getState().setLastCheck(new Date());
       useNetworkStore.getState().setChecking(false);
@@ -101,17 +97,13 @@ let initialCheckDone = false;
 
 export function initializeNetworkStatus() {
   if (initialCheckDone) {
-    console.log('[NetworkStore] Initiale Prüfung bereits durchgeführt');
     return;
   }
   
   initialCheckDone = true;
-  console.log('[NetworkStore] Führe initiale Backend-Prüfung durch...');
-  
   // Non-blocking initial check mit Timeout
   const quickTimeout = setTimeout(() => {
     if (useNetworkStore.getState().isChecking) {
-      console.log('[NetworkStore] Initiale Prüfung dauert zu lange - setze Fallback');
       useNetworkStore.getState().setOnline(navigator.onLine);
       useNetworkStore.getState().setChecking(false);
     }
@@ -123,12 +115,10 @@ export function initializeNetworkStatus() {
 
   // Browser Events (für echtes Offline/Online)
   window.addEventListener('online', () => {
-    console.log('[NetworkStore] Browser Event: online');
     checkBackendReachability();
   });
 
   window.addEventListener('offline', () => {
-    console.log('[NetworkStore] Browser Event: offline');
     useNetworkStore.getState().setOnline(false);
     useNetworkStore.getState().setLastCheck(new Date());
   });

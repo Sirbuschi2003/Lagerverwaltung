@@ -57,18 +57,15 @@ const useItemsStore = create<ItemsStoreState>((set: any, get: any) => ({
     const wantsMore = params?.limit && params.limit > items.length;
     const hasFilters = params?.search || params?.manufacturer || params?.productGroup;
     if (cacheValid && !params?.force && !wantsMore && !hasFilters) {
-      console.log('[ItemsStore] Cache noch gültig, überspringe Load');
       return;
     }
     set({ isLoading: true });
     // IMMER zuerst aus Cache versuchen fÃ¼r bessere Performance
-    console.log('[ItemsStore] Loading items, trying cache first...');
     try {
       const { useOfflineStorage } = await import('../hooks/useOfflineStorage');
       const storage = useOfflineStorage();
       const cachedItems = await storage.getItems();
       if (cachedItems.length > 0) {
-        console.log('[ItemsStore] Cache hit: Loaded', cachedItems.length, 'items from cache');
         set({
           items: cachedItems,
           total: cachedItems.length,
@@ -79,7 +76,6 @@ const useItemsStore = create<ItemsStoreState>((set: any, get: any) => ({
         });
         // Im Hintergrund von API nachladen falls online (non-blocking!)
         if (!offlineMode) {
-          console.log('[ItemsStore] Starte Background-Refresh von API...');
           fetchItems({
             page,
             limit: params?.limit ?? limit,
@@ -88,7 +84,6 @@ const useItemsStore = create<ItemsStoreState>((set: any, get: any) => ({
             productGroup: params?.productGroup,
           })
             .then(data => {
-              console.log('[ItemsStore] Background-Refresh erfolgreich');
               const state = get();
               const incomingLimit = params?.limit ?? limit;
               // Verhindere, dass kleinere Abfragen den großen Offline-Cache überschreiben
@@ -106,27 +101,21 @@ const useItemsStore = create<ItemsStoreState>((set: any, get: any) => ({
               });
               // Cache aktualisieren
               storage.setItems(data.items).catch(err =>
-                console.error('[ItemsStore] Cache-Update fehlgeschlagen:', err)
-              );
             })
             .catch(err => {
-              console.warn('[ItemsStore] Background-Refresh fehlgeschlagen:', err?.message);
               // Nicht kritisch, Cache bleibt gÃ¼ltig
             });
         }
         return; // Beende hier, API lÃ¤dt im Hintergrund
       }
     } catch (err) {
-      console.error('[ItemsStore] Cache error:', err);
     }
     // Nur wenn Cache leer ist UND online: Von API laden
     if (offlineMode) {
-      console.log('[ItemsStore] Offline and no cache - set empty items');
       set({ items: [], isLoading: false });
       return;
     }
     // Online: Versuche API zu laden (nur wenn kein Cache!)
-    console.log('[ItemsStore] Kein Cache - lade von API...');
     try {
       const data = await fetchItems({
         page: params?.page || page,
@@ -141,7 +130,6 @@ const useItemsStore = create<ItemsStoreState>((set: any, get: any) => ({
         const storage = useOfflineStorage();
         await storage.setItems(data.items);
       } catch (storageErr) {
-        console.warn('[ItemsStore] Fehler beim Speichern in Cache:', storageErr);
       }
       set({
         items: data.items,
@@ -152,14 +140,12 @@ const useItemsStore = create<ItemsStoreState>((set: any, get: any) => ({
         lastLoaded: now
       });
     } catch (error) {
-      console.warn("[ItemsStore] API-Fehler, lade aus lokalem Cache", error);
       // Fallback: Versuche aus lokalem Storage zu laden
       try {
         const { useOfflineStorage } = await import('../hooks/useOfflineStorage');
         const storage = useOfflineStorage();
         const cachedItems = await storage.getItems();
         if (cachedItems.length > 0) {
-          console.log('[ItemsStore] Fallback: Artikel aus lokalem Cache geladen');
           set({
             items: cachedItems,
             total: cachedItems.length,
@@ -172,7 +158,6 @@ const useItemsStore = create<ItemsStoreState>((set: any, get: any) => ({
           set({ isLoading: false });
         }
       } catch (cacheError) {
-        console.error('[ItemsStore] Kein Cache verfÃ¼gbar:', cacheError);
         set({ isLoading: false });
       }
     }
@@ -194,7 +179,6 @@ const useItemsStore = create<ItemsStoreState>((set: any, get: any) => ({
         });
         return;
       } catch (error) {
-        console.warn("[ItemsStore] Offline: Cache konnte nicht geladen werden", error);
         set({ isLoading: false });
         return;
       }
@@ -231,16 +215,13 @@ const useItemsStore = create<ItemsStoreState>((set: any, get: any) => ({
         const storage = useOfflineStorage();
         await storage.setItems(allItems);
       } catch (err) {
-        console.warn('[ItemsStore] Fehler beim Speichern in Cache (forceLoad):', err);
       }
     } catch (error) {
-      console.warn("Offline: Artikel werden lokal angezeigt", error);
       set({ isLoading: false });
     }
   },
   addItem: async (payload: CreateItemRequest) => {
     const queueOfflineCreation = async () => {
-      console.log('[ItemsStore] Offline: Artikel wird in Queue gespeichert');
       const { useOfflineStorage } = await import('../hooks/useOfflineStorage');
       const storage = useOfflineStorage();
       const tempId = `temp-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
@@ -266,13 +247,11 @@ const useItemsStore = create<ItemsStoreState>((set: any, get: any) => ({
         const storage = useOfflineStorage();
         await storage.updateLocalItem(created);
       } catch (err) {
-        console.warn('[ItemsStore] Cache-Update fehlgeschlagen:', err);
       }
       return created;
     } catch (error: any) {
       const isNetworkError = !error?.response || error.code === 'ERR_NETWORK';
       if (isNetworkError) {
-        console.warn('[ItemsStore] Netzwerkfehler - speichere Artikel lokal', error);
         return queueOfflineCreation();
       }
       throw error;
@@ -288,7 +267,6 @@ const useItemsStore = create<ItemsStoreState>((set: any, get: any) => ({
   },
   updateItem: async (id: any, payload: any) => {
     const queueOfflineUpdate = async () => {
-      console.log('[ItemsStore] Offline: Artikel-Update wird in Queue gespeichert');
       const { useOfflineStorage } = await import('../hooks/useOfflineStorage');
       const storage = useOfflineStorage();
       await storage.addItemToQueue('UPDATE', { id, ...payload }, id);
@@ -318,13 +296,11 @@ const useItemsStore = create<ItemsStoreState>((set: any, get: any) => ({
         const storage = useOfflineStorage();
         await storage.updateLocalItem(updated);
       } catch (err) {
-        console.warn('[ItemsStore] Cache-Update fehlgeschlagen:', err);
       }
       return updated;
     } catch (error: any) {
       const isNetworkError = !error?.response || error.code === 'ERR_NETWORK';
       if (isNetworkError) {
-        console.warn('[ItemsStore] Netzwerkfehler - speichere Update offline', error);
         return queueOfflineUpdate();
       }
       throw error;
@@ -332,7 +308,6 @@ const useItemsStore = create<ItemsStoreState>((set: any, get: any) => ({
   },
   deleteItem: async (id: any) => {
     const queueOfflineDelete = async () => {
-      console.log('[ItemsStore] Offline: Artikel-Loeschung wird in Queue gespeichert');
       const { useOfflineStorage } = await import('../hooks/useOfflineStorage');
       const storage = useOfflineStorage();
       await storage.addItemToQueue('DELETE', { id }, id);
@@ -350,12 +325,10 @@ const useItemsStore = create<ItemsStoreState>((set: any, get: any) => ({
         const storage = useOfflineStorage();
         await storage.removeLocalItem(id);
       } catch (err) {
-        console.warn('[ItemsStore] Cache-Update fehlgeschlagen:', err);
       }
     } catch (error: any) {
       const isNetworkError = !error?.response || error.code === 'ERR_NETWORK';
       if (isNetworkError) {
-        console.warn('[ItemsStore] Netzwerkfehler - speichere Loeschung offline', error);
         return queueOfflineDelete();
       }
       throw error;

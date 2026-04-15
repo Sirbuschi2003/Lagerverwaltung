@@ -17,7 +17,6 @@ const useSetupStore = create<SetupState>((set) => ({
       const status = await checkSetupStatus();
       set({ needsSetup: status.needsSetup, isLoading: false });
     } catch (error) {
-      console.error("Setup status check failed", error);
       set({ needsSetup: false, isLoading: false });
     }
   },

@@ -975,7 +975,6 @@ export class PurchasingService {
 
       return documents;
     } catch (err) {
-      console.error('[PurchasingService] listOrderDocuments Fehler:', err);
       return [];
     }
   }
@@ -1440,7 +1439,7 @@ export class PurchasingService {
         try { await fs.unlink(fullPath); } catch { /* nicht vorhanden – ok */ }
       }
     } catch (error) {
-      console.warn("[PurchasingService] PDF Löschung fehlgeschlagen:", error);
+      /* PDF nicht gefunden – ok */
     }
   }
 
@@ -1459,9 +1458,8 @@ export class PurchasingService {
       await fs.mkdir(targetDir, { recursive: true });
       const fullPath = path.join(targetDir, filename);
       await fs.writeFile(fullPath, pdfBuffer);
-      console.log(`[PurchasingService] PDF gespeichert: ${branchFolder}/${locationFolder}/${year}/${month}/${filename}`);
     } catch (error) {
-      console.warn("[PurchasingService] PDF Ablage fehlgeschlagen:", error);
+      /* PDF-Ablage fehlgeschlagen – kein fataler Fehler */
     }
   }
 }

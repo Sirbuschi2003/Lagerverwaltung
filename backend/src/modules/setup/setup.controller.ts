@@ -55,7 +55,7 @@ export class SetupController {
     try {
       await this.setupService.saveManualBackup(backup);
     } catch (error) {
-      console.error('Konnte manuelles Backup nicht speichern:', error);
+      /* Backup-Ablage fehlgeschlagen – kein fataler Fehler */
     }
 
     return backup;

@@ -69,7 +69,6 @@ export class LoggingService {
       await this.logRepository.save(logEntry);
     } catch (error) {
       // Logging-Fehler nicht weiterwerfen, um Hauptfunktionalität nicht zu beeinträchtigen
-      console.error('Logging-Fehler:', error);
     }
   }
 
@@ -220,7 +219,6 @@ export class LoggingService {
         return isNaN(days) ? 90 : days;
       }
     } catch (error) {
-      console.error('Fehler beim Laden der Log-Retention Konfiguration:', error);
     }
     return 90; // Standard: 90 Tage
   }
@@ -415,7 +413,6 @@ export class LoggingService {
       const config = await this.configRepository.findOne({ where: { key } });
       return config?.value || null;
     } catch (error) {
-      console.error(`Fehler beim Laden der Konfiguration ${key}:`, error);
       return null;
     }
   }

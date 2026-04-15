@@ -217,5 +217,5 @@ export const offlineStorage = new OfflineStorage();
 
 // Cleanup alle 30 Minuten
 setInterval(() => {
-  offlineStorage.cleanup().catch(console.error);
+  offlineStorage.cleanup().catch(() => { /* Cleanup-Fehler ignorieren */ });
 }, 30 * 60 * 1000);

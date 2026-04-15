@@ -27,7 +27,6 @@ const useRestockStore = create<RestockState>((set) => ({
     // Online-Status prÃ¼fen
     const isOnline = navigator.onLine;
     if (!isOnline) {
-      console.log('[RestockStore] Offline - Ã¼berspringe loadForVehicle');
       set({ myRequests: [], isLoadingMy: false });
       return;
     }
@@ -35,10 +34,8 @@ const useRestockStore = create<RestockState>((set) => ({
     set({ isLoadingMy: true });
     try {
       const data = await fetchVehicleShortages(vehicleId);
-      console.log("Shortages fÃ¼r Fahrzeug", vehicleId, data);
       set({ myRequests: data, isLoadingMy: false });
     } catch (error) {
-      console.warn("Konnte Fahrzeug-Bedarfe nicht laden", error);
       set({ isLoadingMy: false });
     }
   },
@@ -46,10 +43,8 @@ const useRestockStore = create<RestockState>((set) => ({
     set({ isLoadingFleet: true });
     try {
       const data = await fetchRestockOverview(status ? { status } : undefined);
-      console.log("[Lager-View] RestockOverview geladen:", data);
       set({ fleetRequests: data, isLoadingFleet: false });
     } catch (error) {
-      console.warn("Konnte Restock-Übersicht nicht laden", error);
       set({ isLoadingFleet: false });
     }
   },

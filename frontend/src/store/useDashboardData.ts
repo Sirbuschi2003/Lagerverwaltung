@@ -34,7 +34,6 @@ const useDashboardData = create<DashboardState>(() => ({
   summary: loadCached(),
   loadSummary: async () => {
     if (!navigator.onLine) {
-      console.log('[DashboardData] Offline - nutze Cache');
       return;
     }
     try {
@@ -42,7 +41,6 @@ const useDashboardData = create<DashboardState>(() => ({
       localStorage.setItem(CACHE_KEY, JSON.stringify(response.data));
       useDashboardData.setState({ summary: response.data });
     } catch (error) {
-      console.warn("Dashboarddaten nicht verfügbar:", error);
     }
   },
 }));

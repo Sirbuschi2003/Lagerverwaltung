@@ -29,7 +29,6 @@ const useVehiclesStore = create<VehiclesState>((set, get) => ({
       const data = await fetchVehicles();
       set({ vehicles: data, isLoading: false });
     } catch (error) {
-      console.warn("Offline: Fahrzeuge werden lokal angezeigt", error);
       set({ isLoading: false });
     }
   },

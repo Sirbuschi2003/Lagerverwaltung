@@ -54,13 +54,11 @@ const AppContent = () => {
 
   // Initialisiere GLOBALEN Network-Status (nur EINMAL für gesamte App)
   useEffect(() => {
-    console.log('[App] Initialisiere globalen Network-Status...');
     initializeNetworkStatus();
   }, []);
 
   useEffect(() => {
     useSystemConfigStore.getState().loadCompany().catch((error) => {
-      console.warn("[App] Konnte Firmendaten nicht laden:", error);
     });
   }, []);
 
@@ -70,7 +68,6 @@ const AppContent = () => {
   
   // Offline-Queue beim App-Start laden (initialisiert auch Auto-Sync!)
   useEffect(() => {
-    console.log('[App] Initialisiere Offline-Queue...');
     useOfflineQueue.getState().loadFromStorage();
   }, []);
 
@@ -81,7 +78,6 @@ const AppContent = () => {
     }
     // Beim ersten Rendern oder wenn online wird, lade Artikel
     if (isOnline && !initialSyncDone.current) {
-      console.log('[App] Backend erreichbar - lade Artikelstammdaten (initial)');
       initialSyncDone.current = true;
       // JWT erst refreshen (damit locationIds aktuell sind), dann Artikel laden
       void (async () => {
@@ -89,12 +85,10 @@ const AppContent = () => {
         useItemsStore.getState().loadItems();
       })();
     } else if (isOnline) {
-      console.log('[App] Backend erreichbar - lade Artikelstammdaten');
       useItemsStore.getState().loadItems();
     }
     // Wenn offline, beim naechsten Online erneut synchronisieren
     if (!isOnline) {
-      console.log('[App] Backend nicht erreichbar - nutze Offline-Modus');
       initialSyncDone.current = false;
     }
   }, [isOnline, token]);

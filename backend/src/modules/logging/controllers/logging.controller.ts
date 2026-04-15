@@ -105,7 +105,6 @@ export class LoggingController {
 
       return { success: true, count: logs.length };
     } catch (error: any) {
-      console.error('[LoggingController] Fehler beim Empfangen von Frontend-Logs:', error);
       throw error;
     }
   }
