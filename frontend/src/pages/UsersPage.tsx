@@ -15,7 +15,6 @@ import {
   InputLabel,
   ListItemText,
   MenuItem,
-  OutlinedInput,
   Paper,
   Select,
   Table,
@@ -356,25 +355,31 @@ const UsersPage = () => {
                 </Grid>
               )}
               {/* Lager-Zuweisung: Multi-Select mit WAREHOUSE-Lagerorten */}
-              <Grid item xs={12} sm={6}>
+              <Grid item xs={12}>
                 <FormControl fullWidth>
-                  <InputLabel>Lager (Mehrfachauswahl)</InputLabel>
+                  <InputLabel id="lager-select-label">Lager (Mehrfachauswahl)</InputLabel>
                   <Select
+                    labelId="lager-select-label"
                     multiple
-                    value={form.locationIds ?? []}
+                    value={Array.isArray(form.locationIds) ? form.locationIds : []}
                     onChange={handleLocationIdsChange}
-                    input={<OutlinedInput label="Lager (Mehrfachauswahl)" />}
-                    renderValue={(selected) => (
-                      <Box sx={{ display: "flex", flexWrap: "wrap", gap: 0.5 }}>
-                        {(selected as string[]).map((id) => {
-                          const loc = warehouseLocations.find((l) => l.id === id);
-                          return <Chip key={id} label={loc?.name ?? loc?.code ?? id} size="small" />;
-                        })}
-                      </Box>
-                    )}
+                    label="Lager (Mehrfachauswahl)"
+                    displayEmpty
+                    renderValue={(selected) => {
+                      const ids = selected as string[];
+                      if (ids.length === 0) return <em style={{ color: "inherit", fontStyle: "normal" }}>Alle Lager (kein Filter)</em>;
+                      return (
+                        <Box sx={{ display: "flex", flexWrap: "wrap", gap: 0.5 }}>
+                          {ids.map((id) => {
+                            const loc = warehouseLocations.find((l) => l.id === id);
+                            return <Chip key={id} label={loc?.name ?? loc?.code ?? id} size="small" />;
+                          })}
+                        </Box>
+                      );
+                    }}
                   >
                     {warehouseLocations.length === 0 ? (
-                      <MenuItem disabled><em>Keine Lager vorhanden – bitte zuerst in Lagerorte anlegen</em></MenuItem>
+                      <MenuItem disabled><em>Keine Lager vorhanden – bitte zuerst unter Lagerorte anlegen</em></MenuItem>
                     ) : (
                       warehouseLocations.map((l) => (
                         <MenuItem key={l.id} value={l.id}>
@@ -384,11 +389,9 @@ const UsersPage = () => {
                     )}
                   </Select>
                 </FormControl>
-                {warehouseLocations.length > 0 && (
-                  <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5, display: "block" }}>
-                    Leer lassen = Benutzer sieht alle Lager der Niederlassung
-                  </Typography>
-                )}
+                <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5, display: "block" }}>
+                  Leer lassen = Benutzer sieht alle Lager der Niederlassung
+                </Typography>
               </Grid>
               <Grid item xs={12} sm={6}>
                 <FormControl fullWidth>
