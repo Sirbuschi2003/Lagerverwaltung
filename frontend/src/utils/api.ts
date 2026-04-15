@@ -1944,3 +1944,24 @@ export const fetchConsumptionTrend = async (months: 6 | 12 = 12, itemId?: string
   });
   return response.data;
 };
+
+export interface ArticleActivityRow {
+  itemId: string;
+  code: string;
+  description: string;
+  descriptionSecondary: string | null;
+  manufacturer: string | null;
+  productGroup: string | null;
+  checkoutCount: number;
+  checkinCount: number;
+  checkoutQty: number;
+  checkinQty: number;
+  lastMovementAt: string | null;
+}
+
+export const fetchArticleActivity = async (from: string, to: string): Promise<ArticleActivityRow[]> => {
+  const response = await api.get<ArticleActivityRow[]>("/reports/article-activity", {
+    params: { from, to },
+  });
+  return response.data;
+};

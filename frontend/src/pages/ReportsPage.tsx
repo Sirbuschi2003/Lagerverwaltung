@@ -22,6 +22,7 @@ import {
   TableContainer,
   TableHead,
   TableRow,
+  TableSortLabel,
   Tabs,
   TextField,
   ToggleButton,
@@ -37,6 +38,10 @@ import {
   ShowChart as ShowChartIcon,
   FilterList as FilterIcon,
   Clear as ClearIcon,
+  BarChart as BarChartIcon,
+  FileDownload as FileDownloadIcon,
+  ArrowUpward as ArrowUpIcon,
+  ArrowDownward as ArrowDownIcon,
 } from "@mui/icons-material";
 
 import {
@@ -44,11 +49,57 @@ import {
   fetchSlowMoverSettings,
   saveSlowMoverSettings,
   fetchConsumptionTrend,
+  fetchArticleActivity,
   type SlowMoverRow,
   type ConsumptionTrendEntry,
+  type ArticleActivityRow,
 } from "../utils/api";
 import useAuthStore from "../store/useAuthStore";
 import useItemsStore from "../store/useItemsStore";
+
+// ── Datum-Helfer ──────────────────────────────────────────────────────────────
+
+const toDateStr = (d: Date) => d.toISOString().split("T")[0];
+
+const presets = [
+  { label: "30 Tage", days: 30 },
+  { label: "90 Tage", days: 90 },
+  { label: "6 Monate", days: 180 },
+  { label: "1 Jahr", days: 365 },
+];
+
+const getPresetRange = (days: number) => {
+  const to = new Date();
+  const from = new Date(to.getTime() - days * 24 * 60 * 60 * 1000);
+  return { from: toDateStr(from), to: toDateStr(to) };
+};
+
+const formatDate = (iso: string | null) => {
+  if (!iso) return "—";
+  return new Date(iso).toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit", year: "numeric" });
+};
+
+// ── CSV-Export ────────────────────────────────────────────────────────────────
+
+const exportCsv = (rows: ArticleActivityRow[], from: string, to: string) => {
+  const header = ["Artikelnummer", "Bezeichnung", "Bezeichnung 2", "Hersteller", "Produktgruppe",
+    "Entnahmen (Anz.)", "Entnahmen (Menge)", "Eingänge (Anz.)", "Eingänge (Menge)", "Letzte Bewegung"];
+  const lines = rows.map((r) => [
+    r.code, r.description, r.descriptionSecondary ?? "",
+    r.manufacturer ?? "", r.productGroup ?? "",
+    r.checkoutCount, r.checkoutQty, r.checkinCount, r.checkinQty,
+    formatDate(r.lastMovementAt),
+  ].map((v) => `"${String(v).replace(/"/g, '""')}"`).join(";"));
+
+  const csv = "\uFEFF" + [header.join(";"), ...lines].join("\r\n");
+  const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `artikel_auswertung_${from}_${to}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+};
 
 // ── Slow-Mover Tab ────────────────────────────────────────────────────────────
 
@@ -68,7 +119,6 @@ const SlowMoverTab: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // Filter-State
   const [search, setSearch] = useState("");
   const [filterManufacturer, setFilterManufacturer] = useState("");
   const [filterGroup, setFilterGroup] = useState("");
@@ -112,7 +162,6 @@ const SlowMoverTab: React.FC = () => {
     }
   };
 
-  // Dropdown-Optionen aus den Daten ableiten
   const manufacturers = useMemo(() => {
     const set = new Set(rows.map((r) => r.manufacturer).filter(Boolean) as string[]);
     return [...set].sort((a, b) => a.localeCompare(b, "de"));
@@ -144,14 +193,8 @@ const SlowMoverTab: React.FC = () => {
 
   const hasFilter = search || filterManufacturer || filterGroup || filterNoStock;
 
-  const formatDate = (iso: string | null) => {
-    if (!iso) return "Nie bewegt";
-    return new Date(iso).toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit", year: "numeric" });
-  };
-
   return (
     <Box>
-      {/* Header */}
       <Stack direction="row" justifyContent="space-between" alignItems="center" flexWrap="wrap" gap={1} sx={{ mb: 2 }}>
         <Box>
           <Typography variant="h6" sx={{ fontWeight: 700 }}>Slow-Mover / Dead-Stock</Typography>
@@ -171,7 +214,6 @@ const SlowMoverTab: React.FC = () => {
         </Stack>
       </Stack>
 
-      {/* Filter-Leiste */}
       <Paper variant="outlined" sx={{ p: 1.5, mb: 2 }}>
         <Stack direction={{ xs: "column", sm: "row" }} gap={1.5} flexWrap="wrap" alignItems="center">
           <TextField
@@ -182,43 +224,20 @@ const SlowMoverTab: React.FC = () => {
             InputProps={{ startAdornment: <InputAdornment position="start"><FilterIcon fontSize="small" /></InputAdornment> }}
             sx={{ minWidth: 280, flex: 2 }}
           />
-          <TextField
-            select
-            size="small"
-            label="Hersteller"
-            value={filterManufacturer}
-            onChange={(e) => setFilterManufacturer(e.target.value)}
-            sx={{ minWidth: 160 }}
-          >
+          <TextField select size="small" label="Hersteller" value={filterManufacturer} onChange={(e) => setFilterManufacturer(e.target.value)} sx={{ minWidth: 160 }}>
             <MenuItem value="">Alle</MenuItem>
             {manufacturers.map((m) => <MenuItem key={m} value={m}>{m}</MenuItem>)}
           </TextField>
-          <TextField
-            select
-            size="small"
-            label="Produktgruppe"
-            value={filterGroup}
-            onChange={(e) => setFilterGroup(e.target.value)}
-            sx={{ minWidth: 160 }}
-          >
+          <TextField select size="small" label="Produktgruppe" value={filterGroup} onChange={(e) => setFilterGroup(e.target.value)} sx={{ minWidth: 160 }}>
             <MenuItem value="">Alle</MenuItem>
             {productGroups.map((g) => <MenuItem key={g} value={g}>{g}</MenuItem>)}
           </TextField>
-          <Button
-            size="small"
-            variant={filterNoStock ? "contained" : "outlined"}
-            onClick={() => setFilterNoStock((v) => !v)}
-            color={filterNoStock ? "warning" : "inherit"}
-          >
+          <Button size="small" variant={filterNoStock ? "contained" : "outlined"} onClick={() => setFilterNoStock((v) => !v)} color={filterNoStock ? "warning" : "inherit"}>
             Bestand = 0
           </Button>
           {hasFilter && (
-            <Button
-              size="small"
-              startIcon={<ClearIcon />}
-              onClick={() => { setSearch(""); setFilterManufacturer(""); setFilterGroup(""); setFilterNoStock(false); }}
-            >
-              Filter zurücksetzen
+            <Button size="small" startIcon={<ClearIcon />} onClick={() => { setSearch(""); setFilterManufacturer(""); setFilterGroup(""); setFilterNoStock(false); }}>
+              Zurücksetzen
             </Button>
           )}
         </Stack>
@@ -231,7 +250,7 @@ const SlowMoverTab: React.FC = () => {
       ) : filteredRows.length === 0 ? (
         <Paper sx={{ p: 4, textAlign: "center" }}>
           <Typography color="text.secondary">
-            {hasFilter ? "Keine Treffer für die aktuellen Filter." : `Keine Slow-Mover gefunden – alle Artikel wurden in den letzten ${threshold} Tagen bewegt.`}
+            {hasFilter ? "Keine Treffer für die aktuellen Filter." : `Keine Slow-Mover – alle Artikel wurden in den letzten ${threshold} Tagen bewegt.`}
           </Typography>
         </Paper>
       ) : (
@@ -249,37 +268,32 @@ const SlowMoverTab: React.FC = () => {
               </TableRow>
             </TableHead>
             <TableBody>
-              {filteredRows.map((row) => {
-                const severity = getDaysSeverity(row.daysSinceLastMovement);
-                return (
-                  <TableRow key={row.itemId} hover>
-                    <TableCell sx={{ fontFamily: "monospace", fontWeight: 600 }}>{row.code}</TableCell>
-                    <TableCell>
-                      <Typography variant="body2" sx={{ fontWeight: 600 }}>{row.description}</Typography>
-                      {row.descriptionSecondary && (
-                        <Typography variant="caption" color="text.secondary">{row.descriptionSecondary}</Typography>
-                      )}
-                    </TableCell>
-                    <TableCell>{row.manufacturer || "-"}</TableCell>
-                    <TableCell>{row.productGroup || "-"}</TableCell>
-                    <TableCell align="right">
-                      <Typography variant="body2" sx={{ fontWeight: row.totalQuantity === 0 ? 700 : 400, color: row.totalQuantity === 0 ? "warning.main" : "text.primary" }}>
-                        {row.totalQuantity}
-                      </Typography>
-                    </TableCell>
-                    <TableCell>
-                      <Typography variant="body2" color={row.lastMovementAt ? "text.primary" : "error.main"}>
-                        {formatDate(row.lastMovementAt)}
-                      </Typography>
-                    </TableCell>
-                    <TableCell align="right">
-                      <Tooltip title={row.daysSinceLastMovement === null ? "Noch nie bewegt" : `${row.daysSinceLastMovement} Tage`}>
-                        <Chip label={row.daysSinceLastMovement !== null ? `${row.daysSinceLastMovement} d` : "–"} color={severity} size="small" />
-                      </Tooltip>
-                    </TableCell>
-                  </TableRow>
-                );
-              })}
+              {filteredRows.map((row) => (
+                <TableRow key={row.itemId} hover>
+                  <TableCell sx={{ fontFamily: "monospace", fontWeight: 600 }}>{row.code}</TableCell>
+                  <TableCell>
+                    <Typography variant="body2" sx={{ fontWeight: 600 }}>{row.description}</Typography>
+                    {row.descriptionSecondary && <Typography variant="caption" color="text.secondary">{row.descriptionSecondary}</Typography>}
+                  </TableCell>
+                  <TableCell>{row.manufacturer || "-"}</TableCell>
+                  <TableCell>{row.productGroup || "-"}</TableCell>
+                  <TableCell align="right">
+                    <Typography variant="body2" sx={{ fontWeight: row.totalQuantity === 0 ? 700 : 400, color: row.totalQuantity === 0 ? "warning.main" : "text.primary" }}>
+                      {row.totalQuantity}
+                    </Typography>
+                  </TableCell>
+                  <TableCell>
+                    <Typography variant="body2" color={row.lastMovementAt ? "text.primary" : "error.main"}>
+                      {formatDate(row.lastMovementAt)}
+                    </Typography>
+                  </TableCell>
+                  <TableCell align="right">
+                    <Tooltip title={row.daysSinceLastMovement === null ? "Noch nie bewegt" : `${row.daysSinceLastMovement} Tage`}>
+                      <Chip label={row.daysSinceLastMovement !== null ? `${row.daysSinceLastMovement} d` : "–"} color={getDaysSeverity(row.daysSinceLastMovement)} size="small" />
+                    </Tooltip>
+                  </TableCell>
+                </TableRow>
+              ))}
             </TableBody>
           </Table>
         </TableContainer>
@@ -291,7 +305,6 @@ const SlowMoverTab: React.FC = () => {
         </Typography>
       )}
 
-      {/* Schwellwert-Dialog */}
       <Dialog open={settingsOpen} onClose={() => setSettingsOpen(false)} maxWidth="xs" fullWidth>
         <DialogTitle>Slow-Mover Schwellwert</DialogTitle>
         <DialogContent>
@@ -299,10 +312,7 @@ const SlowMoverTab: React.FC = () => {
             Artikel ohne Bewegung seit mehr als diesem Wert gelten als Slow-Mover. Die Einstellung gilt für deine Niederlassung.
           </Typography>
           <TextField
-            fullWidth
-            label="Schwellwert in Tagen"
-            type="number"
-            value={editDays}
+            fullWidth label="Schwellwert in Tagen" type="number" value={editDays}
             onChange={(e) => setEditDays(Math.max(1, Math.min(3650, Number.parseInt(e.target.value, 10) || 1)))}
             inputProps={{ min: 1, max: 3650 }}
             InputProps={{ endAdornment: <InputAdornment position="end">Tage</InputAdornment> }}
@@ -358,9 +368,7 @@ const ConsumptionTrendTab: React.FC = () => {
     }
   }, []);
 
-  useEffect(() => {
-    void load(months, selectedItem?.id);
-  }, [load, months, selectedItem]);
+  useEffect(() => { void load(months, selectedItem?.id); }, [load, months, selectedItem]);
 
   const maxVal = Math.max(...data.map((d) => Math.max(d.checkouts, d.checkins)), 1);
   const formatMonth = (key: string) => {
@@ -373,7 +381,6 @@ const ConsumptionTrendTab: React.FC = () => {
 
   return (
     <Box>
-      {/* Header + Filter */}
       <Stack direction="row" justifyContent="space-between" alignItems="flex-start" flexWrap="wrap" gap={1.5} sx={{ mb: 2 }}>
         <Box>
           <Typography variant="h6" sx={{ fontWeight: 700 }}>Verbrauchstrend</Typography>
@@ -382,12 +389,7 @@ const ConsumptionTrendTab: React.FC = () => {
           </Typography>
         </Box>
         <Stack direction="row" gap={1} alignItems="center" flexWrap="wrap">
-          <ToggleButtonGroup
-            value={months}
-            exclusive
-            size="small"
-            onChange={(_, v) => { if (v) setMonths(v as 6 | 12); }}
-          >
+          <ToggleButtonGroup value={months} exclusive size="small" onChange={(_, v) => { if (v) setMonths(v as 6 | 12); }}>
             <ToggleButton value={6}>6 Monate</ToggleButton>
             <ToggleButton value={12}>12 Monate</ToggleButton>
           </ToggleButtonGroup>
@@ -397,35 +399,20 @@ const ConsumptionTrendTab: React.FC = () => {
         </Stack>
       </Stack>
 
-      {/* Artikel-Filter */}
       <Paper variant="outlined" sx={{ p: 1.5, mb: 2 }}>
         <Stack direction={{ xs: "column", sm: "row" }} gap={1.5} alignItems="center">
           <Autocomplete
-            options={itemOptions}
-            value={selectedItem}
-            onChange={(_, val) => setSelectedItem(val)}
-            getOptionLabel={(opt) => opt.label}
-            isOptionEqualToValue={(a, b) => a.id === b.id}
+            options={itemOptions} value={selectedItem} onChange={(_, val) => setSelectedItem(val)}
+            getOptionLabel={(opt) => opt.label} isOptionEqualToValue={(a, b) => a.id === b.id}
             renderInput={(params) => (
-              <TextField
-                {...params}
-                size="small"
-                label="Artikel filtern (optional)"
-                placeholder="Artikelnr. oder Bezeichnung…"
+              <TextField {...params} size="small" label="Artikel filtern (optional)" placeholder="Artikelnr. oder Bezeichnung…"
                 InputProps={{ ...params.InputProps, startAdornment: <><FilterIcon fontSize="small" sx={{ ml: 0.5, mr: 0.5, color: "text.secondary" }} />{params.InputProps.startAdornment}</> }}
               />
             )}
-            sx={{ flex: 1, minWidth: 280 }}
-            clearOnEscape
+            sx={{ flex: 1, minWidth: 280 }} clearOnEscape
           />
           {selectedItem && (
-            <Button
-              size="small"
-              startIcon={<ClearIcon />}
-              onClick={() => setSelectedItem(null)}
-            >
-              Alle Artikel
-            </Button>
+            <Button size="small" startIcon={<ClearIcon />} onClick={() => setSelectedItem(null)}>Alle Artikel</Button>
           )}
         </Stack>
       </Paper>
@@ -436,7 +423,6 @@ const ConsumptionTrendTab: React.FC = () => {
         <Box sx={{ display: "flex", justifyContent: "center", py: 6 }}><CircularProgress /></Box>
       ) : (
         <>
-          {/* Zusammenfassung */}
           <Stack direction="row" spacing={2} sx={{ mb: 3, flexWrap: "wrap" }}>
             <Paper variant="outlined" sx={{ p: 2, minWidth: 160 }}>
               <Typography variant="caption" color="text.secondary">Entnahmen gesamt</Typography>
@@ -465,7 +451,6 @@ const ConsumptionTrendTab: React.FC = () => {
             )}
           </Stack>
 
-          {/* Balkendiagramm */}
           <Paper variant="outlined" sx={{ p: 2 }}>
             <Box sx={{ display: "flex", alignItems: "flex-end", gap: 1, height: 220, overflowX: "auto", pb: 1 }}>
               {data.map((entry) => {
@@ -491,16 +476,15 @@ const ConsumptionTrendTab: React.FC = () => {
             <Stack direction="row" spacing={2} sx={{ mt: 1, justifyContent: "center" }}>
               <Stack direction="row" spacing={0.5} alignItems="center">
                 <Box sx={{ width: 14, height: 14, bgcolor: "error.main", borderRadius: 0.5 }} />
-                <Typography variant="caption">Entnahmen (CHECKOUT)</Typography>
+                <Typography variant="caption">Entnahmen</Typography>
               </Stack>
               <Stack direction="row" spacing={0.5} alignItems="center">
                 <Box sx={{ width: 14, height: 14, bgcolor: "success.main", borderRadius: 0.5 }} />
-                <Typography variant="caption">Eingänge (CHECKIN)</Typography>
+                <Typography variant="caption">Eingänge</Typography>
               </Stack>
             </Stack>
           </Paper>
 
-          {/* Datentabelle */}
           <TableContainer component={Paper} variant="outlined" sx={{ mt: 2 }}>
             <Table size="small">
               <TableHead>
@@ -536,11 +520,318 @@ const ConsumptionTrendTab: React.FC = () => {
   );
 };
 
+// ── Artikel-Auswertung Tab ────────────────────────────────────────────────────
+
+type SortField = "checkoutCount" | "checkinCount" | "checkoutQty" | "checkinQty" | "lastMovementAt" | "code";
+type SortDir = "asc" | "desc";
+
+const ArticleActivityTab: React.FC = () => {
+  const theme = useTheme();
+
+  const defaultRange = getPresetRange(30);
+  const [from, setFrom] = useState(defaultRange.from);
+  const [to, setTo] = useState(defaultRange.to);
+  const [activePreset, setActivePreset] = useState<number>(30);
+
+  const [rows, setRows] = useState<ArticleActivityRow[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const [search, setSearch] = useState("");
+  const [filterManufacturer, setFilterManufacturer] = useState("");
+  const [filterGroup, setFilterGroup] = useState("");
+  const [sortField, setSortField] = useState<SortField>("checkoutCount");
+  const [sortDir, setSortDir] = useState<SortDir>("desc");
+
+  const load = useCallback(async (f: string, t: string) => {
+    setLoading(true);
+    setError(null);
+    try {
+      const data = await fetchArticleActivity(f, t);
+      setRows(data);
+    } catch (err: any) {
+      setError(err?.response?.data?.message || err?.message || "Fehler beim Laden");
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => { void load(from, to); }, []);
+
+  const handlePreset = (days: number) => {
+    const range = getPresetRange(days);
+    setFrom(range.from);
+    setTo(range.to);
+    setActivePreset(days);
+    void load(range.from, range.to);
+  };
+
+  const handleCustomLoad = () => {
+    setActivePreset(0);
+    void load(from, to);
+  };
+
+  const handleSort = (field: SortField) => {
+    if (sortField === field) {
+      setSortDir((d) => d === "asc" ? "desc" : "asc");
+    } else {
+      setSortField(field);
+      setSortDir("desc");
+    }
+  };
+
+  const manufacturers = useMemo(() => {
+    const set = new Set(rows.map((r) => r.manufacturer).filter(Boolean) as string[]);
+    return [...set].sort((a, b) => a.localeCompare(b, "de"));
+  }, [rows]);
+
+  const productGroups = useMemo(() => {
+    const set = new Set(rows.map((r) => r.productGroup).filter(Boolean) as string[]);
+    return [...set].sort((a, b) => a.localeCompare(b, "de"));
+  }, [rows]);
+
+  const filteredRows = useMemo(() => {
+    const q = search.toLowerCase().trim();
+    let filtered = rows.filter((row) => {
+      if (filterManufacturer && row.manufacturer !== filterManufacturer) return false;
+      if (filterGroup && row.productGroup !== filterGroup) return false;
+      if (q) {
+        return (
+          row.code.toLowerCase().includes(q) ||
+          row.description.toLowerCase().includes(q) ||
+          (row.descriptionSecondary ?? "").toLowerCase().includes(q) ||
+          (row.manufacturer ?? "").toLowerCase().includes(q)
+        );
+      }
+      return true;
+    });
+
+    filtered = [...filtered].sort((a, b) => {
+      let av: number | string = a[sortField] ?? 0;
+      let bv: number | string = b[sortField] ?? 0;
+      if (sortField === "lastMovementAt") {
+        av = a.lastMovementAt ? new Date(a.lastMovementAt).getTime() : 0;
+        bv = b.lastMovementAt ? new Date(b.lastMovementAt).getTime() : 0;
+      }
+      if (typeof av === "string" && typeof bv === "string") {
+        return sortDir === "asc" ? av.localeCompare(bv, "de") : bv.localeCompare(av, "de");
+      }
+      return sortDir === "asc" ? (av as number) - (bv as number) : (bv as number) - (av as number);
+    });
+
+    return filtered;
+  }, [rows, search, filterManufacturer, filterGroup, sortField, sortDir]);
+
+  const totals = useMemo(() => ({
+    checkoutCount: filteredRows.reduce((s, r) => s + r.checkoutCount, 0),
+    checkinCount: filteredRows.reduce((s, r) => s + r.checkinCount, 0),
+    checkoutQty: filteredRows.reduce((s, r) => s + r.checkoutQty, 0),
+    checkinQty: filteredRows.reduce((s, r) => s + r.checkinQty, 0),
+  }), [filteredRows]);
+
+  const hasFilter = search || filterManufacturer || filterGroup;
+
+  const SortCell = ({ field, label, align = "right" }: { field: SortField; label: string; align?: "left" | "right" }) => (
+    <TableCell align={align}>
+      <TableSortLabel active={sortField === field} direction={sortField === field ? sortDir : "desc"} onClick={() => handleSort(field)}>
+        {label}
+      </TableSortLabel>
+    </TableCell>
+  );
+
+  return (
+    <Box>
+      <Stack direction="row" justifyContent="space-between" alignItems="center" flexWrap="wrap" gap={1} sx={{ mb: 2 }}>
+        <Box>
+          <Typography variant="h6" sx={{ fontWeight: 700 }}>Artikel-Auswertung</Typography>
+          <Typography variant="body2" color="text.secondary">
+            Ein- und Ausgänge pro Artikel im gewählten Zeitraum
+          </Typography>
+        </Box>
+        {rows.length > 0 && (
+          <Button variant="outlined" startIcon={<FileDownloadIcon />} size="small" onClick={() => exportCsv(filteredRows, from, to)}>
+            CSV Export
+          </Button>
+        )}
+      </Stack>
+
+      {/* Zeitraum-Auswahl */}
+      <Paper variant="outlined" sx={{ p: 1.5, mb: 2 }}>
+        <Stack direction={{ xs: "column", sm: "row" }} gap={1.5} alignItems="center" flexWrap="wrap">
+          <Stack direction="row" gap={0.5} flexWrap="wrap">
+            {presets.map((p) => (
+              <Button
+                key={p.days} size="small"
+                variant={activePreset === p.days ? "contained" : "outlined"}
+                onClick={() => handlePreset(p.days)}
+              >
+                {p.label}
+              </Button>
+            ))}
+          </Stack>
+          <Divider orientation="vertical" flexItem sx={{ display: { xs: "none", sm: "block" } }} />
+          <Stack direction="row" gap={1} alignItems="center">
+            <TextField size="small" type="date" label="Von" value={from} onChange={(e) => setFrom(e.target.value)} InputLabelProps={{ shrink: true }} sx={{ width: 155 }} />
+            <TextField size="small" type="date" label="Bis" value={to} onChange={(e) => setTo(e.target.value)} InputLabelProps={{ shrink: true }} sx={{ width: 155 }} />
+            <Button variant="contained" size="small" startIcon={<RefreshIcon />} onClick={handleCustomLoad}>
+              Laden
+            </Button>
+          </Stack>
+        </Stack>
+      </Paper>
+
+      {/* Filter */}
+      <Paper variant="outlined" sx={{ p: 1.5, mb: 2 }}>
+        <Stack direction={{ xs: "column", sm: "row" }} gap={1.5} flexWrap="wrap" alignItems="center">
+          <TextField
+            size="small" placeholder="Suche: Artikelnr., Bezeichnung, Hersteller…" value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            InputProps={{ startAdornment: <InputAdornment position="start"><FilterIcon fontSize="small" /></InputAdornment> }}
+            sx={{ minWidth: 280, flex: 2 }}
+          />
+          <TextField select size="small" label="Hersteller" value={filterManufacturer} onChange={(e) => setFilterManufacturer(e.target.value)} sx={{ minWidth: 160 }}>
+            <MenuItem value="">Alle</MenuItem>
+            {manufacturers.map((m) => <MenuItem key={m} value={m}>{m}</MenuItem>)}
+          </TextField>
+          <TextField select size="small" label="Produktgruppe" value={filterGroup} onChange={(e) => setFilterGroup(e.target.value)} sx={{ minWidth: 160 }}>
+            <MenuItem value="">Alle</MenuItem>
+            {productGroups.map((g) => <MenuItem key={g} value={g}>{g}</MenuItem>)}
+          </TextField>
+          {hasFilter && (
+            <Button size="small" startIcon={<ClearIcon />} onClick={() => { setSearch(""); setFilterManufacturer(""); setFilterGroup(""); }}>
+              Zurücksetzen
+            </Button>
+          )}
+        </Stack>
+      </Paper>
+
+      {error && <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError(null)}>{error}</Alert>}
+
+      {/* KPI-Karten */}
+      {!loading && rows.length > 0 && (
+        <Stack direction="row" spacing={2} sx={{ mb: 2, flexWrap: "wrap" }}>
+          <Paper variant="outlined" sx={{ p: 2, minWidth: 150 }}>
+            <Typography variant="caption" color="text.secondary">Entnahmen</Typography>
+            <Stack direction="row" alignItems="center" gap={0.5}>
+              <ArrowDownIcon fontSize="small" sx={{ color: "error.main" }} />
+              <Typography variant="h5" sx={{ fontWeight: 700, color: "error.main" }}>{totals.checkoutCount}</Typography>
+            </Stack>
+            <Typography variant="caption" color="text.secondary">{totals.checkoutQty} Stk. gesamt</Typography>
+          </Paper>
+          <Paper variant="outlined" sx={{ p: 2, minWidth: 150 }}>
+            <Typography variant="caption" color="text.secondary">Eingänge</Typography>
+            <Stack direction="row" alignItems="center" gap={0.5}>
+              <ArrowUpIcon fontSize="small" sx={{ color: "success.main" }} />
+              <Typography variant="h5" sx={{ fontWeight: 700, color: "success.main" }}>{totals.checkinCount}</Typography>
+            </Stack>
+            <Typography variant="caption" color="text.secondary">{totals.checkinQty} Stk. gesamt</Typography>
+          </Paper>
+          <Paper variant="outlined" sx={{ p: 2, minWidth: 150 }}>
+            <Typography variant="caption" color="text.secondary">Artikel bewegt</Typography>
+            <Typography variant="h5" sx={{ fontWeight: 700 }}>{filteredRows.length}</Typography>
+            <Typography variant="caption" color="text.secondary">
+              {from} – {to}
+            </Typography>
+          </Paper>
+          <Paper variant="outlined" sx={{ p: 2, minWidth: 150 }}>
+            <Typography variant="caption" color="text.secondary">Netto-Saldo</Typography>
+            <Typography variant="h5" sx={{ fontWeight: 700, color: totals.checkinQty - totals.checkoutQty >= 0 ? "success.main" : "error.main" }}>
+              {totals.checkinQty - totals.checkoutQty >= 0 ? "+" : ""}{totals.checkinQty - totals.checkoutQty}
+            </Typography>
+            <Typography variant="caption" color="text.secondary">Eingänge minus Entnahmen</Typography>
+          </Paper>
+        </Stack>
+      )}
+
+      {loading ? (
+        <Box sx={{ display: "flex", justifyContent: "center", py: 6 }}><CircularProgress /></Box>
+      ) : filteredRows.length === 0 ? (
+        <Paper sx={{ p: 4, textAlign: "center" }}>
+          <Typography color="text.secondary">
+            {rows.length === 0
+              ? "Keine Bewegungen im gewählten Zeitraum."
+              : "Keine Treffer für die aktuellen Filter."}
+          </Typography>
+        </Paper>
+      ) : (
+        <TableContainer component={Paper} variant="outlined">
+          <Table size="small">
+            <TableHead>
+              <TableRow>
+                <SortCell field="code" label="Artikelnummer" align="left" />
+                <TableCell>Bezeichnung</TableCell>
+                <TableCell>Hersteller</TableCell>
+                <TableCell>Produktgruppe</TableCell>
+                <SortCell field="checkoutCount" label="Entnahmen (Anz.)" />
+                <SortCell field="checkoutQty" label="Entnahmen (Menge)" />
+                <SortCell field="checkinCount" label="Eingänge (Anz.)" />
+                <SortCell field="checkinQty" label="Eingänge (Menge)" />
+                <SortCell field="lastMovementAt" label="Letzte Bewegung" />
+              </TableRow>
+            </TableHead>
+            <TableBody>
+              {filteredRows.map((row) => (
+                <TableRow key={row.itemId} hover>
+                  <TableCell sx={{ fontFamily: "monospace", fontWeight: 600 }}>{row.code}</TableCell>
+                  <TableCell>
+                    <Typography variant="body2" sx={{ fontWeight: 600 }}>{row.description}</Typography>
+                    {row.descriptionSecondary && <Typography variant="caption" color="text.secondary">{row.descriptionSecondary}</Typography>}
+                  </TableCell>
+                  <TableCell>{row.manufacturer || "-"}</TableCell>
+                  <TableCell>{row.productGroup || "-"}</TableCell>
+                  <TableCell align="right">
+                    <Chip
+                      label={row.checkoutCount}
+                      size="small"
+                      icon={<ArrowDownIcon />}
+                      color={row.checkoutCount > 0 ? "error" : "default"}
+                      variant={row.checkoutCount > 0 ? "filled" : "outlined"}
+                      sx={{ minWidth: 52 }}
+                    />
+                  </TableCell>
+                  <TableCell align="right" sx={{ color: row.checkoutQty > 0 ? theme.palette.error.main : "text.secondary", fontWeight: 600 }}>
+                    {row.checkoutQty > 0 ? `-${row.checkoutQty}` : "0"}
+                  </TableCell>
+                  <TableCell align="right">
+                    <Chip
+                      label={row.checkinCount}
+                      size="small"
+                      icon={<ArrowUpIcon />}
+                      color={row.checkinCount > 0 ? "success" : "default"}
+                      variant={row.checkinCount > 0 ? "filled" : "outlined"}
+                      sx={{ minWidth: 52 }}
+                    />
+                  </TableCell>
+                  <TableCell align="right" sx={{ color: row.checkinQty > 0 ? theme.palette.success.main : "text.secondary", fontWeight: 600 }}>
+                    {row.checkinQty > 0 ? `+${row.checkinQty}` : "0"}
+                  </TableCell>
+                  <TableCell>
+                    <Typography variant="body2" color="text.secondary">
+                      {formatDate(row.lastMovementAt)}
+                    </Typography>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </TableContainer>
+      )}
+
+      {!loading && filteredRows.length > 0 && (
+        <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: "block" }}>
+          {filteredRows.length} Artikel · Klick auf Spaltenköpfe zum Sortieren
+        </Typography>
+      )}
+    </Box>
+  );
+};
+
 // ── Hauptseite ────────────────────────────────────────────────────────────────
 
 const TABS = [
-  { label: "Slow-Mover / Dead-Stock", icon: <TrendingDownIcon /> },
+  { label: "Artikel-Auswertung", icon: <BarChartIcon /> },
   { label: "Verbrauchstrend", icon: <ShowChartIcon /> },
+  { label: "Slow-Mover / Dead-Stock", icon: <TrendingDownIcon /> },
 ];
 
 const ReportsPage: React.FC<{ embedded?: boolean }> = ({ embedded = false }) => {
@@ -567,8 +858,9 @@ const ReportsPage: React.FC<{ embedded?: boolean }> = ({ embedded = false }) => 
         ))}
       </Tabs>
 
-      {tab === 0 && <SlowMoverTab />}
+      {tab === 0 && <ArticleActivityTab />}
       {tab === 1 && <ConsumptionTrendTab />}
+      {tab === 2 && <SlowMoverTab />}
     </Box>
   );
 };

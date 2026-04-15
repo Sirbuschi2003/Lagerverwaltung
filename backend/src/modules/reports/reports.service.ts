@@ -1,6 +1,6 @@
 import { Injectable } from "@nestjs/common";
 import { InjectRepository } from "@nestjs/typeorm";
-import { Between, Repository } from "typeorm";
+import { Repository } from "typeorm";
 
 import { StockLevel } from "../stock/entities/stock-level.entity";
 import { StockMovement } from "../stock/entities/stock-movement.entity";
@@ -16,6 +16,20 @@ export interface SlowMoverRow {
   totalQuantity: number;
   lastMovementAt: string | null;
   daysSinceLastMovement: number | null;
+}
+
+export interface ArticleActivityRow {
+  itemId: string;
+  code: string;
+  description: string;
+  descriptionSecondary: string | null;
+  manufacturer: string | null;
+  productGroup: string | null;
+  checkoutCount: number;
+  checkinCount: number;
+  checkoutQty: number;
+  checkinQty: number;
+  lastMovementAt: string | null;
 }
 
 const SLOW_MOVER_DAYS_KEY = "reports.slowMoverDays";
@@ -41,26 +55,33 @@ export class ReportsService {
     return days;
   }
 
-  async slowMoverReport(thresholdDays: number, branchId?: string | null): Promise<SlowMoverRow[]> {
-    // Aggregiere Bestand pro Artikel
+  async slowMoverReport(thresholdDays: number, branchId?: string | null, locationIds?: string[]): Promise<SlowMoverRow[]> {
     const levelsQb = this.stockLevelsRepository
       .createQueryBuilder("level")
       .select("level.itemId", "itemId")
       .addSelect("SUM(level.quantity)", "totalQuantity")
-      .leftJoin("level.item", "item");
+      .leftJoin("level.item", "item")
+      .leftJoin("item.storageLocation", "storageLocation")
+      .leftJoin("storageLocation.parent", "slParent");
 
     if (branchId) {
       levelsQb.where("item.branchId = :branchId", { branchId });
     }
+
+    if (locationIds?.length) {
+      levelsQb.andWhere(
+        "(storageLocation.id IN (:...locationIds) OR slParent.id IN (:...locationIds))",
+        { locationIds },
+      );
+    }
+
     levelsQb.groupBy("level.itemId").having("SUM(level.quantity) >= 0");
 
     const levels: Array<{ itemId: string; totalQuantity: string }> = await levelsQb.getRawMany();
-
     if (levels.length === 0) return [];
 
     const itemIds = levels.map((l) => l.itemId);
 
-    // Letzten Bewegungszeitpunkt pro Artikel
     const lastMovementMap = new Map<string, Date>();
     const lastMovementsRaw: Array<{ itemId: string; lastAt: string }> = await this.movementsRepository
       .createQueryBuilder("mv")
@@ -68,6 +89,7 @@ export class ReportsService {
       .addSelect("MAX(mv.occurredAt)", "lastAt")
       .where("mv.itemId IN (:...itemIds)", { itemIds })
       .andWhere("mv.isVoided = false")
+      .andWhere("mv.source NOT LIKE :importPattern", { importPattern: "%import%" })
       .groupBy("mv.itemId")
       .getRawMany();
 
@@ -75,7 +97,6 @@ export class ReportsService {
       lastMovementMap.set(row.itemId, new Date(row.lastAt));
     });
 
-    // Artikel-Stammdaten
     const itemDetailsRaw: Array<{
       id: string; code: string; description: string;
       descriptionSecondary: string | null; manufacturer: string | null; productGroup: string | null;
@@ -98,7 +119,6 @@ export class ReportsService {
       const lastAt = lastMovementMap.get(level.itemId) ?? null;
       const daysSince = lastAt ? Math.floor((now - lastAt.getTime()) / (24 * 60 * 60 * 1000)) : null;
 
-      // Slow-Mover: keine Bewegung seit > thresholdDays oder noch nie bewegt
       if (lastAt !== null && lastAt.getTime() >= cutoff) continue;
 
       const item = itemMap.get(level.itemId);
@@ -124,40 +144,58 @@ export class ReportsService {
     });
   }
 
-  async consumptionReport(from: Date, to: Date, branchId?: string | null) {
-    if (!branchId) {
-      return this.movementsRepository.find({
-        where: { occurredAt: Between(from, to) },
-        order: { occurredAt: "ASC" },
-      });
-    }
-    return this.movementsRepository
+  async consumptionReport(from: Date, to: Date, branchId?: string | null, locationIds?: string[]) {
+    const qb = this.movementsRepository
       .createQueryBuilder("movement")
       .leftJoin("movement.item", "item")
+      .leftJoin("item.storageLocation", "storageLocation")
+      .leftJoin("storageLocation.parent", "slParent")
       .where("movement.occurredAt BETWEEN :from AND :to", { from, to })
-      .andWhere("item.branchId = :branchId", { branchId })
-      .orderBy("movement.occurredAt", "ASC")
-      .getMany();
+      .andWhere("movement.isVoided = false")
+      .andWhere("movement.source NOT LIKE :importPattern", { importPattern: "%import%" })
+      .orderBy("movement.occurredAt", "ASC");
+
+    if (branchId) {
+      qb.andWhere("item.branchId = :branchId", { branchId });
+    }
+
+    if (locationIds?.length) {
+      qb.andWhere(
+        "(storageLocation.id IN (:...locationIds) OR slParent.id IN (:...locationIds))",
+        { locationIds },
+      );
+    }
+
+    return qb.getMany();
   }
 
-  async stockStatusSummary(branchId?: string | null) {
-    if (!branchId) {
-      return this.stockLevelsRepository.find({
-        order: { vehicle: { licensePlate: "ASC" } },
-      });
-    }
-    return this.stockLevelsRepository
+  async stockStatusSummary(branchId?: string | null, locationIds?: string[]) {
+    const qb = this.stockLevelsRepository
       .createQueryBuilder("level")
       .leftJoin("level.item", "item")
-      .where("item.branchId = :branchId", { branchId })
-      .orderBy("level.vehicleId", "ASC")
-      .getMany();
+      .leftJoin("item.storageLocation", "storageLocation")
+      .leftJoin("storageLocation.parent", "slParent")
+      .orderBy("level.vehicleId", "ASC");
+
+    if (branchId) {
+      qb.andWhere("item.branchId = :branchId", { branchId });
+    }
+
+    if (locationIds?.length) {
+      qb.andWhere(
+        "(storageLocation.id IN (:...locationIds) OR slParent.id IN (:...locationIds))",
+        { locationIds },
+      );
+    }
+
+    return qb.getMany();
   }
 
   async consumptionTrend(
     months: 6 | 12,
     branchId?: string | null,
     itemId?: string | null,
+    locationIds?: string[],
   ): Promise<Array<{ month: string; checkouts: number; checkins: number }>> {
     const now = new Date();
     const from = new Date(now.getFullYear(), now.getMonth() - months + 1, 1);
@@ -169,18 +207,26 @@ export class ReportsService {
       .addSelect("SUM(CASE WHEN mv.type = 'CHECKIN' THEN mv.quantity ELSE 0 END)", "checkins")
       .where("mv.occurredAt >= :from", { from })
       .andWhere("mv.isVoided = false")
+      .andWhere("mv.source NOT LIKE :importPattern", { importPattern: "%import%" })
       .groupBy("month")
       .orderBy("month", "ASC");
 
-    if (branchId || itemId) {
+    if (branchId || itemId || locationIds?.length) {
       qb.leftJoin("mv.item", "item");
       if (branchId) qb.andWhere("item.branchId = :branchId", { branchId });
       if (itemId) qb.andWhere("mv.itemId = :itemId", { itemId });
+      if (locationIds?.length) {
+        qb.leftJoin("item.storageLocation", "storageLocation")
+          .leftJoin("storageLocation.parent", "slParent")
+          .andWhere(
+            "(storageLocation.id IN (:...locationIds) OR slParent.id IN (:...locationIds))",
+            { locationIds },
+          );
+      }
     }
 
     const raw: Array<{ month: string; checkouts: string; checkins: string }> = await qb.getRawMany();
 
-    // Alle Monate auffüllen (auch Monate ohne Bewegungen)
     const result: Array<{ month: string; checkouts: number; checkins: number }> = [];
     for (let i = months - 1; i >= 0; i--) {
       const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
@@ -193,6 +239,87 @@ export class ReportsService {
       });
     }
     return result;
+  }
+
+  async articleActivityReport(
+    from: Date,
+    to: Date,
+    branchId?: string | null,
+    locationIds?: string[],
+  ): Promise<ArticleActivityRow[]> {
+    const qb = this.movementsRepository
+      .createQueryBuilder("mv")
+      .select("mv.itemId", "itemId")
+      .addSelect("SUM(CASE WHEN mv.type = 'CHECKOUT' THEN 1 ELSE 0 END)", "checkoutCount")
+      .addSelect("SUM(CASE WHEN mv.type = 'CHECKIN' THEN 1 ELSE 0 END)", "checkinCount")
+      .addSelect("SUM(CASE WHEN mv.type = 'CHECKOUT' THEN mv.quantity ELSE 0 END)", "checkoutQty")
+      .addSelect("SUM(CASE WHEN mv.type = 'CHECKIN' THEN mv.quantity ELSE 0 END)", "checkinQty")
+      .addSelect("MAX(mv.occurredAt)", "lastMovementAt")
+      .leftJoin("mv.item", "item")
+      .leftJoin("item.storageLocation", "storageLocation")
+      .leftJoin("storageLocation.parent", "slParent")
+      .where("mv.occurredAt BETWEEN :from AND :to", { from, to })
+      .andWhere("mv.isVoided = false")
+      .andWhere("mv.source NOT LIKE :importPattern", { importPattern: "%import%" })
+      .groupBy("mv.itemId");
+
+    if (branchId) {
+      qb.andWhere("item.branchId = :branchId", { branchId });
+    }
+
+    if (locationIds?.length) {
+      qb.andWhere(
+        "(storageLocation.id IN (:...locationIds) OR slParent.id IN (:...locationIds))",
+        { locationIds },
+      );
+    }
+
+    const raw: Array<{
+      itemId: string;
+      checkoutCount: string;
+      checkinCount: string;
+      checkoutQty: string;
+      checkinQty: string;
+      lastMovementAt: string;
+    }> = await qb.getRawMany();
+
+    if (raw.length === 0) return [];
+
+    const itemIds = raw.map((r) => r.itemId);
+    const itemDetailsRaw: Array<{
+      id: string; code: string; description: string;
+      descriptionSecondary: string | null; manufacturer: string | null; productGroup: string | null;
+    }> = await this.movementsRepository.manager
+      .createQueryBuilder()
+      .select(["item.id AS id", "item.code AS code", "item.description AS description",
+        "item.descriptionSecondary AS descriptionSecondary",
+        "item.manufacturer AS manufacturer", "item.productGroup AS productGroup"])
+      .from("items", "item")
+      .where("item.id IN (:...itemIds)", { itemIds })
+      .getRawMany();
+
+    const itemMap = new Map(itemDetailsRaw.map((i) => [i.id, i]));
+
+    return raw
+      .map((r) => {
+        const item = itemMap.get(r.itemId);
+        if (!item) return null;
+        return {
+          itemId: r.itemId,
+          code: item.code,
+          description: item.description,
+          descriptionSecondary: item.descriptionSecondary ?? null,
+          manufacturer: item.manufacturer ?? null,
+          productGroup: item.productGroup ?? null,
+          checkoutCount: Number(r.checkoutCount),
+          checkinCount: Number(r.checkinCount),
+          checkoutQty: Number(r.checkoutQty),
+          checkinQty: Number(r.checkinQty),
+          lastMovementAt: r.lastMovementAt ? new Date(r.lastMovementAt).toISOString() : null,
+        } satisfies ArticleActivityRow;
+      })
+      .filter((r): r is ArticleActivityRow => r !== null)
+      .sort((a, b) => (b.checkoutCount + b.checkinCount) - (a.checkoutCount + a.checkinCount));
   }
 
   async getVehicleStockLevels(vehicleId: string) {
