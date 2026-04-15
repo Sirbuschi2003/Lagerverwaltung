@@ -165,6 +165,7 @@ export class StockController {
       limit: parsedLimit,
       offset: parsedOffset,
       branchId: req.user?.branchId,
+      locationIds: req.user?.locationIds,
     });
     return data;
   }

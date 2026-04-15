@@ -18,13 +18,21 @@ export class LocationsService {
     private readonly repository: Repository<Location>,
   ) {}
 
-  async findAll(params?: { type?: string; parentId?: string | null; includeVehicles?: boolean; branchId?: string | null }) {
+  async findAll(params?: { type?: string; parentId?: string | null; includeVehicles?: boolean; branchId?: string | null; locationIds?: string[] }) {
     const qb = this.repository.createQueryBuilder("location")
       .leftJoinAndSelect("location.parent", "parent")
       .leftJoinAndSelect("location.vehicle", "vehicle");
 
     if (params?.branchId) {
       qb.andWhere("location.branchId = :branchId", { branchId: params.branchId });
+    }
+
+    // Lager-Filter: nur das zugewiesene Lager + seine direkten Kinder anzeigen
+    if (params?.locationIds?.length) {
+      qb.andWhere(
+        "(location.id IN (:...locationIds) OR parent.id IN (:...locationIds))",
+        { locationIds: params.locationIds },
+      );
     }
 
     if (params?.type) {

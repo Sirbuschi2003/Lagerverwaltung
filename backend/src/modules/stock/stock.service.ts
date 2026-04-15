@@ -1662,15 +1662,24 @@ export class StockService {
     limit?: number;
     offset?: number;
     branchId?: string | null;
+    locationIds?: string[];
   }): Promise<{ movements: StockMovement[]; summary: { totalCheckinQty: number; totalCheckoutQty: number; totalCheckinCount: number; totalCheckoutCount: number } }> {
     const qb = this.movementsRepository
       .createQueryBuilder('movement')
       .leftJoinAndSelect('movement.item', 'item')
+      .leftJoin('item.storageLocation', 'storageLocation')
+      .leftJoin('storageLocation.parent', 'slParent')
       .leftJoinAndSelect('movement.vehicle', 'vehicle')
       .leftJoinAndSelect('movement.user', 'user')
       .orderBy('movement.occurredAt', 'DESC');
 
     if (params.branchId) qb.andWhere('item.branchId = :branchId', { branchId: params.branchId });
+    if (params.locationIds?.length) {
+      qb.andWhere(
+        '(storageLocation.id IN (:...locationIds) OR slParent.id IN (:...locationIds))',
+        { locationIds: params.locationIds },
+      );
+    }
     if (params.itemId) qb.andWhere('item.id = :itemId', { itemId: params.itemId });
     if (params.vehicleId) qb.andWhere('vehicle.id = :vehicleId', { vehicleId: params.vehicleId });
     if (params.userId) qb.andWhere('user.id = :userId', { userId: params.userId });
@@ -1687,11 +1696,19 @@ export class StockService {
     const summaryQb = this.movementsRepository
       .createQueryBuilder('movement')
       .leftJoin('movement.item', 'item')
+      .leftJoin('item.storageLocation', 'storageLocation')
+      .leftJoin('storageLocation.parent', 'slParent')
       .select('movement.type', 'type')
       .addSelect('SUM(movement.quantity)', 'qty')
       .addSelect('COUNT(*)', 'cnt');
 
     if (params.branchId) summaryQb.andWhere('item.branchId = :branchId', { branchId: params.branchId });
+    if (params.locationIds?.length) {
+      summaryQb.andWhere(
+        '(storageLocation.id IN (:...locationIds) OR slParent.id IN (:...locationIds))',
+        { locationIds: params.locationIds },
+      );
+    }
     if (params.itemId) summaryQb.andWhere('movement.itemId = :itemId', { itemId: params.itemId });
     if (params.vehicleId) summaryQb.andWhere('movement.vehicleId = :vehicleId', { vehicleId: params.vehicleId });
     if (params.userId) summaryQb.andWhere('movement.userId = :userId', { userId: params.userId });

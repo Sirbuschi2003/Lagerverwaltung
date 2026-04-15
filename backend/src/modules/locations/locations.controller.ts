@@ -2,7 +2,7 @@ import { Body, Controller, Delete, Get, Param, Patch, Post, Query, Req, UseGuard
 import type { Request } from "express";
 
 interface LocationsRequest extends Request {
-  user?: { id?: string; role?: string; branchId?: string | null };
+  user?: { id?: string; role?: string; branchId?: string | null; locationIds?: string[] };
 }
 
 import { JwtAuthGuard } from "../auth/guards/jwt-auth.guard";
@@ -35,6 +35,7 @@ export class LocationsController {
       parentId,
       includeVehicles: includeVehicles === "true",
       branchId,
+      locationIds: req.user?.locationIds,
     });
   }
 
