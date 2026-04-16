@@ -32,7 +32,7 @@ import BuildIcon from '@mui/icons-material/Build';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import ErrorIcon from '@mui/icons-material/Error';
 import DeleteSweepIcon from '@mui/icons-material/DeleteSweep';
-import WarningAmberIcon from '@mui/icons-material/WarningAmber';
+import ErrorOutlineIcon from '@mui/icons-material/ErrorOutline';
 import SearchIcon from '@mui/icons-material/Search';
 import SystemUpdateAltIcon from '@mui/icons-material/SystemUpdateAlt';
 import RefreshIcon from '@mui/icons-material/Refresh';
@@ -756,7 +756,7 @@ const AdminMaintenancePage = () => {
       {/* ── Lager zurücksetzen ─────────────────────────────────────────── */}
       <Paper sx={{ p: 3 }}>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
-          <WarningAmberIcon color="error" />
+          <ErrorOutlineIcon color="error" />
           <Typography variant="h6" color="error.main">Lager zurücksetzen</Typography>
         </Box>
         <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>

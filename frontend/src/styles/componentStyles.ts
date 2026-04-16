@@ -20,7 +20,9 @@ export const getAppLayoutStyles = (theme: Theme) => ({
     px: { xs: 1.5, sm: 2.5, md: 3.5 },
     py: { xs: 1.5, sm: 2, md: 2.5 },
     flex: 1,
-    overflow: "auto",
+    minHeight: 0,
+    overflowY: "auto",
+    overflowX: "hidden",
   },
   statusChip: {
     fontWeight: 600,

@@ -9,10 +9,20 @@
   --focus-color: #2d77c6;
 }
 
-html,
-body,
-#root {
+html {
   height: 100%;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  min-height: 100%;
+  margin: 0;
+  padding: 0;
+}
+
+#root {
+  min-height: 100%;
   margin: 0;
   padding: 0;
 }
