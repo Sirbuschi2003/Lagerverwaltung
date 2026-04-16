@@ -1002,12 +1002,51 @@ const ItemsPage = () => {
         }
       });
 
+      // Baut eine Map locationId -> Wurzel-Lager-ID (= oberste Vorfahren-ID ohne Parent).
+      // Nötig damit "Regal 1 / Fach 1" in Lager 001 und Lager 002 unterschieden werden kann.
+      const buildRootAncestorMap = (locs: any[]): Map<string, string> => {
+        const parentMap = new Map<string, string>();
+        locs.forEach((loc) => {
+          const pid = loc.parent?.id ?? loc.parentId;
+          if (pid) parentMap.set(loc.id, pid);
+        });
+        const cache = new Map<string, string>();
+        const getRoot = (id: string): string => {
+          if (cache.has(id)) return cache.get(id)!;
+          const seen = new Set<string>();
+          let curr = id;
+          while (parentMap.has(curr) && !seen.has(curr)) {
+            seen.add(curr);
+            curr = parentMap.get(curr)!;
+          }
+          cache.set(id, curr);
+          return curr;
+        };
+        const result = new Map<string, string>();
+        locs.forEach((loc) => result.set(loc.id, getRoot(loc.id)));
+        return result;
+      };
+
       const locationsByStructuredKey = new Map<string, any>();
       const locationsByLookup = new Map<string, any[]>();
+      let rootAncestorMap = buildRootAncestorMap(locationList);
       const registerLocationLookup = (location: any) => {
         const structuredKey = getStructuredLocationKey(location);
-        if (structuredKey && !locationsByStructuredKey.has(structuredKey)) {
-          locationsByStructuredKey.set(structuredKey, location);
+        if (structuredKey) {
+          // Lager-spezifischer Schlüssel: SHELF:1:1:{warehouseId} – verhindert Kollisionen
+          // zwischen gleich benannten Lagerorten in verschiedenen Lagern (z. B. Regal 1 / Fach 1
+          // existiert sowohl im Teilelager als auch im Tonerlager).
+          const rootId = rootAncestorMap.get(location.id);
+          if (rootId) {
+            const scopedKey = `${structuredKey}:${rootId}`;
+            if (!locationsByStructuredKey.has(scopedKey)) {
+              locationsByStructuredKey.set(scopedKey, location);
+            }
+          }
+          // Unscoped Fallback (erster Treffer gewinnt – nur wenn kein Lager-Filter greift)
+          if (!locationsByStructuredKey.has(structuredKey)) {
+            locationsByStructuredKey.set(structuredKey, location);
+          }
         }
         for (const candidate of [cleanHyrekaText(location.name), cleanHyrekaText(location.code)]) {
           const key = normalizeLocationLookup(candidate);
@@ -1018,6 +1057,7 @@ const ItemsPage = () => {
         }
       };
       const rebuildLocationLookups = (nextLocations: any[]) => {
+        rootAncestorMap = buildRootAncestorMap(nextLocations);
         locationsByStructuredKey.clear();
         locationsByLookup.clear();
         nextLocations.forEach(registerLocationLookup);
@@ -1076,15 +1116,23 @@ const ItemsPage = () => {
 
         const parsed = parseStructuredLocationFromText(raw);
         if (parsed) {
-          const existing = locationsByStructuredKey.get(parsed.key);
+          // Lager-spezifischer Schlüssel hat Priorität, um Kollisionen zu vermeiden
+          // wenn gleiche Regal/Fach-Namen in verschiedenen Lagern existieren.
+          const scopedKey = parentIdForNewLocations ? `${parsed.key}:${parentIdForNewLocations}` : null;
+          const existing = (scopedKey ? locationsByStructuredKey.get(scopedKey) : null)
+            ?? locationsByStructuredKey.get(parsed.key);
           if (existing?.id) return existing.id;
         }
 
         const directMatches = locationsByLookup.get(normalizeLocationLookup(raw)) ?? [];
-        if (directMatches.length === 1) {
-          return directMatches[0].id;
+        const filteredMatches = parentIdForNewLocations
+          ? directMatches.filter((loc) => rootAncestorMap.get(loc.id) === parentIdForNewLocations)
+          : directMatches;
+        const matchesToUse = filteredMatches.length > 0 ? filteredMatches : directMatches;
+        if (matchesToUse.length === 1) {
+          return matchesToUse[0].id;
         }
-        if (directMatches.length > 1) {
+        if (matchesToUse.length > 1) {
           errors.push(`Lagerort mehrdeutig (${raw}) bei Artikel ${code || "-"}.`);
           return undefined;
         }
@@ -1105,6 +1153,12 @@ const ItemsPage = () => {
             parentId: parentIdForNewLocations || undefined,
           });
           locationList.push(created);
+          // Root-Ancestor für den neuen Lagerort sofort eintragen, damit der
+          // lager-spezifische Schlüssel beim nächsten Lookup korrekt aufgelöst wird.
+          const newRoot = parentIdForNewLocations
+            ? (rootAncestorMap.get(parentIdForNewLocations) ?? parentIdForNewLocations)
+            : created.id;
+          rootAncestorMap.set(created.id, newRoot);
           registerLocationLookup(created);
           createdLocations += 1;
           return created.id;
@@ -1117,7 +1171,9 @@ const ItemsPage = () => {
               (userBranchId === null || location.branchId === userBranchId || location.branchId === null),
             );
             rebuildLocationLookups(locationList);
-            const resolved = locationsByStructuredKey.get(parsed.key);
+            const scopedKeyFallback = parentIdForNewLocations ? `${parsed.key}:${parentIdForNewLocations}` : null;
+            const resolved = (scopedKeyFallback ? locationsByStructuredKey.get(scopedKeyFallback) : null)
+              ?? locationsByStructuredKey.get(parsed.key);
             if (resolved?.id) return resolved.id;
           } catch (reloadError) {
             console.warn("[ItemsPage] Lagerorte konnten nicht neu geladen werden", reloadError);
