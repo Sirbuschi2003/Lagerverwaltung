@@ -387,14 +387,16 @@ export interface BranchResetPreview {
   locations: number;
 }
 
-export const fetchBranchResetPreview = async (): Promise<BranchResetPreview> => {
-  const response = await api.get<BranchResetPreview>("/items/reset-preview");
+export const fetchBranchResetPreview = async (branchId?: string | null): Promise<BranchResetPreview> => {
+  const response = await api.get<BranchResetPreview>("/items/reset-preview", {
+    params: branchId ? { branchId } : {},
+  });
   return response.data;
 };
 
-export const resetBranchData = async (includeLocations: boolean): Promise<{ deleted: number; locationsDeleted: number }> => {
+export const resetBranchData = async (includeLocations: boolean, branchId?: string | null): Promise<{ deleted: number; locationsDeleted: number }> => {
   const response = await api.delete<{ deleted: number; locationsDeleted: number }>("/items/bulk", {
-    params: { includeLocations: includeLocations ? "true" : "false" },
+    params: { includeLocations: includeLocations ? "true" : "false", ...(branchId ? { branchId } : {}) },
     timeout: 120000,
   });
   return response.data;

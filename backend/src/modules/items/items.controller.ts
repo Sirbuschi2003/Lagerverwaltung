@@ -150,9 +150,13 @@ export class ItemsController {
 
   @Get("reset-preview")
   @Permissions("items.delete")
-  async resetPreview(@Req() req: ItemsRequest) {
+  async resetPreview(@Req() req: ItemsRequest, @Query("branchId") branchIdParam?: string) {
     try {
-      return await this.itemsService.previewReset(req.user?.branchId);
+      // Super-Admin (branchId=null im JWT) darf Ziel-Branch per Query-Param wählen
+      const effectiveBranchId = req.user?.branchId !== null && req.user?.branchId !== undefined
+        ? req.user.branchId
+        : (branchIdParam ?? null);
+      return await this.itemsService.previewReset(effectiveBranchId);
     } catch (error) {
       this.logger.error(`[ItemsController] resetPreview error: ${error instanceof Error ? error.message : String(error)}`);
       throw new InternalServerErrorException('Vorschau konnte nicht geladen werden');
@@ -161,10 +165,18 @@ export class ItemsController {
 
   @Delete("bulk")
   @Permissions("items.delete")
-  async removeAll(@Req() req: ItemsRequest, @Query("includeLocations") includeLocations?: string) {
+  async removeAll(
+    @Req() req: ItemsRequest,
+    @Query("includeLocations") includeLocations?: string,
+    @Query("branchId") branchIdParam?: string,
+  ) {
     try {
       this.logger.debug("[ItemsController] removeAll endpoint called");
-      const result = await this.itemsService.removeAll(req.user?.branchId, includeLocations === "true");
+      // Super-Admin darf Ziel-Branch per Query-Param wählen
+      const effectiveBranchId = req.user?.branchId !== null && req.user?.branchId !== undefined
+        ? req.user.branchId
+        : (branchIdParam ?? null);
+      const result = await this.itemsService.removeAll(effectiveBranchId, includeLocations === "true");
       this.logger.log(`[ItemsController] removeAll completed: ${result.deleted} items, ${result.locationsDeleted} locations deleted`);
       return result;
     } catch (error) {

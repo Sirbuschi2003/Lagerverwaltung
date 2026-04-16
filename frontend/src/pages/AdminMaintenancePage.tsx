@@ -3,6 +3,7 @@ import {
   Box,
   Button,
   Checkbox,
+  MenuItem,
   Paper,
   Typography,
   Alert,
@@ -17,11 +18,14 @@ import {
   Divider,
   FormControlLabel,
   LinearProgress,
+  Select,
   Stepper,
   Step,
   StepLabel,
   Collapse,
   IconButton,
+  InputLabel,
+  FormControl,
   TextField,
 } from '@mui/material';
 import BuildIcon from '@mui/icons-material/Build';
@@ -45,11 +49,14 @@ import {
   fetchChangelog,
   fetchBranchResetPreview,
   resetBranchData,
+  fetchBranches,
   type MaintenanceIssue,
   type UpdateStatus,
   type UpdatePhase,
   type BranchResetPreview,
+  type BranchDto,
 } from '../utils/api';
+import useAuthStore from '../store/useAuthStore';
 
 const RETENTION_YEARS = 10;
 
@@ -66,6 +73,9 @@ const phaseToStep = (phase: UpdatePhase): number => {
 };
 
 const AdminMaintenancePage = () => {
+  const { user } = useAuthStore();
+  const isSuperAdmin = !user?.branchId;
+
   // DB-Wartung
   const [loading, setLoading] = useState(false);
   const [issues, setIssues] = useState<MaintenanceIssue[]>([]);
@@ -104,8 +114,24 @@ const AdminMaintenancePage = () => {
   const [resetLoading, setResetLoading] = useState(false);
   const [resetResult, setResetResult] = useState<string | null>(null);
   const [resetError, setResetError] = useState<string | null>(null);
+  // Super-Admin: Branch-Auswahl
+  const [branches, setBranches] = useState<BranchDto[]>([]);
+  const [selectedBranchId, setSelectedBranchId] = useState<string>('');
+
+  useEffect(() => {
+    if (isSuperAdmin) {
+      fetchBranches().then(setBranches).catch(() => {});
+    }
+  }, [isSuperAdmin]);
+
+  const effectiveResetBranchId = isSuperAdmin ? (selectedBranchId || null) : (user?.branchId ?? null);
+  const selectedBranch = branches.find((b) => b.id === selectedBranchId);
 
   const handleResetPreview = async () => {
+    if (isSuperAdmin && !selectedBranchId) {
+      setResetError('Bitte zuerst eine Niederlassung auswählen.');
+      return;
+    }
     setResetPreviewLoading(true);
     setResetPreview(null);
     setResetResult(null);
@@ -113,7 +139,7 @@ const AdminMaintenancePage = () => {
     setResetConfirmText('');
     setResetConfirmCheck(false);
     try {
-      const data = await fetchBranchResetPreview();
+      const data = await fetchBranchResetPreview(effectiveResetBranchId);
       setResetPreview(data);
     } catch {
       setResetError('Vorschau konnte nicht geladen werden.');
@@ -128,9 +154,10 @@ const AdminMaintenancePage = () => {
     setResetResult(null);
     setResetError(null);
     try {
-      const result = await resetBranchData(resetIncludeLocations);
+      const result = await resetBranchData(resetIncludeLocations, effectiveResetBranchId);
+      const branchLabel = selectedBranch ? ` (${selectedBranch.name})` : '';
       setResetResult(
-        `Erfolgreich zurückgesetzt: ${result.deleted} Artikel` +
+        `Niederlassung${branchLabel} erfolgreich zurückgesetzt: ${result.deleted} Artikel` +
         (resetIncludeLocations ? `, ${result.locationsDeleted} Lagerorte` : '') +
         ` gelöscht. Alle Bestände und Buchungshistorie wurden entfernt.`
       );
@@ -743,6 +770,30 @@ const AdminMaintenancePage = () => {
           die komplette Buchungshistorie (wer hat wann was entnommen) werden permanent gelöscht.
         </Alert>
 
+        {isSuperAdmin && (
+          <FormControl size="small" sx={{ mb: 2, minWidth: 280 }}>
+            <InputLabel>Niederlassung auswählen</InputLabel>
+            <Select
+              label="Niederlassung auswählen"
+              value={selectedBranchId}
+              onChange={(e) => {
+                setSelectedBranchId(e.target.value);
+                setResetPreview(null);
+                setResetConfirmText('');
+                setResetConfirmCheck(false);
+                setResetResult(null);
+                setResetError(null);
+              }}
+            >
+              {branches.map((b) => (
+                <MenuItem key={b.id} value={b.id}>
+                  {b.name}{b.externalCode ? ` (${b.externalCode})` : ''}
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+        )}
+
         <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap', alignItems: 'center', mb: 2 }}>
           <FormControlLabel
             control={
@@ -757,7 +808,7 @@ const AdminMaintenancePage = () => {
             variant="outlined"
             color="warning"
             onClick={handleResetPreview}
-            disabled={resetPreviewLoading}
+            disabled={resetPreviewLoading || (isSuperAdmin && !selectedBranchId)}
             startIcon={resetPreviewLoading ? <CircularProgress size={18} /> : <SearchIcon />}
           >
             Vorschau laden
