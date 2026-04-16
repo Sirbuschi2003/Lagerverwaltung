@@ -40,7 +40,8 @@
       "Bash(xargs ls:*)",
       "Bash(find . -type f \\\\\\( -name \"*.png\" -o -name \"*.jpg\" -o -name \"*.jpeg\" -o -name \"*.gif\" \\\\\\) -exec ls -lh {} \\\\;)",
       "Bash(xargs wc:*)",
-      "Bash(grep -E \"\\\\.original$|schema\\\\.sql|image\\\\.png|generate-handbuch\")"
+      "Bash(grep -E \"\\\\.original$|schema\\\\.sql|image\\\\.png|generate-handbuch\")",
+      "Bash(find /c/Users/Thomas.Busche/Desktop/Code/Lagerverwaltung/backend/src/modules -name \"*.controller.ts\" -exec grep -l \"productGroup\\\\|manufacturer\\\\|warengruppe\\\\|hersteller\" {} \\\\;)"
     ],
     "additionalDirectories": [
       "c:\\Users\\Thomas.Busche\\.claude\\projects\\c--Users-Thomas-Busche-Desktop-Code-Lagerverwaltung\\memory",
