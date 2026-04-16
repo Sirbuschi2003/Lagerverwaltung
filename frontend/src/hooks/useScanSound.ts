@@ -60,9 +60,29 @@ const useScanSound = () => {
     playTone(880);
   }, [playTone]);
 
+  // Zwei absteigende Töne (quadratische Wellenform, deutlich lauter) als klares Warnsignal
   const playError = useCallback(() => {
-    playTone(220);
-  }, [playTone]);
+    const ctx = getContext();
+    if (!ctx) return;
+    if (ctx.state === "suspended") void ctx.resume();
+
+    const playBuzz = (frequency: number, startTime: number) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = "square";
+      osc.frequency.setValueAtTime(frequency, startTime);
+      gain.gain.setValueAtTime(0.0001, startTime);
+      gain.gain.exponentialRampToValueAtTime(0.28, startTime + 0.01);
+      gain.gain.exponentialRampToValueAtTime(0.0001, startTime + 0.18);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(startTime);
+      osc.stop(startTime + 0.18);
+    };
+
+    playBuzz(440, ctx.currentTime);
+    playBuzz(260, ctx.currentTime + 0.2);
+  }, [getContext]);
 
   return {
     playSuccess,
