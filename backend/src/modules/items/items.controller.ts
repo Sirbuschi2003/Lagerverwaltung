@@ -148,13 +148,24 @@ export class ItemsController {
     }
   }
 
+  @Get("reset-preview")
+  @Permissions("items.delete")
+  async resetPreview(@Req() req: ItemsRequest) {
+    try {
+      return await this.itemsService.previewReset(req.user?.branchId);
+    } catch (error) {
+      this.logger.error(`[ItemsController] resetPreview error: ${error instanceof Error ? error.message : String(error)}`);
+      throw new InternalServerErrorException('Vorschau konnte nicht geladen werden');
+    }
+  }
+
   @Delete("bulk")
   @Permissions("items.delete")
-  async removeAll(@Req() req: ItemsRequest) {
+  async removeAll(@Req() req: ItemsRequest, @Query("includeLocations") includeLocations?: string) {
     try {
       this.logger.debug("[ItemsController] removeAll endpoint called");
-      const result = await this.itemsService.removeAll(req.user?.branchId);
-      this.logger.log(`[ItemsController] removeAll completed: ${result.deleted} items deleted`);
+      const result = await this.itemsService.removeAll(req.user?.branchId, includeLocations === "true");
+      this.logger.log(`[ItemsController] removeAll completed: ${result.deleted} items, ${result.locationsDeleted} locations deleted`);
       return result;
     } catch (error) {
       this.logger.error(`[ItemsController] removeAll error: ${error instanceof Error ? error.message : String(error)}`);

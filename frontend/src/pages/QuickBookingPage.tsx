@@ -26,12 +26,14 @@ import {
   Tooltip,
   Typography,
 } from "@mui/material";
+import SyncIcon from "@mui/icons-material/Sync";
 import SearchIcon from "@mui/icons-material/Search";
 import DeleteIcon from "@mui/icons-material/Delete";
 import CheckIcon from "@mui/icons-material/Check";
 import InfoOutlinedIcon from "@mui/icons-material/InfoOutlined";
 import QrCodeScannerIcon from "@mui/icons-material/QrCodeScanner";
 import CloseIcon from "@mui/icons-material/Close";
+import { io, type Socket } from "socket.io-client";
 import useItemsStore from "../store/useItemsStore";
 import useAuthStore from "../store/useAuthStore";
 import { findItemByAnyCode, recordMovement, type ItemDto } from "../utils/api";
@@ -75,6 +77,7 @@ const QuickBookingPage: React.FC = () => {
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [cameraOpen, setCameraOpen] = useState(false);
   const [cameraScanFeedback, setCameraScanFeedback] = useState<CameraScanFeedback | null>(null);
+  const [syncConnected, setSyncConnected] = useState(false);
 
   const barcodeRef = useRef<HTMLInputElement>(null);
   // Ref damit handleScan immer den aktuellen Inhalt der Liste sieht (stale-closure-safe)
@@ -82,10 +85,57 @@ const QuickBookingPage: React.FC = () => {
   useEffect(() => { bookingListRef.current = bookingList; }, [bookingList]);
   // Verhindert gleichzeitige Scan-Verarbeitungen (z.B. schnelle Folge-Scans)
   const busyRef = useRef(false);
+  // Socket-Ref für Echtzeit-Sync
+  const socketRef = useRef<Socket | null>(null);
+  // Wenn true, kommt die nächste Listenänderung vom Remote → nicht zurücksenden
+  const remoteUpdateRef = useRef(false);
 
   useEffect(() => {
     void loadItems();
   }, []);
+
+  // ── Socket.io Echtzeit-Sync ───────────────────────────────────────────────
+  useEffect(() => {
+    if (!user?.id) return;
+    const socket = io("/stock", { path: "/socket.io", transports: ["websocket"] });
+    socketRef.current = socket;
+
+    socket.on("connect", () => {
+      setSyncConnected(true);
+      socket.emit("quickbook:join", { userId: user.id });
+    });
+    socket.on("disconnect", () => setSyncConnected(false));
+
+    // Anderes Gerät hat die Liste geändert → lokal übernehmen ohne zurückzusenden
+    socket.on("quickbook:state", (data: { list: BookingEntry[] }) => {
+      remoteUpdateRef.current = true;
+      setBookingList(data.list ?? []);
+    });
+
+    // Anderes Gerät hat gebucht oder Liste gelöscht
+    socket.on("quickbook:cleared", () => {
+      remoteUpdateRef.current = true;
+      setBookingList([]);
+      setCurrentItem(null);
+    });
+
+    return () => {
+      socket.disconnect();
+      socketRef.current = null;
+      setSyncConnected(false);
+    };
+  }, [user?.id]);
+
+  // Listenänderungen an alle anderen Geräte senden
+  useEffect(() => {
+    if (remoteUpdateRef.current) {
+      // Wurde vom Remote gesetzt → nicht zurücksenden, Flag zurücksetzen
+      remoteUpdateRef.current = false;
+      return;
+    }
+    if (!socketRef.current?.connected || !user?.id) return;
+    socketRef.current.emit("quickbook:update", { userId: user.id, list: bookingList });
+  }, [bookingList]);
 
   const refocusBarcode = () => setTimeout(() => barcodeRef.current?.focus(), 80);
 
@@ -152,6 +202,27 @@ const QuickBookingPage: React.FC = () => {
       setBusy(false);
       refocusBarcode();
       return;
+    }
+
+    // Bei CHECKOUT: prüfen ob Gesamtmenge (Liste + neuer Scan) den Bestand überschreitet
+    if (mode === "CHECKOUT" && found.currentQuantity !== null && found.currentQuantity !== undefined) {
+      const alreadyBooked = bookingListRef.current
+        .filter((e) => e.itemId === found.id && e.mode === "CHECKOUT")
+        .reduce((sum, e) => sum + e.quantity, 0);
+      const totalAfterScan = alreadyBooked + quantity;
+      if (totalAfterScan > found.currentQuantity) {
+        playError();
+        const available = found.currentQuantity - alreadyBooked;
+        const msg = available <= 0
+          ? `${found.code} – Bestand aufgebraucht (${found.currentQuantity} Stk. vorhanden)`
+          : `${found.code} – nur noch ${available} Stk. verfügbar (Bestand: ${found.currentQuantity})`;
+        showError(msg);
+        setCameraScanFeedback({ type: "error", text: msg });
+        busyRef.current = false;
+        setBusy(false);
+        refocusBarcode();
+        return;
+      }
     }
 
     playSuccess();
@@ -239,6 +310,11 @@ const QuickBookingPage: React.FC = () => {
     setBusy(false);
     if (errors === 0) {
       showSuccess(`${success} Position${success !== 1 ? "en" : ""} erfolgreich gebucht`);
+      // Alle Geräte im Room über Buchung informieren → Liste leeren
+      if (socketRef.current?.connected && user?.id) {
+        socketRef.current.emit("quickbook:booked", { userId: user.id });
+      }
+      remoteUpdateRef.current = true; // eigene Listenänderung nicht nochmal senden
       setBookingList([]);
       setCurrentItem(null);
     } else {
@@ -248,6 +324,11 @@ const QuickBookingPage: React.FC = () => {
   };
 
   const handleLoschen = () => {
+    // Alle Geräte im Room informieren
+    if (socketRef.current?.connected && user?.id) {
+      socketRef.current.emit("quickbook:clear", { userId: user.id });
+    }
+    remoteUpdateRef.current = true; // eigene Listenänderung nicht nochmal senden
     setBookingList([]);
     setCurrentItem(null);
     setBarcodeInput("");
@@ -258,6 +339,16 @@ const QuickBookingPage: React.FC = () => {
 
   return (
     <Box sx={{ width: "100%" }}>
+      {/* ── Sync-Status-Banner ── */}
+      {syncConnected && (
+        <Alert
+          severity="info"
+          icon={<SyncIcon fontSize="small" />}
+          sx={{ mb: 1, py: 0.25, "& .MuiAlert-message": { py: 0.5 } }}
+        >
+          Echtzeit-Sync aktiv – Buchungsliste wird auf allen angemeldeten Geräten synchronisiert
+        </Alert>
+      )}
       {/* ── Kopfzeile: Buchungsart + Barcode + Menge + Vorgang ── */}
       <Paper sx={{ p: 2, mb: 1 }}>
         <Stack direction={{ xs: "column", sm: "row" }} spacing={2} alignItems={{ xs: "stretch", sm: "flex-start" }}>

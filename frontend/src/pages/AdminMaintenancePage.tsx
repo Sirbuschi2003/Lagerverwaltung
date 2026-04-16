@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import {
   Box,
   Button,
+  Checkbox,
   Paper,
   Typography,
   Alert,
@@ -14,17 +15,20 @@ import {
   TableRow,
   Chip,
   Divider,
+  FormControlLabel,
   LinearProgress,
   Stepper,
   Step,
   StepLabel,
   Collapse,
   IconButton,
+  TextField,
 } from '@mui/material';
 import BuildIcon from '@mui/icons-material/Build';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import ErrorIcon from '@mui/icons-material/Error';
 import DeleteSweepIcon from '@mui/icons-material/DeleteSweep';
+import WarningAmberIcon from '@mui/icons-material/WarningAmber';
 import SearchIcon from '@mui/icons-material/Search';
 import SystemUpdateAltIcon from '@mui/icons-material/SystemUpdateAlt';
 import RefreshIcon from '@mui/icons-material/Refresh';
@@ -39,9 +43,12 @@ import {
   fetchUpdateStatus,
   applyUpdate,
   fetchChangelog,
+  fetchBranchResetPreview,
+  resetBranchData,
   type MaintenanceIssue,
   type UpdateStatus,
   type UpdatePhase,
+  type BranchResetPreview,
 } from '../utils/api';
 
 const RETENTION_YEARS = 10;
@@ -87,6 +94,55 @@ const AdminMaintenancePage = () => {
   const [purgePreview, setPurgePreview] = useState<{ count: number; oldestDate: string | null; cutoffDate: string } | null>(null);
   const [purgeLoading, setPurgeLoading] = useState(false);
   const [purgeResult, setPurgeResult] = useState<string | null>(null);
+
+  // Lager zurücksetzen
+  const [resetPreview, setResetPreview] = useState<BranchResetPreview | null>(null);
+  const [resetPreviewLoading, setResetPreviewLoading] = useState(false);
+  const [resetIncludeLocations, setResetIncludeLocations] = useState(true);
+  const [resetConfirmText, setResetConfirmText] = useState('');
+  const [resetConfirmCheck, setResetConfirmCheck] = useState(false);
+  const [resetLoading, setResetLoading] = useState(false);
+  const [resetResult, setResetResult] = useState<string | null>(null);
+  const [resetError, setResetError] = useState<string | null>(null);
+
+  const handleResetPreview = async () => {
+    setResetPreviewLoading(true);
+    setResetPreview(null);
+    setResetResult(null);
+    setResetError(null);
+    setResetConfirmText('');
+    setResetConfirmCheck(false);
+    try {
+      const data = await fetchBranchResetPreview();
+      setResetPreview(data);
+    } catch {
+      setResetError('Vorschau konnte nicht geladen werden.');
+    } finally {
+      setResetPreviewLoading(false);
+    }
+  };
+
+  const handleResetExecute = async () => {
+    if (resetConfirmText !== 'LÖSCHEN' || !resetConfirmCheck) return;
+    setResetLoading(true);
+    setResetResult(null);
+    setResetError(null);
+    try {
+      const result = await resetBranchData(resetIncludeLocations);
+      setResetResult(
+        `Erfolgreich zurückgesetzt: ${result.deleted} Artikel` +
+        (resetIncludeLocations ? `, ${result.locationsDeleted} Lagerorte` : '') +
+        ` gelöscht. Alle Bestände und Buchungshistorie wurden entfernt.`
+      );
+      setResetPreview(null);
+      setResetConfirmText('');
+      setResetConfirmCheck(false);
+    } catch {
+      setResetError('Fehler beim Zurücksetzen. Bitte erneut versuchen.');
+    } finally {
+      setResetLoading(false);
+    }
+  };
 
   // Initialer Update-Check
   useEffect(() => {
@@ -668,6 +724,111 @@ const AdminMaintenancePage = () => {
         {purgeResult && (
           <Alert severity="success" sx={{ mt: 2 }}>{purgeResult}</Alert>
         )}
+      </Paper>
+
+      {/* ── Lager zurücksetzen ─────────────────────────────────────────── */}
+      <Paper sx={{ p: 3 }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
+          <WarningAmberIcon color="error" />
+          <Typography variant="h6" color="error.main">Lager zurücksetzen</Typography>
+        </Box>
+        <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+          Löscht <strong>alle Artikel</strong> der aktuellen Niederlassung inklusive Technikerbestände und der
+          gesamten Buchungshistorie. Optional werden auch alle Lagerorte entfernt.
+          Nach dem Reset kann ein sauberer Neuimport durchgeführt werden.
+        </Typography>
+
+        <Alert severity="error" sx={{ mb: 2 }}>
+          <strong>Dieser Vorgang ist unwiderruflich.</strong> Technikerbestände auf Fahrzeugen und
+          die komplette Buchungshistorie (wer hat wann was entnommen) werden permanent gelöscht.
+        </Alert>
+
+        <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap', alignItems: 'center', mb: 2 }}>
+          <FormControlLabel
+            control={
+              <Checkbox
+                checked={resetIncludeLocations}
+                onChange={(e) => setResetIncludeLocations(e.target.checked)}
+              />
+            }
+            label="Lagerorte ebenfalls löschen (Regale, Fächer)"
+          />
+          <Button
+            variant="outlined"
+            color="warning"
+            onClick={handleResetPreview}
+            disabled={resetPreviewLoading}
+            startIcon={resetPreviewLoading ? <CircularProgress size={18} /> : <SearchIcon />}
+          >
+            Vorschau laden
+          </Button>
+        </Box>
+
+        {resetPreview && (
+          <Box sx={{ mb: 2 }}>
+            <Alert severity="warning" sx={{ mb: 2 }}>
+              Folgende Daten werden unwiderruflich gelöscht:
+            </Alert>
+            <Table size="small" sx={{ mb: 2, maxWidth: 400 }}>
+              <TableBody>
+                <TableRow>
+                  <TableCell>Artikel</TableCell>
+                  <TableCell><strong>{resetPreview.items.toLocaleString('de-DE')}</strong></TableCell>
+                </TableRow>
+                <TableRow>
+                  <TableCell>Bestände (inkl. Technikerfahrzeuge)</TableCell>
+                  <TableCell><strong>{resetPreview.stockLevels.toLocaleString('de-DE')}</strong></TableCell>
+                </TableRow>
+                <TableRow>
+                  <TableCell>Buchungshistorie (Entnahmen/Eingänge)</TableCell>
+                  <TableCell><strong>{resetPreview.stockMovements.toLocaleString('de-DE')}</strong></TableCell>
+                </TableRow>
+                {resetIncludeLocations && (
+                  <TableRow>
+                    <TableCell>Lagerorte</TableCell>
+                    <TableCell><strong>{resetPreview.locations.toLocaleString('de-DE')}</strong></TableCell>
+                  </TableRow>
+                )}
+              </TableBody>
+            </Table>
+
+            <Typography variant="body2" sx={{ mb: 1 }}>
+              Zum Bestätigen <strong>LÖSCHEN</strong> eingeben und Checkbox aktivieren:
+            </Typography>
+            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5, maxWidth: 400 }}>
+              <TextField
+                size="small"
+                label='Zur Bestätigung "LÖSCHEN" eingeben'
+                value={resetConfirmText}
+                onChange={(e) => setResetConfirmText(e.target.value)}
+                error={resetConfirmText.length > 0 && resetConfirmText !== 'LÖSCHEN'}
+              />
+              <FormControlLabel
+                control={
+                  <Checkbox
+                    checked={resetConfirmCheck}
+                    onChange={(e) => setResetConfirmCheck(e.target.checked)}
+                    color="error"
+                  />
+                }
+                label="Ich bestätige, dass alle Daten unwiderruflich gelöscht werden"
+              />
+              <Button
+                variant="contained"
+                color="error"
+                onClick={handleResetExecute}
+                disabled={resetConfirmText !== 'LÖSCHEN' || !resetConfirmCheck || resetLoading}
+                startIcon={resetLoading ? <CircularProgress size={20} /> : <DeleteSweepIcon />}
+                sx={{ alignSelf: 'flex-start' }}
+              >
+                Lager jetzt zurücksetzen
+              </Button>
+            </Box>
+          </Box>
+        )}
+
+        {resetResult && <Alert severity="success">{resetResult}</Alert>}
+        {resetError && <Alert severity="error">{resetError}</Alert>}
       </Paper>
     </Box>
   );

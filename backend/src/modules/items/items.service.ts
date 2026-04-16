@@ -12,6 +12,7 @@ import { Item } from "./entities/item.entity";
 import { Location } from "../locations/entities/location.entity";
 import { Supplier } from "../suppliers/entities/supplier.entity";
 import { StockLevel } from "../stock/entities/stock-level.entity";
+import { StockMovement } from "../stock/entities/stock-movement.entity";
 import { LoggingService } from "../logging/services/logging.service";
 import { LogCategory, LogLevel } from "../logging/entities/system-log.entity";
 
@@ -106,6 +107,8 @@ export class ItemsService {
     private readonly codesRepository: Repository<ItemCode>,
     @InjectRepository(StockLevel)
     private readonly stockLevelsRepository: Repository<StockLevel>,
+    @InjectRepository(StockMovement)
+    private readonly stockMovementsRepository: Repository<StockMovement>,
     @InjectRepository(Location)
     private readonly locationsRepository: Repository<Location>,
     @InjectRepository(Supplier)
@@ -355,19 +358,28 @@ export class ItemsService {
         where: directWhere,
         relations: ['codes', 'storageLocation', 'supplier']
       });
-      if (direct) {
-        return direct;
-      }
+      const found = direct ?? await (async () => {
+        // Prüfe alternative Codes – direkt nach branchId filtern
+        const altWhere: Record<string, unknown> = { code: normalized };
+        if (branchId) altWhere.branchId = branchId;
+        else altWhere.branchId = IsNull();
+        const alias = await this.codesRepository.findOne({
+          where: altWhere,
+          relations: ["item", "item.codes", "item.storageLocation", "item.supplier"]
+        });
+        return alias?.item ?? null;
+      })();
 
-      // Prüfe alternative Codes – direkt nach branchId filtern
-      const altWhere: Record<string, unknown> = { code: normalized };
-      if (branchId) altWhere.branchId = branchId;
-      else altWhere.branchId = IsNull();
-      const alias = await this.codesRepository.findOne({
-        where: altWhere,
-        relations: ["item", "item.codes", "item.storageLocation", "item.supplier"]
-      });
-      return alias?.item ?? null;
+      if (found?.storageLocation?.id) {
+        const stock = await this.stockLevelsRepository.findOne({
+          where: { itemId: found.id, locationId: found.storageLocation.id } as any,
+          select: ['quantity'],
+        });
+        (found as any).currentQuantity = stock ? Number(stock.quantity) : 0;
+      } else if (found) {
+        (found as any).currentQuantity = null;
+      }
+      return found;
     } catch (error) {
       this.logger.error(`Fehler beim Abrufen des Artikels nach Code ${code}: ${error instanceof Error ? error.message : String(error)}`);
       throw error;
@@ -635,7 +647,9 @@ export class ItemsService {
 
     const existingLocationIds = requestedLocationIds.size
       ? await this.locationsRepository.find({
-          where: { id: In(Array.from(requestedLocationIds)) },
+          where: branchId
+            ? { id: In(Array.from(requestedLocationIds)), branchId }
+            : { id: In(Array.from(requestedLocationIds)) },
           select: ["id"],
         })
       : [];
@@ -894,39 +908,84 @@ export class ItemsService {
     );
   }
 
-  async removeAll(branchId?: string | null): Promise<{ deleted: number }> {
+  async previewReset(branchId?: string | null): Promise<{
+    items: number;
+    stockLevels: number;
+    stockMovements: number;
+    locations: number;
+  }> {
+    const branchFilter = branchId ? { branchId } : { branchId: IsNull() };
+
+    const items = await this.repository.count({ where: branchFilter });
+
+    const stockLevels = items > 0
+      ? await this.stockLevelsRepository
+          .createQueryBuilder("sl")
+          .innerJoin("sl.item", "item")
+          .where(branchId ? "item.branchId = :branchId" : "item.branchId IS NULL", branchId ? { branchId } : {})
+          .getCount()
+      : 0;
+
+    const stockMovements = items > 0
+      ? await this.stockMovementsRepository
+          .createQueryBuilder("sm")
+          .innerJoin("sm.item", "item")
+          .where(branchId ? "item.branchId = :branchId" : "item.branchId IS NULL", branchId ? { branchId } : {})
+          .getCount()
+      : 0;
+
+    const locations = await this.locationsRepository
+      .createQueryBuilder("loc")
+      .where(branchId ? "loc.branchId = :branchId" : "loc.branchId IS NULL", branchId ? { branchId } : {})
+      .andWhere("loc.type != 'VEHICLE'")
+      .getCount();
+
+    return { items, stockLevels, stockMovements, locations };
+  }
+
+  async removeAll(branchId?: string | null, includeLocations = false): Promise<{ deleted: number; locationsDeleted: number }> {
     try {
       this.logger.log("Starte removeAll-Operation");
 
-      let whereClause: Record<string, unknown>;
-      if (branchId) {
-        whereClause = { branchId };
-      } else {
-        whereClause = { branchId: IsNull() };
-      }
-      const itemCount = await this.repository.count({ where: whereClause });
+      const branchFilter = branchId ? { branchId } : { branchId: IsNull() };
+      const itemCount = await this.repository.count({ where: branchFilter });
       this.logger.log(`Gefundene Artikel vor Loeschung: ${itemCount}`);
 
-      if (itemCount === 0) {
-        return { deleted: 0 };
+      let itemsDeletedCount = 0;
+      if (itemCount > 0) {
+        // Erst Artikel-Codes löschen, dann Artikel (CASCADE löscht StockLevels, StockMovements, RestockRequests)
+        await this.codesRepository
+          .createQueryBuilder("ic")
+          .delete()
+          .where(branchId ? "ic.branchId = :branchId" : "ic.branchId IS NULL", branchId ? { branchId } : {})
+          .execute();
+
+        const itemsDeleted = await this.repository
+          .createQueryBuilder("item")
+          .delete()
+          .where(branchId ? "item.branchId = :branchId" : "item.branchId IS NULL", branchId ? { branchId } : {})
+          .execute();
+        itemsDeletedCount = itemsDeleted.affected ?? 0;
+        this.logger.log(`Artikel geloescht: ${itemsDeletedCount}`);
       }
 
-      // Erst Artikel-Codes der Niederlassung löschen, dann Artikel
-      const codesDeleted = await this.codesRepository
-        .createQueryBuilder("ic")
-        .delete()
-        .where(branchId ? "ic.branchId = :branchId" : "ic.branchId IS NULL", branchId ? { branchId } : {})
-        .execute();
-      this.logger.log(`Artikel-Codes geloescht: ${codesDeleted.affected ?? 0}`);
+      let locationsDeletedCount = 0;
+      if (includeLocations) {
+        // Kinder zuerst (haben parent), dann Eltern – zwei Durchläufe reichen für 2 Ebenen
+        for (let pass = 0; pass < 3; pass++) {
+          const result = await this.locationsRepository
+            .createQueryBuilder("loc")
+            .delete()
+            .where(branchId ? "loc.branchId = :branchId" : "loc.branchId IS NULL", branchId ? { branchId } : {})
+            .andWhere("loc.type != 'VEHICLE'")
+            .execute();
+          locationsDeletedCount += result.affected ?? 0;
+          if (!result.affected) break;
+        }
+        this.logger.log(`Lagerorte geloescht: ${locationsDeletedCount}`);
+      }
 
-      const itemsDeleted = await this.repository
-        .createQueryBuilder("item")
-        .delete()
-        .where(branchId ? "item.branchId = :branchId" : "item.branchId IS NULL", branchId ? { branchId } : {})
-        .execute();
-      this.logger.log(`Artikel geloescht: ${itemsDeleted.affected ?? 0}`);
-
-      return { deleted: itemsDeleted.affected ?? 0 };
+      return { deleted: itemsDeletedCount, locationsDeleted: locationsDeletedCount };
     } catch (error) {
       this.logger.error("Fehler bei removeAll:", error);
       throw error;

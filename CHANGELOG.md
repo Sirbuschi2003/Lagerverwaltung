@@ -1,5 +1,46 @@
 # Changelog
 
+## [3.5.0] – 2026-04-16
+
+### Feature: Lager zurücksetzen (Artikelstamm-Neustart)
+
+- Neuer Bereich in **Wartung & Update**: "Lager zurücksetzen"
+- Vorschau zeigt exakte Anzahl: Artikel, Bestände (inkl. Technikerfahrzeuge), Buchungshistorie, Lagerorte
+- Option: Lagerorte (Regale/Fächer) ebenfalls löschen
+- Doppelte Sicherheitsabfrage: Textbestätigung `LÖSCHEN` + Checkbox
+- Cascade-Löschung auf DB-Ebene entfernt StockLevels, StockMovements und RestockRequests automatisch
+- Niederlassungsadmin kann nur seine eigene Niederlassung zurücksetzen
+
+### Feature: Schnellbuchung – Echtzeit-Sync PC ↔ Handy
+
+- Buchungsliste wird über Socket.io in Echtzeit zwischen allen angemeldeten Geräten desselben Benutzers synchronisiert
+- Scan auf dem Handy erscheint sofort auf dem PC-Bildschirm und umgekehrt
+- "Übernehmen" und "Liste löschen" wirken auf allen verbundenen Geräten gleichzeitig
+- Sync-Status-Banner zeigt an wenn Echtzeit-Verbindung aktiv ist
+- Serverseitiger State-Cache: neu verbindende Geräte erhalten sofort den aktuellen Listenstand
+
+### Feature: Schnellbuchung – Bestandsschutz beim Scannen
+
+- CHECKOUT-Modus: System prüft vor jedem Scan ob Gesamtmenge (bereits in Liste + neuer Scan) den Lagerbestand überschreitet
+- Bei Überschreitung: Warnton, Fehlermeldung mit verbleibender Restmenge, kein Listeneintrag
+- Backend liefert `currentQuantity` jetzt direkt beim Artikel-Lookup per Code/Barcode mit
+
+### Bugfix: Hyreka-Import – Lagerorte im falschen Lager
+
+- **Ursache:** Beim Import wurden alle Lagerorte aller Niederlassungen für die Zuordnung herangezogen – dadurch wurde "Regal 1 / Fach 1" aus Lager 001 auch beim Import für Lager 002 gefunden
+- **Fix Frontend:** `fetchLocations()` beim Import filtert jetzt nach `branchId` des eingeloggten Benutzers
+- **Fix Backend:** Location-ID-Validierung beim Bulk-Import prüft jetzt auch ob der Lagerort zur eigenen Niederlassung gehört
+- Neu angelegte Lagerorte während des Imports erhalten korrekte Niederlassungszugehörigkeit
+
+### Bugfix: Berichte & Analysen – locationIds-Filter + neue Artikel-Auswertung
+
+*(bereits in 3.4.1 enthalten, hier dokumentiert)*
+
+- Auswertungen berücksichtigen `locationIds`-Filter korrekt
+- Neue Artikel-Auswertung: Bestand nach Warengruppe/Hersteller
+
+---
+
 ## [3.4.1] – 2026-04-15
 
 ### Refactor: Lager-Zugriffskontrolle über Lagerorte (statt separater Warehouse-Tabelle)

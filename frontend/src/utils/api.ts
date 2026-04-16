@@ -380,6 +380,26 @@ export const updateItemsBulk = async (
   return response.data;
 };
 
+export interface BranchResetPreview {
+  items: number;
+  stockLevels: number;
+  stockMovements: number;
+  locations: number;
+}
+
+export const fetchBranchResetPreview = async (): Promise<BranchResetPreview> => {
+  const response = await api.get<BranchResetPreview>("/items/reset-preview");
+  return response.data;
+};
+
+export const resetBranchData = async (includeLocations: boolean): Promise<{ deleted: number; locationsDeleted: number }> => {
+  const response = await api.delete<{ deleted: number; locationsDeleted: number }>("/items/bulk", {
+    params: { includeLocations: includeLocations ? "true" : "false" },
+    timeout: 120000,
+  });
+  return response.data;
+};
+
 export const fetchItemById = async (id: string): Promise<ItemDto> => {
   const response = await api.get<ItemDto>(`/items/${id}`);
   return response.data;

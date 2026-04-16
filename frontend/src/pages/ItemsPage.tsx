@@ -951,16 +951,22 @@ const ItemsPage = () => {
     const droppedAlternateCodesWarnings = new Set<string>();
 
     try {
+      const userBranchId: string | null = user?.branchId ?? null;
       const [supplierSeed, locationSeed, existingItemsResponse] = await Promise.all([
         suppliers.length > 0 ? Promise.resolve(suppliers) : fetchSuppliers(),
         locations.length > 0
           ? Promise.resolve(locations.filter((location: any) => location.type !== "VEHICLE"))
-          : fetchLocations({ includeVehicles: false }),
+          : fetchLocations({ includeVehicles: false, ...(userBranchId ? { branchId: userBranchId } : {}) }),
         fetchItems({ page: 1, limit: 200000 }),
       ]);
 
       let supplierList: any[] = [...supplierSeed];
-      let locationList: any[] = [...locationSeed].filter((location: any) => location.type !== "VEHICLE");
+      // Nur Lagerorte der eigenen Niederlassung für die Zuordnung verwenden,
+      // damit "Regal 1 / Fach 1" aus Lager 001 nicht für Lager 002 gewählt wird.
+      let locationList: any[] = [...locationSeed].filter((location: any) =>
+        location.type !== "VEHICLE" &&
+        (userBranchId === null || location.branchId === userBranchId || location.branchId === null),
+      );
       const knownGroups = Array.from(
         new Set(
           existingItemsResponse.items
@@ -1105,8 +1111,11 @@ const ItemsPage = () => {
         } catch (createError) {
           console.warn("[ItemsPage] Lagerort konnte nicht direkt angelegt werden", createError);
           try {
-            const refreshed = await fetchLocations({ includeVehicles: false });
-            locationList = refreshed.filter((location) => location.type !== "VEHICLE");
+            const refreshed = await fetchLocations({ includeVehicles: false, ...(userBranchId ? { branchId: userBranchId } : {}) });
+            locationList = refreshed.filter((location: any) =>
+              location.type !== "VEHICLE" &&
+              (userBranchId === null || location.branchId === userBranchId || location.branchId === null),
+            );
             rebuildLocationLookups(locationList);
             const resolved = locationsByStructuredKey.get(parsed.key);
             if (resolved?.id) return resolved.id;
@@ -1394,7 +1403,7 @@ const ItemsPage = () => {
 
   const prepareImportPayload = useCallback(async (itemsToImport: CsvImportItem[]): Promise<PreparedImportPayload> => {
     const supplierList = suppliers.length > 0 ? suppliers : await fetchSuppliers();
-    const locationList = locations.length > 0 ? locations : await fetchLocations({ includeVehicles: false });
+    const locationList = locations.length > 0 ? locations : await fetchLocations({ includeVehicles: false, ...(user?.branchId ? { branchId: user.branchId } : {}) });
     if (suppliers.length === 0) setSuppliers(supplierList);
     if (locations.length === 0) setLocations(locationList);
 
@@ -1656,7 +1665,7 @@ Import erfolgreich! Die Artikel sind jetzt verfügbar.`;
     fetchSuppliers()
       .then(setSuppliers)
       .catch((err) => console.warn("[ItemsPage] Lieferanten konnten nicht geladen werden", err));
-    fetchLocations({ includeVehicles: false })
+    fetchLocations({ includeVehicles: false, ...(user?.branchId ? { branchId: user.branchId } : {}) })
       .then(setLocations)
       .catch((err) => console.warn("[ItemsPage] Lagerorte konnten nicht geladen werden", err));
   }, [isOnline]);
