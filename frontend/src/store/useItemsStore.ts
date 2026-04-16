@@ -100,11 +100,9 @@ const useItemsStore = create<ItemsStoreState>((set: any, get: any) => ({
                 lastLoaded: Date.now()
               });
               // Cache aktualisieren
-              storage.setItems(data.items).catch(err =>
-            })
-            .catch(err => {
-              // Nicht kritisch, Cache bleibt gÃ¼ltig
-            });
+              storage.setItems(data.items).catch(() => {
+                // Nicht kritisch, Cache bleibt gültig
+              });
         }
         return; // Beende hier, API lÃ¤dt im Hintergrund
       }
