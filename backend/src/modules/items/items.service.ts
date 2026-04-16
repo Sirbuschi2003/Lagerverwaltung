@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException, Logger } from "@nestjs/common";
 import { InjectRepository } from "@nestjs/typeorm";
-import { In, IsNull, Repository } from "typeorm";
+import { DataSource, In, IsNull, Repository } from "typeorm";
 import * as fs from "fs/promises";
 import * as path from "path";
 import sharp from "sharp";
@@ -114,6 +114,7 @@ export class ItemsService {
     @InjectRepository(Supplier)
     private readonly suppliersRepository: Repository<Supplier>,
     private readonly loggingService: LoggingService,
+    private readonly dataSource: DataSource,
   ) {}
 
   async findAll(params?: { page?: number; limit?: number; search?: string; manufacturer?: string; productGroup?: string; branchId?: string | null; locationIds?: string[] }) {
@@ -953,7 +954,24 @@ export class ItemsService {
 
       let itemsDeletedCount = 0;
       if (itemCount > 0) {
-        // Erst Artikel-Codes löschen, dann Artikel (CASCADE löscht StockLevels, StockMovements, RestockRequests)
+        // purchase_order_lines hat onDelete: RESTRICT auf item → erst Bestellpositionen
+        // für alle Artikel dieses Lagers löschen, bevor die Artikel selbst gelöscht werden.
+        if (branchId) {
+          await this.dataSource.query(
+            `DELETE pol FROM purchase_order_lines pol
+             INNER JOIN items i ON pol.itemId = i.id
+             WHERE i.branchId = ?`,
+            [branchId],
+          );
+        } else {
+          await this.dataSource.query(
+            `DELETE pol FROM purchase_order_lines pol
+             INNER JOIN items i ON pol.itemId = i.id
+             WHERE i.branchId IS NULL`,
+          );
+        }
+
+        // Artikel-Codes löschen, dann Artikel (CASCADE löscht StockLevels, StockMovements, RestockRequests)
         await this.codesRepository
           .createQueryBuilder("ic")
           .delete()
