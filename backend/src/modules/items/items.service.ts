@@ -956,19 +956,24 @@ export class ItemsService {
       if (itemCount > 0) {
         // purchase_order_lines hat onDelete: RESTRICT auf item → erst Bestellpositionen
         // für alle Artikel dieses Lagers löschen, bevor die Artikel selbst gelöscht werden.
-        if (branchId) {
-          await this.dataSource.query(
-            `DELETE pol FROM purchase_order_lines pol
-             INNER JOIN items i ON pol.itemId = i.id
-             WHERE i.branchId = ?`,
-            [branchId],
-          );
-        } else {
-          await this.dataSource.query(
-            `DELETE pol FROM purchase_order_lines pol
-             INNER JOIN items i ON pol.itemId = i.id
-             WHERE i.branchId IS NULL`,
-          );
+        const itemIds: { id: string }[] = await this.dataSource.query(
+          branchId
+            ? `SELECT id FROM items WHERE branchId = ?`
+            : `SELECT id FROM items WHERE branchId IS NULL`,
+          branchId ? [branchId] : [],
+        );
+        if (itemIds.length > 0) {
+          const ids = itemIds.map((r) => r.id);
+          // In Blöcken löschen um IN-Clause-Limit zu vermeiden
+          const chunkSize = 500;
+          for (let i = 0; i < ids.length; i += chunkSize) {
+            const chunk = ids.slice(i, i + chunkSize);
+            const placeholders = chunk.map(() => "?").join(",");
+            await this.dataSource.query(
+              `DELETE FROM purchase_order_lines WHERE itemId IN (${placeholders})`,
+              chunk,
+            );
+          }
         }
 
         // Artikel-Codes löschen, dann Artikel (CASCADE löscht StockLevels, StockMovements, RestockRequests)
