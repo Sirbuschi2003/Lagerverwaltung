@@ -103,8 +103,10 @@ const useItemsStore = create<ItemsStoreState>((set: any, get: any) => ({
               storage.setItems(data.items).catch(() => {
                 // Nicht kritisch, Cache bleibt gültig
               });
+            })
+            .catch(() => {});
         }
-        return; // Beende hier, API lÃ¤dt im Hintergrund
+        return; // Beende hier, API lädt im Hintergrund
       }
     } catch (err) {
     }
