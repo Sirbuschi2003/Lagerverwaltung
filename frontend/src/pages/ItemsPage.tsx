@@ -49,6 +49,7 @@ import {
   createSupplier,
   createLocation,
   recordMovement,
+  recordMovementsBulk,
   previewItemsBulk,
   updateItemsBulk,
   getItemImageUrl,
@@ -1377,8 +1378,10 @@ const ItemsPage = () => {
           Number.isFinite(entry.desiredCurrentQuantity),
       );
 
-      for (let index = 0; index < stockTargets.length; index += 1) {
-        const target = stockTargets[index];
+      type StockAdjustmentEntry = { code: string; movement: Parameters<typeof recordMovementsBulk>[0][number] };
+      const adjustments: StockAdjustmentEntry[] = [];
+
+      for (const target of stockTargets) {
         const refreshed = refreshedByCode.get(normalizeLookupKey(target.code));
         if (!refreshed) {
           errors.push(`Bestandsabgleich: Artikel nicht gefunden (${target.code}).`);
@@ -1394,12 +1397,11 @@ const ItemsPage = () => {
         const current = typeof refreshed.currentQuantity === "number" ? refreshed.currentQuantity : 0;
         const desired = target.desiredCurrentQuantity ?? current;
         const delta = desired - current;
-        if (delta === 0) {
-          continue;
-        }
+        if (delta === 0) continue;
 
-        try {
-          await recordMovement({
+        adjustments.push({
+          code: target.code,
+          movement: {
             itemId: refreshed.id,
             locationId: target.desiredLocationId,
             userId: user?.id ?? undefined,
@@ -1408,17 +1410,20 @@ const ItemsPage = () => {
             occurredAt: new Date().toISOString(),
             note: "Hyreka-Einmalimport Bestandsabgleich",
             source: HYREKA_IMPORT_SOURCE,
-          });
-          stockAdjusted += 1;
-        } catch (movementError) {
-          errors.push(
-            `Bestandsabgleich fehlgeschlagen (${target.code}): ${
-              movementError instanceof Error ? movementError.message : String(movementError)
-            }`,
-          );
-        }
-        setHyrekaImportProgress(72 + Math.round(((index + 1) / Math.max(stockTargets.length, 1)) * 28));
+          },
+        });
       }
+
+      if (adjustments.length > 0) {
+        setHyrekaImportStatus(`Bestände werden abgeglichen (${adjustments.length} Artikel)...`);
+        const bulkResult = await recordMovementsBulk(adjustments.map((a) => a.movement));
+        stockAdjusted = bulkResult.ok;
+        bulkResult.failed.forEach(({ index, reason }) => {
+          const code = adjustments[index]?.code ?? `#${index}`;
+          errors.push(`Bestandsabgleich fehlgeschlagen (${code}): ${reason}`);
+        });
+      }
+      setHyrekaImportProgress(100);
 
       setSuppliers(supplierList);
       setLocations(locationList);

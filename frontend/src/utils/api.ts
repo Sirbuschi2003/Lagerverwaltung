@@ -719,6 +719,37 @@ export const updateRestockStatus = async (
   return response.data;
 };
 
+export const recordMovementsBulk = async (
+  movements: RecordMovementRequest[],
+): Promise<{ ok: number; failed: Array<{ index: number; reason: string }> }> => {
+  const batchSize = 250;
+  let ok = 0;
+  const failed: Array<{ index: number; reason: string }> = [];
+
+  for (let batchStart = 0; batchStart < movements.length; batchStart += batchSize) {
+    const batch = movements.slice(batchStart, batchStart + batchSize);
+    try {
+      const response = await api.post<{ results: Array<{ status: string; reason?: string }> }>(
+        "/stock/sync",
+        { movements: batch },
+      );
+      response.data.results.forEach((result, i) => {
+        if (result.status === "ok") {
+          ok += 1;
+        } else {
+          failed.push({ index: batchStart + i, reason: result.reason ?? "Unbekannter Fehler" });
+        }
+      });
+    } catch (error) {
+      batch.forEach((_, i) => {
+        failed.push({ index: batchStart + i, reason: (error as any)?.message ?? "Batch-Fehler" });
+      });
+    }
+  }
+
+  return { ok, failed };
+};
+
 export const recordMovement = async (
   payload: RecordMovementRequest,
 ): Promise<void> => {
