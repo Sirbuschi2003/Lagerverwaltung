@@ -34,8 +34,8 @@ import { BranchesModule } from "./modules/branches/branches.module";
       load: [configuration],
       envFilePath: [".env", ".env.local"],
     }),
-    // Globales Rate-Limiting: 100 Anfragen pro Minute (ueberschreibbar per @Throttle())
-    ThrottlerModule.forRoot([{ ttl: 60000, limit: 100 }]),
+    // Globales Rate-Limiting: 500 Anfragen pro Minute – Bulk-Importe benötigen viele Requests
+    ThrottlerModule.forRoot([{ ttl: 60000, limit: 500 }]),
     ScheduleModule.forRoot(),
     TypeOrmModule.forRootAsync({
       useClass: DatabaseConfigService,
