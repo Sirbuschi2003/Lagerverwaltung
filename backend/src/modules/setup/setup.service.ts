@@ -539,17 +539,42 @@ export class SetupService {
       }
 
       if (sections.includes('stockLevels') && data.stockLevels?.length > 0) {
-        await mgr.getRepository(StockLevel).save(data.stockLevels.map((sl: any) => ({
-          id: sl.id, item: { id: sl.itemId },
-          vehicle: sl.vehicleId ? { id: sl.vehicleId } : null,
-          location: sl.locationId ? { id: sl.locationId } : null,
-          quantity: sl.quantity, targetQuantity: sl.targetQuantity,
-        })));
+        // Backup-ItemIDs können von aktuellen DB-IDs abweichen (z.B. nach Hyreka-Import).
+        // Mapping über Artikelcode: backup itemId → aktuelle DB itemId
+        const backupItemIdToCode = new Map<string, string>(
+          (data.items ?? []).map((i: any) => [i.id, i.code]),
+        );
+        const currentItems = await mgr.getRepository(Item).find({ select: ['id', 'code'] });
+        const codeToCurrentId = new Map<string, string>(currentItems.map((i) => [i.code, i.id]));
+
+        const resolveItemId = (backupItemId: string): string | null => {
+          const currentId = codeToCurrentId.get(backupItemIdToCode.get(backupItemId) ?? '');
+          return currentId ?? backupItemId; // Fallback: gleiche ID (Items aus Backup)
+        };
+
+        const resolvedLevels = data.stockLevels
+          .map((sl: any) => ({
+            id: sl.id,
+            item: { id: resolveItemId(sl.itemId) },
+            vehicle: sl.vehicleId ? { id: sl.vehicleId } : null,
+            location: sl.locationId ? { id: sl.locationId } : null,
+            quantity: sl.quantity, targetQuantity: sl.targetQuantity,
+          }))
+          .filter((sl: any) => sl.item.id != null);
+        if (resolvedLevels.length > 0) await mgr.getRepository(StockLevel).save(resolvedLevels);
       }
 
       if (sections.includes('stockMovements') && data.stockMovements?.length > 0) {
+        const backupItemIdToCode = new Map<string, string>(
+          (data.items ?? []).map((i: any) => [i.id, i.code]),
+        );
+        const currentItems = await mgr.getRepository(Item).find({ select: ['id', 'code'] });
+        const codeToCurrentId = new Map<string, string>(currentItems.map((i) => [i.code, i.id]));
+        const resolveItemId = (backupItemId: string): string =>
+          codeToCurrentId.get(backupItemIdToCode.get(backupItemId) ?? '') ?? backupItemId;
+
         await mgr.getRepository(StockMovement).save(data.stockMovements.map((sm: any) => ({
-          id: sm.id, type: sm.type, item: { id: sm.itemId },
+          id: sm.id, type: sm.type, item: { id: resolveItemId(sm.itemId) },
           vehicle: sm.vehicleId ? { id: sm.vehicleId } : null,
           location: sm.locationId ? { id: sm.locationId } : null,
           user: sm.userId ? { id: sm.userId } : null,
