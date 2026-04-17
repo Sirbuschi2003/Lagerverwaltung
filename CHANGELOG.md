@@ -1,5 +1,60 @@
 # Changelog
 
+## [3.5.1] – 2026-04-17
+
+### Feature: Selektive Wiederherstellung aus Backup
+
+- Backup enthält jetzt alle Daten (Artikel, Bestände, Buchungshistorie, Bestellungen, Lieferanten, Lagerorte, Benutzer, Fahrzeuge, Niederlassungen, System-Konfiguration)
+- Granulare Auswahl: jede Datenkategorie einzeln aktivierbar/deaktivierbar vor dem Restore
+- Vollständige Transaktion mit automatischem Rollback bei Fehler – kein Datenverlust bei Teilfehler
+- `PayloadTooLargeError` bei großen Backups behoben (Limit auf 200 MB erhöht)
+- Restore-Timeout von 3 s auf 300 s erhöht; Axios statt `fetch` für konsistente Auth-Header
+- Niederlassungen werden jetzt ebenfalls wiederhergestellt
+- Alte Backup-Versionen (< 2.0) werden erkannt und mit verständlicher Fehlermeldung abgelehnt
+
+### Bugfix: Backup-Wiederherstellung – Datenvollständigkeit
+
+- `purchase_orders`: fehlende Felder `branchId`, `locationId`, `deliveryNoteNumber` ergänzt (verhinderte zuvor DB-Fehler „Field has no default value")
+- `items`: fehlende Felder in der Restore-Abbildung ergänzt
+- **BackupPage:** `fetch`-Aufruf mit veralteter `token`-Variable durch korrekte `api`-Axios-Instanz ersetzt
+
+### Bugfix: Bestandswiederherstellung nach Hyreka-Import
+
+- Nach einem Hyreka-Import haben Artikel neue UUIDs – die alten Backup-IDs sind ungültig
+- StockLevels und StockMovements werden jetzt über den Artikelcode auf die aktuellen DB-IDs gemappt
+- Bestände erscheinen nach Wiederherstellung wieder korrekt in der Flottenübersicht
+
+### Bugfix: Absturz bei gelöschten Artikeln mit verwaisten Beständen
+
+- `getFleetOverview`, `getVehicleStock`, `getRestockOverview` (Backend) und `DashboardRestockWidget` (Frontend) crashten mit „cannot read property of null" wenn StockLevels auf gelöschte Artikel zeigten
+- Null-Checks an allen betroffenen Stellen ergänzt
+
+### Bugfix: Hyreka-Import – Artikel landen im falschen Lager
+
+- **Scoped-Key-Kollision:** Gleiche Regalnamen in verschiedenen Lagern wurden falsch zugeordnet → Toner-Artikel landeten im Teilelager. Scoped-Lookup ist jetzt strikt: nur Treffer im gewählten Ziellager werden verwendet.
+- **Artikel ohne CSV-Lagerort:** `??`-Operator fängt leere Strings nicht ab – durch `||` ersetzt. Artikel ohne Lagerort in der CSV werden nun korrekt dem gewählten übergeordneten Lager zugewiesen.
+
+### Feature: Filter „Ohne Lagerort" in der Artikelliste
+
+- Manager können Artikel ohne hinterlegten Lagerort direkt filtern (Checkbox in der Artikelliste)
+- Anzeige alphabetisch sortiert nach Artikelnummer – hilfreich nach Importen zur Qualitätskontrolle
+
+### Bugfix: Rate-Limit – Login nach Bulk-Import blockiert
+
+- Globales Rate-Limit von 100 auf 500 Anfragen/Minute erhöht – Bulk-Importe erschöpfen das Limit nicht mehr
+- Login-Throttle (10 Versuche / 15 Min) wird durch Container-Neustart sofort zurückgesetzt
+
+### Performance: Bestandsabgleich im Hyreka-Import massiv beschleunigt
+
+- Statt bis zu 10.000 Einzelrequests werden alle Bestandskorrekturen gesammelt und in 250er-Batches über `/stock/sync` übertragen
+- Bei 10.000 Artikeln: ~40 statt ~10.000 HTTP-Requests → von >10 Minuten auf ~20 Sekunden
+
+### Bugfix: TypeScript-Kompilierfehler
+
+- `@types/socket.io-client` entfernt – verursachte Typkonflikt mit `socket.io-client` v4
+
+---
+
 ## [3.5.0] – 2026-04-16
 
 ### Feature: Lager zurücksetzen (Artikelstamm-Neustart)
