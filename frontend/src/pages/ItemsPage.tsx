@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useRef, useState, useCallback, type ChangeEv
 import Papa from "papaparse";
 import {
   Alert,
+  AlertTitle,
   Autocomplete,
   Box,
   Button,
@@ -2212,23 +2213,50 @@ Import erfolgreich! Die Artikel sind jetzt verfügbar.`;
         <DialogTitle>Artikel importieren (CSV)</DialogTitle>
         <DialogContent>
           <Alert severity="info" sx={{ mb: 2 }}>
+            <AlertTitle>CSV-Format – Aufbau der Importdatei</AlertTitle>
             <Typography variant="body2" sx={{ mb: 1 }}>
-              <strong>Unterstützte CSV-Formate:</strong>
+              Die Datei muss <strong>UTF-8</strong> kodiert sein und <strong>Komma oder Semikolon</strong> als Trennzeichen verwenden.
+              Die erste Zeile muss die Spaltenüberschriften enthalten.
             </Typography>
-            <Typography variant="body2" sx={{ mb: 1 }}>
-              - <code>Artikel-Nr.,Beschreibung1,Beschreibung2,Hersteller,Warengruppe</code>
-            </Typography>
-            <Typography variant="body2" sx={{ mb: 1 }}>
-              - <code>Artikel-Nr.,Beschreibung,Hersteller+Warengruppe</code>
-            </Typography>
-            <Typography variant="body2" sx={{ mb: 1 }}>
-              - <code>Artikel-Nr.,Beschreibung,Hersteller,Warengruppe</code>
-            </Typography>
-            <Typography variant="body2">
-              Die Datei muss UTF-8 kodiert sein. Hersteller und Warengruppe können auch zusammen stehen (z.B. "Toshiba Ersatzteil").
-            </Typography>
-            <Typography variant="body2" sx={{ mt: 1 }}>
-              Tipp: Mit <strong>Artikel exportieren (CSV)</strong> bekommst du ein Re-Import-Format inkl. Lagerort, Lieferant, Preis, Bestellmenge und Ist-Bestand.
+
+            <Typography variant="body2" sx={{ mb: 0.5 }}><strong>Pflichtfelder (Spaltenname exakt so oder Alias):</strong></Typography>
+            <Box component="table" sx={{ width: "100%", borderCollapse: "collapse", mb: 1.5, "& td": { p: "2px 6px", fontSize: "0.75rem", verticalAlign: "top" }, "& tr:nth-of-type(odd) td": { bgcolor: "action.hover" } }}>
+              <tbody>
+                <tr><td><code>Artikel-Nr.</code> oder <code>code</code></td><td>Eindeutige Artikelnummer (Pflicht)</td></tr>
+                <tr><td><code>Beschreibung</code> oder <code>description</code></td><td>Artikelbezeichnung (Pflicht)</td></tr>
+                <tr><td><code>Hersteller</code> oder <code>manufacturer</code></td><td>Herstellername (Pflicht)</td></tr>
+                <tr><td><code>Warengruppe</code> oder <code>product_group</code></td><td>Warengruppe / Kategorie (Pflicht)</td></tr>
+              </tbody>
+            </Box>
+
+            <Typography variant="body2" sx={{ mb: 0.5 }}><strong>Optionale Felder:</strong></Typography>
+            <Box component="table" sx={{ width: "100%", borderCollapse: "collapse", mb: 1.5, "& td": { p: "2px 6px", fontSize: "0.75rem", verticalAlign: "top" }, "& tr:nth-of-type(odd) td": { bgcolor: "action.hover" } }}>
+              <tbody>
+                <tr><td><code>Beschreibung_2</code> oder <code>description_secondary</code></td><td>Zweite Bezeichnung / Ergänzung</td></tr>
+                <tr><td><code>Sollbestand</code> oder <code>target_stock</code></td><td>Zielbestand (Ganzzahl)</td></tr>
+                <tr><td><code>Meldebestand</code> oder <code>reorder_point</code></td><td>Bestellauslösung wenn Bestand ≤ Wert</td></tr>
+                <tr><td><code>Mindestbestand</code> oder <code>minimum_stock</code></td><td>Sicherheitspuffer / untere Grenze</td></tr>
+                <tr><td><code>Ist-Bestand</code> oder <code>current_quantity</code></td><td>Aktueller Lagerbestand (Ganzzahl)</td></tr>
+                <tr><td><code>Preis (EUR)</code> oder <code>price_eur</code></td><td>Einkaufspreis (Dezimalzahl, Punkt oder Komma)</td></tr>
+                <tr><td><code>Verpackungseinheit</code> oder <code>pack_size</code></td><td>Stück pro Verpackung (Ganzzahl)</td></tr>
+                <tr><td><code>Bestellmenge</code> oder <code>order_quantity</code></td><td>Bestellmenge je Bestellung (Ganzzahl)</td></tr>
+                <tr><td><code>QR-Code</code></td><td>QR-Code-Wert (Standard: Artikelnummer)</td></tr>
+                <tr><td><code>Lieferant</code> oder <code>supplier_name</code></td><td>Lieferantenname (muss im System existieren)</td></tr>
+                <tr><td><code>Lagerort-Code</code> oder <code>storage_location_code</code></td><td>Code des Lagerortes (z. B. <code>R1-F2</code>)</td></tr>
+                <tr><td><code>Lagerort-Name</code> oder <code>storage_location_name</code></td><td>Name des Lagerortes (z. B. <code>Regal 1 / Fach 2</code>)</td></tr>
+                <tr><td><code>Weitere Codes</code> oder <code>alternate_codes</code></td><td>Alternativcodes, kommagetrennt</td></tr>
+              </tbody>
+            </Box>
+
+            <Typography variant="body2" sx={{ mb: 0.5 }}><strong>Beispielzeile (erste Zeile = Überschrift):</strong></Typography>
+            <Box component="pre" sx={{ fontSize: "0.7rem", bgcolor: "grey.100", p: 1, borderRadius: 1, overflowX: "auto", mb: 1 }}>
+{`Artikel-Nr.,Beschreibung,Hersteller,Warengruppe,Sollbestand,Preis (EUR),Lagerort-Name
+TB-FC330,Toner Schwarz,Toshiba,Toner,5,89.90,Regal 3 / Fach 1`}
+            </Box>
+
+            <Typography variant="body2" color="text.secondary">
+              Tipp: <strong>Artikel exportieren (CSV)</strong> erstellt eine fertige Re-Import-Datei mit allen Feldern.
+              Für Hyreka-Exporte den <strong>Hyreka Einmalimport</strong> verwenden.
             </Typography>
           </Alert>
           <input type="file" accept=".csv" onChange={handleImportFile} />
