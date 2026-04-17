@@ -1645,12 +1645,16 @@ export interface RestoreFilters {
 }
 
 export const restoreSelective = async (backup: any, sections: string[], filters?: RestoreFilters): Promise<void> => {
-  await api.post('/setup/restore/selective', { backup, sections, filters });
+  await api.post('/setup/restore/selective', { backup, sections, filters }, { timeout: 300000 });
 };
 
 export const loadBackupFromServer = async (filename: string): Promise<any> => {
-  const response = await api.get(`/setup/backup/download/${encodeURIComponent(filename)}`, { responseType: 'json' });
+  const response = await api.get(`/setup/backup/download/${encodeURIComponent(filename)}`, { responseType: 'json', timeout: 60000 });
   return response.data;
+};
+
+export const restoreFullBackup = async (backup: any): Promise<void> => {
+  await api.post('/setup/restore', backup, { timeout: 300000 });
 };
 
 // Bewegungsverlauf

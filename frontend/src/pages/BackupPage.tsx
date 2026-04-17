@@ -21,11 +21,10 @@ import {
   Warehouse as WarehouseIcon,
   Business as BranchIcon,
 } from '@mui/icons-material';
-import useAuthStore from '../store/useAuthStore';
 import {
   getAutoBackupConfig, setAutoBackupConfig, getLastAutoBackup,
   listAutoBackups, downloadAutoBackup, deleteAutoBackup,
-  restoreSelective, loadBackupFromServer,
+  restoreSelective, restoreFullBackup, loadBackupFromServer,
   type AutoBackupConfig, type AutoBackupFile, type RestoreFilters,
 } from '../utils/api';
 
@@ -114,7 +113,6 @@ function locationSubtree(rootId: string, allLocations: BackupLocation[]): string
 
 const BackupPage = () => {
   const navigate = useNavigate();
-  const token = useAuthStore((state: any) => state.token);
 
   // Backup erstellen
   const [backupLoading, setBackupLoading] = useState(false);
@@ -239,12 +237,7 @@ const BackupPage = () => {
     setFullRestoreLoading(true);
     setFullRestoreConfirm(false);
     try {
-      const response = await fetch('/api/setup/restore', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify(loadedBackup),
-      });
-      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      await restoreFullBackup(loadedBackup);
       setBackupMessage({ type: 'success', text: 'Datenbank vollständig wiederhergestellt! Bitte neu anmelden.' });
       setTimeout(() => { localStorage.removeItem('token'); navigate('/login'); }, 2000);
     } catch (e: any) {
