@@ -171,6 +171,8 @@ export class SetupService {
           ...item,
           storageLocationId: item.storageLocation?.id ?? null,
           storageLocation: undefined,
+          supplierId: (item as any).supplier?.id ?? (item as any).supplierId ?? null,
+          supplier: undefined,
         })),
         vehicles,
         suppliers,
@@ -182,6 +184,9 @@ export class SetupService {
           orderedAt: order.orderedAt,
           receivedAt: order.receivedAt,
           note: order.note,
+          deliveryNoteNumber: (order as any).deliveryNoteNumber ?? null,
+          branchId: (order as any).branchId ?? null,
+          locationId: (order as any).locationId ?? null,
           createdAt: order.createdAt,
           updatedAt: order.updatedAt,
         })),
@@ -342,7 +347,11 @@ export class SetupService {
         await mgr.getRepository(PurchaseOrder).save(data.purchaseOrders.map((o: any) => ({
           id: o.id, supplier: o.supplierId ? { id: o.supplierId } : null,
           status: o.status, orderNumber: o.orderNumber, orderedAt: o.orderedAt,
-          receivedAt: o.receivedAt, note: o.note, createdAt: o.createdAt, updatedAt: o.updatedAt,
+          receivedAt: o.receivedAt, note: o.note ?? null,
+          deliveryNoteNumber: o.deliveryNoteNumber ?? null,
+          branchId: o.branchId ?? null,
+          locationId: o.locationId ?? null,
+          createdAt: o.createdAt, updatedAt: o.updatedAt,
         })));
       }
 
