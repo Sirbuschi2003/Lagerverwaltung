@@ -60,12 +60,14 @@ async function bootstrap() {
   // Cookie-Parser für HttpOnly-Refresh-Token
   app.use(cookieParser());
 
-  // Body-Limit global 1 MB – Backup-Endpoints setzen eigene Limits per Middleware
+  // Backup-Endpoints zuerst registrieren – muss VOR dem globalen 1mb-Limit stehen,
+  // damit Express den spezifischeren Handler zuerst auswertet.
+  app.use("/api/setup/restore", bodyParser.json({ limit: "50mb" }));
+  app.use("/api/setup/import", bodyParser.json({ limit: "50mb" }));
+
+  // Body-Limit global 1 MB für alle anderen Endpoints
   app.use(bodyParser.json({ limit: "1mb" }));
   app.use(bodyParser.urlencoded({ limit: "1mb", extended: true }));
-
-  // Backup-Endpoints benoetigen groessere Payloads (bis 50 MB)
-  app.use("/api/setup/restore", bodyParser.json({ limit: "50mb" }));
 
   // UTF-8 Content-Type Header fuer alle Responses
   app.use((_req: Request, res: Response, next: NextFunction) => {
