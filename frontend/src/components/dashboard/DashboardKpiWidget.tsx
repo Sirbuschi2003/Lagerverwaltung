@@ -27,6 +27,7 @@ import WarningAmberIcon from "@mui/icons-material/WarningAmber";
 import AssignmentIcon from "@mui/icons-material/Assignment";
 import CloseIcon from "@mui/icons-material/Close";
 import SearchIcon from "@mui/icons-material/Search";
+import InfoOutlinedIcon from "@mui/icons-material/InfoOutlined";
 import useDashboardData from "../../store/useDashboardData";
 import { BelowTargetItemDto, fetchBelowTargetItems } from "../../utils/api";
 
@@ -128,7 +129,7 @@ const BelowTargetDialog: React.FC<{ open: boolean; onClose: () => void }> = ({ o
                   {col("itemDescription", "Bezeichnung")}
                   {col("locationLabel", "Ort")}
                   {col("quantity", "Bestand", "right")}
-                  {col("targetQuantity", "Sollbestand", "right")}
+                  {col("targetQuantity", "Soll/Mindest", "right")}
                   {col("shortage", "Fehlmenge", "right")}
                 </TableRow>
               </TableHead>
@@ -152,7 +153,16 @@ const BelowTargetDialog: React.FC<{ open: boolean; onClose: () => void }> = ({ o
                       </TableCell>
                       <TableCell sx={{ whiteSpace: "nowrap" }}>{item.locationLabel}</TableCell>
                       <TableCell align="right">{item.quantity}</TableCell>
-                      <TableCell align="right">{item.targetQuantity}</TableCell>
+                      <TableCell align="right">
+                        <Box sx={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 0.5 }}>
+                          {item.effectiveTarget}
+                          {item.drivenByMinStock && (
+                            <Tooltip title={`Mindestbestand: ${item.minimumStock}${item.targetQuantity > 0 ? ` | Sollbestand: ${item.targetQuantity}` : ""}`} placement="top">
+                              <InfoOutlinedIcon sx={{ fontSize: 14, color: "info.main", cursor: "help" }} />
+                            </Tooltip>
+                          )}
+                        </Box>
+                      </TableCell>
                       <TableCell align="right" sx={{ color: "warning.main", fontWeight: 700 }}>
                         {item.shortage > 0 ? `-${item.shortage}` : "0"}
                       </TableCell>

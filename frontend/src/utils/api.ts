@@ -937,6 +937,8 @@ export interface BelowTargetItemDto {
   quantity: number;
   targetQuantity: number;
   minimumStock: number | null;
+  effectiveTarget: number;
+  drivenByMinStock: boolean;
   shortage: number;
 }
 

@@ -229,6 +229,11 @@ export class StockService {
       return belowLevels.map((level) => {
         const isWarehouse = !level.vehicle;
         const minStock = isWarehouse ? (level.item.minimumStock ?? 0) : 0;
+        const shortage = Math.max(0, level.targetQuantity - level.quantity, minStock - level.quantity);
+        const effectiveTarget = level.targetQuantity > 0
+          ? Math.max(level.targetQuantity, minStock)
+          : minStock || level.targetQuantity;
+        const drivenByMinStock = isWarehouse && minStock > 0 && (minStock - level.quantity) >= (level.targetQuantity - level.quantity);
         return {
           stockLevelId: level.id,
           itemId: level.item.id,
@@ -242,7 +247,9 @@ export class StockService {
           quantity: level.quantity,
           targetQuantity: level.targetQuantity,
           minimumStock: level.item.minimumStock ?? null,
-          shortage: Math.max(0, level.targetQuantity - level.quantity, minStock - level.quantity),
+          effectiveTarget,
+          drivenByMinStock,
+          shortage,
         };
       });
     } catch (error) {
