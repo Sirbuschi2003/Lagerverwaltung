@@ -976,34 +976,38 @@ export class ItemsService {
           }
         }
 
-        // Artikel-Codes löschen, dann Artikel (CASCADE löscht StockLevels, StockMovements, RestockRequests)
-        await this.codesRepository
-          .createQueryBuilder("ic")
-          .delete()
-          .where(branchId ? "ic.branchId = :branchId" : "ic.branchId IS NULL", branchId ? { branchId } : {})
-          .execute();
+        // Artikel-Codes löschen (raw SQL – TypeORM-DELETE-QueryBuilder unterstützt keinen Alias in WHERE)
+        await this.dataSource.query(
+          branchId
+            ? `DELETE FROM item_codes WHERE branchId = ?`
+            : `DELETE FROM item_codes WHERE branchId IS NULL`,
+          branchId ? [branchId] : [],
+        );
 
-        const itemsDeleted = await this.repository
-          .createQueryBuilder("item")
-          .delete()
-          .where(branchId ? "item.branchId = :branchId" : "item.branchId IS NULL", branchId ? { branchId } : {})
-          .execute();
-        itemsDeletedCount = itemsDeleted.affected ?? 0;
+        // Artikel löschen (CASCADE löscht StockLevels, StockMovements, RestockRequests, InventoryLines)
+        const itemsResult = await this.dataSource.query(
+          branchId
+            ? `DELETE FROM items WHERE branchId = ?`
+            : `DELETE FROM items WHERE branchId IS NULL`,
+          branchId ? [branchId] : [],
+        );
+        itemsDeletedCount = itemsResult?.affectedRows ?? 0;
         this.logger.log(`Artikel geloescht: ${itemsDeletedCount}`);
       }
 
       let locationsDeletedCount = 0;
       if (includeLocations) {
-        // Kinder zuerst (haben parent), dann Eltern – zwei Durchläufe reichen für 2 Ebenen
+        // Kinder zuerst, dann Eltern – bis zu 3 Durchläufe für verschachtelte Hierarchien
         for (let pass = 0; pass < 3; pass++) {
-          const result = await this.locationsRepository
-            .createQueryBuilder("loc")
-            .delete()
-            .where(branchId ? "loc.branchId = :branchId" : "loc.branchId IS NULL", branchId ? { branchId } : {})
-            .andWhere("loc.type != 'VEHICLE'")
-            .execute();
-          locationsDeletedCount += result.affected ?? 0;
-          if (!result.affected) break;
+          const locResult = await this.dataSource.query(
+            branchId
+              ? `DELETE FROM locations WHERE branchId = ? AND type != 'VEHICLE'`
+              : `DELETE FROM locations WHERE branchId IS NULL AND type != 'VEHICLE'`,
+            branchId ? [branchId] : [],
+          );
+          const affected: number = locResult?.affectedRows ?? 0;
+          locationsDeletedCount += affected;
+          if (!affected) break;
         }
         this.logger.log(`Lagerorte geloescht: ${locationsDeletedCount}`);
       }
