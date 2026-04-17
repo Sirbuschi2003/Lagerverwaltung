@@ -70,6 +70,15 @@ export class SetupController {
     return { success: true, message: 'Datenbank erfolgreich wiederhergestellt' };
   }
 
+  @Post("restore/selective")
+  @UseGuards(JwtAuthGuard, RolesGuard, PermissionsGuard)
+  @Roles("MANAGER")
+  @Permissions("backup.access")
+  async restoreSelective(@Body() body: { backup: any; sections: string[] }) {
+    await this.setupService.restoreSelective(body.backup, body.sections);
+    return { success: true, message: 'Ausgewählte Bereiche wiederhergestellt' };
+  }
+
   /**
    * Auto-Backup Konfiguration abrufen
    */

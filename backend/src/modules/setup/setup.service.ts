@@ -466,6 +466,181 @@ export class SetupService {
   }
 
   /**
+   * Selektive Wiederherstellung einzelner Datenbereiche aus einem Backup.
+   * Nur die gewählten Sektionen werden gelöscht und neu befüllt.
+   * Abhängigkeiten (z.B. items für stockLevels) müssen bereits in der DB existieren.
+   */
+  async restoreSelective(backup: any, sections: string[]): Promise<void> {
+    const { data } = backup;
+
+    await this.dataSource.query('SET FOREIGN_KEY_CHECKS = 0');
+    try {
+      // --- 1. Gewählte Sektionen leeren (Reihenfolge: abhängige zuerst) ---
+      if (sections.includes('inventorySessions')) {
+        await this.inventoryLineRepository.clear();
+        await this.inventorySessionRepository.clear();
+      }
+      if (sections.includes('stockMovements')) {
+        await this.stockMovementRepository.clear();
+      }
+      if (sections.includes('stockLevels')) {
+        await this.stockLevelRepository.clear();
+      }
+      if (sections.includes('purchaseOrders')) {
+        await this.purchaseOrderLineRepository.clear();
+        await this.purchaseOrderRepository.clear();
+      }
+      if (sections.includes('items')) {
+        await this.itemCodeRepository.clear();
+        await this.itemRepository.clear();
+      }
+      if (sections.includes('suppliers')) {
+        await this.supplierRepository.clear();
+      }
+      if (sections.includes('locations')) {
+        await this.dataSource.query('DELETE FROM user_locations');
+        await this.locationRepository.clear();
+      }
+      if (sections.includes('vehicles')) {
+        await this.vehicleRepository.clear();
+      }
+      if (sections.includes('users')) {
+        await this.userPermissionRepository.clear();
+        await this.rolePermissionRepository.clear();
+        await this.dataSource.query('DELETE FROM user_locations');
+        await this.userRepository.clear();
+      }
+      if (sections.includes('systemConfig')) {
+        await this.branchConfigRepository.clear();
+        await this.configRepository.clear();
+      }
+
+      // --- 2. Gewählte Sektionen wiederherstellen (unabhängige zuerst) ---
+      if (sections.includes('systemConfig')) {
+        if (data.systemConfigs?.length > 0) {
+          await this.configRepository.save(data.systemConfigs);
+        }
+        if (data.branchConfigs?.length > 0) {
+          await this.branchConfigRepository.save(data.branchConfigs);
+        }
+      }
+
+      if (sections.includes('users') && data.users?.length > 0) {
+        await this.userRepository.save(data.users.map((u: any) => ({
+          id: u.id,
+          username: u.username,
+          displayName: u.displayName,
+          email: u.email ?? null,
+          passwordHash: u.passwordHash,
+          role: u.role,
+          vehicleId: u.vehicleId ?? null,
+          branchId: u.branchId ?? null,
+          refreshInterval: u.refreshInterval,
+          locations: [],
+        })));
+        if (data.rolePermissions?.length > 0) {
+          await this.rolePermissionRepository.save(data.rolePermissions);
+        }
+        if (data.userPermissions?.length > 0) {
+          await this.userPermissionRepository.save(data.userPermissions);
+        }
+        for (const u of data.users) {
+          if (Array.isArray(u.locationIds) && u.locationIds.length > 0) {
+            await this.userRepository.save({ id: u.id, locations: u.locationIds.map((lid: string) => ({ id: lid })) });
+          }
+        }
+      }
+
+      if (sections.includes('vehicles') && data.vehicles?.length > 0) {
+        await this.vehicleRepository.save(data.vehicles);
+      }
+
+      if (sections.includes('locations') && data.locations?.length > 0) {
+        await this.locationRepository.save(data.locations.map((loc: any) => ({
+          id: loc.id, type: loc.type, code: loc.code, name: loc.name ?? null,
+          parent: null, vehicle: loc.vehicleId ? { id: loc.vehicleId } : null,
+          branchId: loc.branchId ?? null, createdAt: loc.createdAt, updatedAt: loc.updatedAt,
+        })));
+        const withParent = data.locations.filter((l: any) => l.parentId)
+          .map((l: any) => ({ id: l.id, parent: { id: l.parentId } }));
+        if (withParent.length > 0) {
+          await this.locationRepository.save(withParent);
+        }
+      }
+
+      if (sections.includes('suppliers') && data.suppliers?.length > 0) {
+        await this.supplierRepository.save(data.suppliers);
+      }
+
+      if (sections.includes('items')) {
+        if (data.items?.length > 0) {
+          await this.itemRepository.save(data.items.map((item: any) => {
+            const { storageLocationId, supplierId, ...rest } = item;
+            return { ...rest, storageLocation: storageLocationId ? { id: storageLocationId } : null, supplier: supplierId ? { id: supplierId } : null };
+          }));
+        }
+        if (data.itemCodes?.length > 0) {
+          await this.itemCodeRepository.save(data.itemCodes.map((ic: any) => ({
+            id: ic.id, branchId: ic.branchId, code: ic.code, kind: ic.kind,
+            item: ic.itemId ? { id: ic.itemId } : null,
+          })));
+        }
+      }
+
+      if (sections.includes('purchaseOrders')) {
+        if (data.purchaseOrders?.length > 0) {
+          await this.purchaseOrderRepository.save(data.purchaseOrders.map((o: any) => ({
+            id: o.id, supplier: o.supplierId ? { id: o.supplierId } : null,
+            status: o.status, orderNumber: o.orderNumber, orderedAt: o.orderedAt,
+            receivedAt: o.receivedAt, note: o.note, createdAt: o.createdAt, updatedAt: o.updatedAt,
+          })));
+        }
+        if (data.purchaseOrderLines?.length > 0) {
+          await this.purchaseOrderLineRepository.save(data.purchaseOrderLines.map((l: any) => ({
+            id: l.id, order: { id: l.orderId }, item: { id: l.itemId },
+            quantity: l.quantity, receivedQuantity: l.receivedQuantity, packSize: l.packSize,
+          })));
+        }
+      }
+
+      if (sections.includes('stockLevels') && data.stockLevels?.length > 0) {
+        await this.stockLevelRepository.save(data.stockLevels.map((sl: any) => ({
+          id: sl.id, item: { id: sl.itemId },
+          vehicle: sl.vehicleId ? { id: sl.vehicleId } : null,
+          location: sl.locationId ? { id: sl.locationId } : null,
+          quantity: sl.quantity, targetQuantity: sl.targetQuantity,
+        })));
+      }
+
+      if (sections.includes('stockMovements') && data.stockMovements?.length > 0) {
+        await this.stockMovementRepository.save(data.stockMovements.map((sm: any) => ({
+          id: sm.id, type: sm.type, item: { id: sm.itemId },
+          vehicle: sm.vehicleId ? { id: sm.vehicleId } : null,
+          location: sm.locationId ? { id: sm.locationId } : null,
+          user: sm.userId ? { id: sm.userId } : null,
+          quantity: sm.quantity, occurredAt: sm.occurredAt, note: sm.note, source: sm.source,
+        })));
+      }
+
+      if (sections.includes('inventorySessions')) {
+        if (data.inventorySessions?.length > 0) {
+          await this.inventorySessionRepository.save(data.inventorySessions);
+        }
+        if (data.inventoryLines?.length > 0) {
+          await this.inventoryLineRepository.save(data.inventoryLines.map((il: any) => ({
+            id: il.id, session: { id: il.sessionId }, item: { id: il.itemId },
+            vehicle: il.vehicleId ? { id: il.vehicleId } : null,
+            location: il.locationId ? { id: il.locationId } : null,
+            expectedQuantity: il.expectedQuantity, countedQuantity: il.countedQuantity, note: il.note,
+          })));
+        }
+      }
+    } finally {
+      await this.dataSource.query('SET FOREIGN_KEY_CHECKS = 1');
+    }
+  }
+
+  /**
    * Automatisches Backup-System
    */
 

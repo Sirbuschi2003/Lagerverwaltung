@@ -1638,6 +1638,10 @@ export const deleteAutoBackup = async (filename: string): Promise<{ success: boo
   return response.data;
 };
 
+export const restoreSelective = async (backup: any, sections: string[]): Promise<void> => {
+  await api.post('/setup/restore/selective', { backup, sections });
+};
+
 // Bewegungsverlauf
 export interface MovementDto {
   id: string;

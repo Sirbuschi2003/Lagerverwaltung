@@ -36,9 +36,37 @@ import {
   Download as DownloadIcon,
   Delete as DeleteIcon,
   Refresh as RefreshIcon,
+  Tune as SelectiveIcon,
 } from '@mui/icons-material';
+import {
+  Checkbox,
+  FormControlLabel,
+  FormGroup,
+  Chip,
+  Tooltip,
+} from '@mui/material';
 import useAuthStore from '../store/useAuthStore';
-import { getAutoBackupConfig, setAutoBackupConfig, getLastAutoBackup, listAutoBackups, downloadAutoBackup, deleteAutoBackup, type AutoBackupConfig, type AutoBackupFile } from '../utils/api';
+import { getAutoBackupConfig, setAutoBackupConfig, getLastAutoBackup, listAutoBackups, downloadAutoBackup, deleteAutoBackup, restoreSelective, type AutoBackupConfig, type AutoBackupFile } from '../utils/api';
+
+interface RestoreSection {
+  key: string;
+  label: string;
+  description: string;
+  dependsOn?: string;
+}
+
+const RESTORE_SECTIONS: RestoreSection[] = [
+  { key: 'stockLevels',       label: 'Bestände',           description: 'Lager- und Wagenbestände',           dependsOn: 'Artikel + Fahrzeuge müssen vorhanden sein' },
+  { key: 'stockMovements',    label: 'Buchungshistorie',   description: 'Alle Ein- und Ausbuchungen',          dependsOn: 'Artikel + Fahrzeuge müssen vorhanden sein' },
+  { key: 'items',             label: 'Artikel',            description: 'Artikel-Stammdaten & Codes' },
+  { key: 'locations',         label: 'Lagerorte',          description: 'Regale, Fächer (keine Fahrzeuge)' },
+  { key: 'vehicles',          label: 'Fahrzeuge',          description: 'Fahrzeugliste' },
+  { key: 'suppliers',         label: 'Lieferanten',        description: 'Lieferanten-Stammdaten' },
+  { key: 'purchaseOrders',    label: 'Bestellungen',       description: 'Bestellungen & Positionen',          dependsOn: 'Artikel + Lieferanten müssen vorhanden sein' },
+  { key: 'inventorySessions', label: 'Inventursitzungen',  description: 'Inventur-Sessions & Zeilen',         dependsOn: 'Artikel + Fahrzeuge müssen vorhanden sein' },
+  { key: 'users',             label: 'Benutzer & Rechte',  description: 'Benutzer, Rollen & Berechtigungen' },
+  { key: 'systemConfig',      label: 'Systemeinstellungen',description: 'System- & Branch-Konfiguration' },
+];
 
 const BackupPage = () => {
   const navigate = useNavigate();
@@ -46,6 +74,12 @@ const BackupPage = () => {
   const [backupLoading, setBackupLoading] = useState(false);
   const [restoreLoading, setRestoreLoading] = useState(false);
   const [backupMessage, setBackupMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+
+  // Selektiver Restore
+  const [selectiveDialog, setSelectiveDialog] = useState(false);
+  const [selectiveBackup, setSelectiveBackup] = useState<any>(null);
+  const [selectedSections, setSelectedSections] = useState<string[]>([]);
+  const [selectiveLoading, setSelectiveLoading] = useState(false);
   const [autoConfig, setAutoConfig] = useState<AutoBackupConfig>({ enabled: false, frequency: 'daily', time: '02:00', lastBackup: null });
   const [configLoading, setConfigLoading] = useState(false);
   const [savingConfig, setSavingConfig] = useState(false);
@@ -209,6 +243,47 @@ const BackupPage = () => {
     }
   };
 
+  const handleSelectiveFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    event.target.value = '';
+    try {
+      const text = await file.text();
+      const backup = JSON.parse(text);
+      if (!backup?.data || typeof backup.data !== 'object') {
+        setBackupMessage({ type: 'error', text: 'Ungültige Backup-Datei.' });
+        return;
+      }
+      setSelectiveBackup(backup);
+      setSelectedSections([]);
+      setSelectiveDialog(true);
+    } catch {
+      setBackupMessage({ type: 'error', text: 'Backup-Datei konnte nicht gelesen werden.' });
+    }
+  };
+
+  const handleSelectiveRestore = async () => {
+    if (selectedSections.length === 0) return;
+    const confirmed = window.confirm(
+      `ACHTUNG: Die folgenden Bereiche werden gelöscht und aus dem Backup wiederhergestellt:\n\n` +
+      selectedSections.map(k => RESTORE_SECTIONS.find(s => s.key === k)?.label ?? k).join(', ') +
+      '\n\nBist du sicher?'
+    );
+    if (!confirmed) return;
+
+    setSelectiveLoading(true);
+    try {
+      await restoreSelective(selectiveBackup, selectedSections);
+      setSelectiveDialog(false);
+      setBackupMessage({ type: 'success', text: `Bereiche erfolgreich wiederhergestellt: ${selectedSections.map(k => RESTORE_SECTIONS.find(s => s.key === k)?.label).join(', ')}` });
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : 'Unbekannter Fehler';
+      setBackupMessage({ type: 'error', text: `Selektive Wiederherstellung fehlgeschlagen: ${msg}` });
+    } finally {
+      setSelectiveLoading(false);
+    }
+  };
+
   return (
     <Container maxWidth="md" sx={{ mt: 4, mb: 4 }}>
       <Backdrop open={busy} sx={{ color: '#fff', zIndex: (theme) => theme.zIndex.drawer + 1, flexDirection: 'column', gap: 2 }}>
@@ -281,6 +356,31 @@ const BackupPage = () => {
               hidden
               onChange={handleRestoreBackup}
             />
+          </Button>
+        </Box>
+
+        <Divider sx={{ my: 4 }} />
+
+        <Box>
+          <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <SelectiveIcon />
+            Selektive Wiederherstellung
+          </Typography>
+          <Alert severity="warning" sx={{ mb: 2 }}>
+            Stellt nur ausgewählte Bereiche wieder her. Die gewählten Bereiche werden zuerst vollständig gelöscht. Nicht ausgewählte Daten bleiben unverändert.
+          </Alert>
+          <Typography variant="body2" color="text.secondary" paragraph>
+            Nützlich z.B. um nach einem Lager-Reset nur die Bestände oder Artikel aus einem Backup zurückzuholen.
+          </Typography>
+          <Button
+            variant="outlined"
+            color="warning"
+            component="label"
+            disabled={busy || selectiveLoading}
+            startIcon={<SelectiveIcon />}
+          >
+            Backup auswählen & Bereiche wählen
+            <input type="file" accept=".json" hidden onChange={handleSelectiveFileChange} />
           </Button>
         </Box>
 
@@ -519,6 +619,82 @@ const BackupPage = () => {
             autoFocus
           >
             {deletingFile ? <CircularProgress size={20} /> : 'Löschen'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Selektiver Restore Dialog */}
+      <Dialog open={selectiveDialog} onClose={() => !selectiveLoading && setSelectiveDialog(false)} maxWidth="sm" fullWidth>
+        <DialogTitle sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+          <SelectiveIcon />
+          Bereiche zur Wiederherstellung wählen
+        </DialogTitle>
+        <DialogContent>
+          <DialogContentText sx={{ mb: 2 }}>
+            Wähle die Bereiche, die aus dem Backup wiederhergestellt werden sollen. Nur die gewählten Bereiche werden gelöscht und neu befüllt.
+          </DialogContentText>
+          <FormGroup>
+            {RESTORE_SECTIONS.map((section) => {
+              const presentInBackup = selectiveBackup?.data
+                ? (() => {
+                    if (section.key === 'items') return (selectiveBackup.data.items?.length ?? 0) > 0;
+                    if (section.key === 'purchaseOrders') return (selectiveBackup.data.purchaseOrders?.length ?? 0) > 0;
+                    if (section.key === 'inventorySessions') return (selectiveBackup.data.inventorySessions?.length ?? 0) > 0;
+                    if (section.key === 'systemConfig') return (selectiveBackup.data.systemConfigs?.length ?? 0) > 0 || (selectiveBackup.data.branchConfigs?.length ?? 0) > 0;
+                    return (selectiveBackup.data[section.key]?.length ?? 0) > 0;
+                  })()
+                : false;
+
+              return (
+                <Box key={section.key} sx={{ mb: 0.5 }}>
+                  <FormControlLabel
+                    control={
+                      <Checkbox
+                        checked={selectedSections.includes(section.key)}
+                        onChange={(e) => setSelectedSections(prev =>
+                          e.target.checked ? [...prev, section.key] : prev.filter(k => k !== section.key)
+                        )}
+                        disabled={selectiveLoading}
+                      />
+                    }
+                    label={
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
+                        <Typography variant="body2" fontWeight="medium">{section.label}</Typography>
+                        <Typography variant="caption" color="text.secondary">— {section.description}</Typography>
+                        {!presentInBackup && (
+                          <Chip label="leer im Backup" size="small" color="default" variant="outlined" sx={{ fontSize: 10 }} />
+                        )}
+                      </Box>
+                    }
+                  />
+                  {section.dependsOn && selectedSections.includes(section.key) && (
+                    <Alert severity="info" sx={{ ml: 4, mb: 0.5, py: 0, fontSize: 12 }}>
+                      Voraussetzung: {section.dependsOn}
+                    </Alert>
+                  )}
+                </Box>
+              );
+            })}
+          </FormGroup>
+          {selectedSections.length > 0 && (
+            <Alert severity="warning" sx={{ mt: 2 }}>
+              <strong>Folgende Bereiche werden gelöscht und überschrieben:</strong><br />
+              {selectedSections.map(k => RESTORE_SECTIONS.find(s => s.key === k)?.label).join(', ')}
+            </Alert>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setSelectiveDialog(false)} disabled={selectiveLoading}>
+            Abbrechen
+          </Button>
+          <Button
+            onClick={handleSelectiveRestore}
+            color="warning"
+            variant="contained"
+            disabled={selectedSections.length === 0 || selectiveLoading}
+            startIcon={selectiveLoading ? <CircularProgress size={16} /> : <SelectiveIcon />}
+          >
+            {selectiveLoading ? 'Wird wiederhergestellt...' : `${selectedSections.length} Bereich${selectedSections.length !== 1 ? 'e' : ''} wiederherstellen`}
           </Button>
         </DialogActions>
       </Dialog>
