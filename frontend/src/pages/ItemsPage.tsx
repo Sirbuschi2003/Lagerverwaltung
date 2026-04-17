@@ -13,7 +13,9 @@ import {
   IconButton,
   LinearProgress,
   Backdrop,
+  Checkbox,
   CircularProgress,
+  FormControlLabel,
   Paper,
   Table,
   TableBody,
@@ -530,6 +532,7 @@ const ItemsPage = () => {
   const [debouncedSearchTerm, setDebouncedSearchTerm] = useState("");
   const [selectedManufacturer, setSelectedManufacturer] = useState<string | null>(null);
   const [selectedProductGroup, setSelectedProductGroup] = useState<string | null>(null);
+  const [filterNoLocation, setFilterNoLocation] = useState(false);
   const [viewItems, setViewItems] = useState<any[]>([]);
   const [viewTotal, setViewTotal] = useState<number>(0);
   const [viewLoading, setViewLoading] = useState<boolean>(false);
@@ -2033,8 +2036,12 @@ Import erfolgreich! Die Artikel sind jetzt verfügbar.`;
     }
   };
 
-  const filteredItems = sortedItems;
-  const paginatedItems = sortedItems;
+  const filteredItems = filterNoLocation
+    ? [...items]
+        .filter((item: any) => !item.storageLocation)
+        .sort((a: any, b: any) => a.code.localeCompare(b.code, "de", { sensitivity: "base" }))
+    : sortedItems;
+  const paginatedItems = filteredItems;
 
   // Offline-Queue-Indikator
   const [offlineQueueCount, setOfflineQueueCount] = useState(0);
@@ -2528,16 +2535,30 @@ Import erfolgreich! Die Artikel sind jetzt verfügbar.`;
             value={selectedProductGroup}
             onChange={(_: any, value: any) => setSelectedProductGroup(value)}
             renderInput={params => <TextField {...params} label="Warengruppe" size="small" />}
-            sx={{ 
+            sx={{
               minWidth: { xs: '100%', sm: 180 },
               flex: { xs: 1, sm: 'none' }
             }}
           />
+          {(user?.role === 'MANAGER') && (
+            <FormControlLabel
+              control={
+                <Checkbox
+                  checked={filterNoLocation}
+                  onChange={(e) => { setFilterNoLocation(e.target.checked); setPage(1); }}
+                  size="small"
+                  color="warning"
+                />
+              }
+              label={<Typography variant="body2">Ohne Lagerort</Typography>}
+              sx={{ ml: 0.5, whiteSpace: 'nowrap' }}
+            />
+          )}
         </Box>
         {/* Anzeige der Artikelanzahl oberhalb der Tabelle */}
         <Box sx={{ mb: 2 }}>
           <Typography variant="subtitle1">
-            Gesamtanzahl Artikel: {viewTotal || viewItems.length}
+            Gesamtanzahl Artikel: {filterNoLocation ? filteredItems.length : (viewTotal || viewItems.length)}
             {totalPages > 1 && (
               <> | Seite {page} von {totalPages} ({itemsPerPage} pro Seite)</>
             )}
