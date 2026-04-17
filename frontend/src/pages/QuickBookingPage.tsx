@@ -165,7 +165,13 @@ const QuickBookingPage: React.FC = () => {
     return findItemByCode(items, code) ?? null;
   };
 
-  const bookEntry = async (entry: BookingEntry): Promise<boolean> => {
+  const bookEntry = async (entry: BookingEntry): Promise<{ ok: boolean; error?: string }> => {
+    if (!entry.locationId) {
+      return {
+        ok: false,
+        error: `${entry.itemCode}: Kein Lagerort hinterlegt – Buchung nicht möglich. Bitte Lagerort am Artikel pflegen.`,
+      };
+    }
     try {
       await recordMovement({
         itemId: entry.itemId,
@@ -176,9 +182,13 @@ const QuickBookingPage: React.FC = () => {
         occurredAt: new Date().toISOString(),
         source: entry.reference || "quick-booking",
       });
-      return true;
-    } catch {
-      return false;
+      return { ok: true };
+    } catch (err: any) {
+      const msg =
+        Array.isArray(err?.response?.data?.message)
+          ? err.response.data.message.join(", ")
+          : (err?.response?.data?.message ?? err?.message ?? "Unbekannter Fehler");
+      return { ok: false, error: `${entry.itemCode}: ${msg}` };
     }
   };
 
@@ -242,13 +252,18 @@ const QuickBookingPage: React.FC = () => {
     };
 
     if (sofortBuchen) {
-      const ok = await bookEntry(entry);
-      if (ok) {
+      const result = await bookEntry(entry);
+      if (result.ok) {
         showSuccess(`${found.code} – ${quantity}x ${mode === "CHECKIN" ? "eingebucht" : "ausgebucht"}`);
         setCameraScanFeedback({ type: "success", text: `${found.code} – direkt gebucht (${quantity}×)` });
       } else {
-        showError(`Fehler beim Buchen von ${found.code}`);
-        setCameraScanFeedback({ type: "error", text: `Fehler beim Buchen von ${found.code}` });
+        playError();
+        showError(result.error ?? `Fehler beim Buchen von ${found.code}`);
+        setCameraScanFeedback({ type: "error", text: result.error ?? `Fehler beim Buchen von ${found.code}` });
+        busyRef.current = false;
+        setBusy(false);
+        refocusBarcode();
+        return;
       }
     } else {
       // Ref nutzen statt bookingList direkt (stale closure im useCallback vermeiden)
@@ -298,27 +313,33 @@ const QuickBookingPage: React.FC = () => {
   const handleUebernehmen = async () => {
     if (bookingList.length === 0) return;
     setBusy(true);
-    let errors = 0;
+    const failedMessages: string[] = [];
     let success = 0;
 
     for (const entry of bookingList) {
-      const ok = await bookEntry(entry);
-      if (ok) success++;
-      else errors++;
+      const result = await bookEntry(entry);
+      if (result.ok) {
+        success++;
+      } else {
+        failedMessages.push(result.error ?? entry.itemCode);
+      }
     }
 
     setBusy(false);
-    if (errors === 0) {
+    if (failedMessages.length === 0) {
       showSuccess(`${success} Position${success !== 1 ? "en" : ""} erfolgreich gebucht`);
-      // Alle Geräte im Room über Buchung informieren → Liste leeren
       if (socketRef.current?.connected && user?.id) {
         socketRef.current.emit("quickbook:booked", { userId: user.id });
       }
-      remoteUpdateRef.current = true; // eigene Listenänderung nicht nochmal senden
+      remoteUpdateRef.current = true;
       setBookingList([]);
       setCurrentItem(null);
     } else {
-      showError(`${errors} Fehler bei der Buchung (${success} erfolgreich)`);
+      showError(
+        failedMessages.length === 1
+          ? failedMessages[0]
+          : `${failedMessages.length} Fehler: ${failedMessages.slice(0, 3).join(" | ")}${failedMessages.length > 3 ? " …" : ""}`,
+      );
     }
     refocusBarcode();
   };

@@ -1234,6 +1234,11 @@ export class StockService {
     const locationId = location?.id ?? null;
 
     if (!locationId) {
+      if (movement.type === "CHECKIN" || movement.type === "CHECKOUT") {
+        throw new BadRequestException(
+          "Für diese Buchung ist ein Lagerort oder Fahrzeug erforderlich.",
+        );
+      }
       return;
     }
 
