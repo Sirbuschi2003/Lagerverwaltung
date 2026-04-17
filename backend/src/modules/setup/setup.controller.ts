@@ -74,8 +74,12 @@ export class SetupController {
   @UseGuards(JwtAuthGuard, RolesGuard, PermissionsGuard)
   @Roles("MANAGER")
   @Permissions("backup.access")
-  async restoreSelective(@Body() body: { backup: any; sections: string[] }) {
-    await this.setupService.restoreSelective(body.backup, body.sections);
+  async restoreSelective(@Body() body: {
+    backup: any;
+    sections: string[];
+    filters?: { targetBranchId?: string | null; vehicleIds?: string[] | null; locationIds?: string[] | null };
+  }) {
+    await this.setupService.restoreSelective(body.backup, body.sections, body.filters);
     return { success: true, message: 'Ausgewählte Bereiche wiederhergestellt' };
   }
 

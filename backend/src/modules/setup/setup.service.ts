@@ -200,6 +200,7 @@ export class SetupService {
           name: location.name,
           parentId: location.parent?.id ?? null,
           vehicleId: location.vehicle?.id ?? null,
+          branchId: (location as any).branchId ?? null,
           createdAt: location.createdAt,
           updatedAt: location.updatedAt,
         })),
@@ -247,221 +248,149 @@ export class SetupService {
 
   async restoreBackup(backup: any): Promise<void> {
     const { data } = backup;
+    // branchId fallback: Lagerorte im Backup haben ggf. null (Altdaten vor Branch-Isolation)
+    const fallbackBranchId = data.branches?.[0]?.id
+      ?? data.locations?.find((l: any) => l.branchId)?.branchId
+      ?? null;
 
-    // Deaktiviere Foreign Key Checks für MySQL
-    await this.dataSource.query('SET FOREIGN_KEY_CHECKS = 0');
+    const queryRunner = this.dataSource.createQueryRunner();
+    await queryRunner.connect();
+    await queryRunner.startTransaction();
+    await queryRunner.query('SET FOREIGN_KEY_CHECKS = 0');
 
     try {
-      // Lösche alle bestehenden Daten in der richtigen Reihenfolge (wegen Foreign Keys)
-      await this.inventoryLineRepository.clear();
-      await this.inventorySessionRepository.clear();
-      await this.stockMovementRepository.clear();
-      await this.stockLevelRepository.clear();
-      await this.purchaseOrderLineRepository.clear();
-      await this.purchaseOrderRepository.clear();
-      await this.itemCodeRepository.clear();
-      await this.itemRepository.clear();
-      await this.supplierRepository.clear();
-      await this.userPermissionRepository.clear();
-      await this.rolePermissionRepository.clear();
-      await this.dataSource.query('DELETE FROM user_locations');
-      await this.locationRepository.clear();
-      await this.vehicleRepository.clear();
-      await this.userRepository.clear();
-      await this.branchConfigRepository.clear();
-      await this.configRepository.clear();
-      await this.roleRepository.clear();
-      await this.permissionRepository.clear();
-      await this.branchRepository.clear();
+      const mgr = queryRunner.manager;
 
-      // Stelle Daten wieder her – Reihenfolge: unabhängige Tabellen zuerst
-      if (data.branches?.length > 0) {
-        await this.branchRepository.save(data.branches);
-      }
+      await mgr.getRepository(InventoryLine).clear();
+      await mgr.getRepository(InventorySession).clear();
+      await mgr.getRepository(StockMovement).clear();
+      await mgr.getRepository(StockLevel).clear();
+      await mgr.getRepository(PurchaseOrderLine).clear();
+      await mgr.getRepository(PurchaseOrder).clear();
+      await mgr.getRepository(ItemCode).clear();
+      await mgr.getRepository(Item).clear();
+      await mgr.getRepository(Supplier).clear();
+      await mgr.getRepository(UserPermission).clear();
+      await mgr.getRepository(RolePermission).clear();
+      await mgr.query('DELETE FROM user_locations');
+      await mgr.getRepository(Location).clear();
+      await mgr.getRepository(Vehicle).clear();
+      await mgr.getRepository(User).clear();
+      await mgr.getRepository(BranchConfig).clear();
+      await mgr.getRepository(SystemConfig).clear();
+      await mgr.getRepository(Role).clear();
+      await mgr.getRepository(Permission).clear();
+      await mgr.getRepository(Branch).clear();
 
-      if (data.permissions?.length > 0) {
-        await this.permissionRepository.save(data.permissions);
-      }
-
-      if (data.roles?.length > 0) {
-        await this.roleRepository.save(data.roles);
-      }
-
-      if (data.systemConfigs?.length > 0) {
-        await this.configRepository.save(data.systemConfigs);
-      }
-
-      if (data.branchConfigs?.length > 0) {
-        await this.branchConfigRepository.save(data.branchConfigs);
-      }
+      if (data.branches?.length > 0) await mgr.getRepository(Branch).save(data.branches);
+      if (data.permissions?.length > 0) await mgr.getRepository(Permission).save(data.permissions);
+      if (data.roles?.length > 0) await mgr.getRepository(Role).save(data.roles);
+      if (data.systemConfigs?.length > 0) await mgr.getRepository(SystemConfig).save(data.systemConfigs);
+      if (data.branchConfigs?.length > 0) await mgr.getRepository(BranchConfig).save(data.branchConfigs);
 
       if (data.users?.length > 0) {
-        await this.userRepository.save(data.users.map((u: any) => ({
-          id: u.id,
-          username: u.username,
-          displayName: u.displayName,
-          email: u.email ?? null,
-          passwordHash: u.passwordHash,
-          role: u.role,
-          vehicleId: u.vehicleId ?? null,
-          branchId: u.branchId ?? null,
-          refreshInterval: u.refreshInterval,
-          locations: [],
+        await mgr.getRepository(User).save(data.users.map((u: any) => ({
+          id: u.id, username: u.username, displayName: u.displayName,
+          email: u.email ?? null, passwordHash: u.passwordHash, role: u.role,
+          vehicleId: u.vehicleId ?? null, branchId: u.branchId ?? null,
+          refreshInterval: u.refreshInterval, locations: [],
         })));
       }
 
-      if (data.vehicles?.length > 0) {
-        await this.vehicleRepository.save(data.vehicles);
-      }
+      if (data.vehicles?.length > 0) await mgr.getRepository(Vehicle).save(data.vehicles);
 
       if (data.locations?.length > 0) {
-        const baseLocations = data.locations.map((loc: any) => ({
-          id: loc.id,
-          type: loc.type,
-          code: loc.code,
-          name: loc.name ?? null,
-          parent: null,
-          vehicle: loc.vehicleId ? { id: loc.vehicleId } : null,
-          createdAt: loc.createdAt,
-          updatedAt: loc.updatedAt,
-        }));
-
-        await this.locationRepository.save(baseLocations);
-
-        const locationsWithParent = data.locations
-          .filter((loc: any) => loc.parentId)
-          .map((loc: any) => ({
-            id: loc.id,
-            parent: { id: loc.parentId },
-          }));
-
-        if (locationsWithParent.length > 0) {
-          await this.locationRepository.save(locationsWithParent);
-        }
+        await mgr.getRepository(Location).save(data.locations.map((loc: any) => ({
+          id: loc.id, type: loc.type, code: loc.code, name: loc.name ?? null,
+          parent: null, vehicle: loc.vehicleId ? { id: loc.vehicleId } : null,
+          branchId: loc.branchId ?? fallbackBranchId,
+          createdAt: loc.createdAt, updatedAt: loc.updatedAt,
+        })));
+        const withParent = data.locations.filter((l: any) => l.parentId)
+          .map((l: any) => ({ id: l.id, parent: { id: l.parentId } }));
+        if (withParent.length > 0) await mgr.getRepository(Location).save(withParent);
       }
 
-      // Stelle Benutzer-Lager-Zuordnungen wieder her (user_locations)
       if (data.users?.length > 0) {
-        for (const userData of data.users) {
-          if (Array.isArray(userData.locationIds) && userData.locationIds.length > 0) {
-            await this.userRepository.save({
-              id: userData.id,
-              locations: userData.locationIds.map((lid: string) => ({ id: lid })),
-            });
+        for (const u of data.users) {
+          if (Array.isArray(u.locationIds) && u.locationIds.length > 0) {
+            await mgr.getRepository(User).save({ id: u.id, locations: u.locationIds.map((lid: string) => ({ id: lid })) });
           }
         }
       }
 
-      if (data.suppliers?.length > 0) {
-        await this.supplierRepository.save(data.suppliers);
-      }
+      if (data.suppliers?.length > 0) await mgr.getRepository(Supplier).save(data.suppliers);
 
       if (data.items?.length > 0) {
-        const itemsToSave = data.items.map((item: any) => {
+        await mgr.getRepository(Item).save(data.items.map((item: any) => {
           const { storageLocationId, supplierId, ...rest } = item;
-          return {
-            ...rest,
-            storageLocation: storageLocationId ? { id: storageLocationId } : null,
-            supplier: supplierId ? { id: supplierId } : null,
-          };
-        });
-        await this.itemRepository.save(itemsToSave);
+          return { ...rest, storageLocation: storageLocationId ? { id: storageLocationId } : null, supplier: supplierId ? { id: supplierId } : null };
+        }));
       }
 
       if (data.itemCodes?.length > 0) {
-        await this.itemCodeRepository.save(data.itemCodes.map((ic: any) => ({
-          id: ic.id,
-          branchId: ic.branchId,
-          code: ic.code,
-          kind: ic.kind,
+        await mgr.getRepository(ItemCode).save(data.itemCodes.map((ic: any) => ({
+          id: ic.id, branchId: ic.branchId, code: ic.code, kind: ic.kind,
           item: ic.itemId ? { id: ic.itemId } : null,
         })));
       }
 
-      if (data.rolePermissions?.length > 0) {
-        await this.rolePermissionRepository.save(data.rolePermissions);
-      }
-
-      if (data.userPermissions?.length > 0) {
-        await this.userPermissionRepository.save(data.userPermissions);
-      }
+      if (data.rolePermissions?.length > 0) await mgr.getRepository(RolePermission).save(data.rolePermissions);
+      if (data.userPermissions?.length > 0) await mgr.getRepository(UserPermission).save(data.userPermissions);
 
       if (data.purchaseOrders?.length > 0) {
-        const ordersToSave = data.purchaseOrders.map((order: any) => ({
-          id: order.id,
-          supplier: order.supplierId ? { id: order.supplierId } : null,
-          status: order.status,
-          orderNumber: order.orderNumber,
-          orderedAt: order.orderedAt,
-          receivedAt: order.receivedAt,
-          note: order.note,
-          createdAt: order.createdAt,
-          updatedAt: order.updatedAt,
-        }));
-        await this.purchaseOrderRepository.save(ordersToSave);
+        await mgr.getRepository(PurchaseOrder).save(data.purchaseOrders.map((o: any) => ({
+          id: o.id, supplier: o.supplierId ? { id: o.supplierId } : null,
+          status: o.status, orderNumber: o.orderNumber, orderedAt: o.orderedAt,
+          receivedAt: o.receivedAt, note: o.note, createdAt: o.createdAt, updatedAt: o.updatedAt,
+        })));
       }
 
       if (data.purchaseOrderLines?.length > 0) {
-        const linesToSave = data.purchaseOrderLines.map((line: any) => ({
-          id: line.id,
-          order: { id: line.orderId },
-          item: { id: line.itemId },
-          quantity: line.quantity,
-          receivedQuantity: line.receivedQuantity,
-          packSize: line.packSize,
-        }));
-        await this.purchaseOrderLineRepository.save(linesToSave);
+        await mgr.getRepository(PurchaseOrderLine).save(data.purchaseOrderLines.map((l: any) => ({
+          id: l.id, order: { id: l.orderId }, item: { id: l.itemId },
+          quantity: l.quantity, receivedQuantity: l.receivedQuantity, packSize: l.packSize,
+        })));
       }
 
       if (data.stockLevels?.length > 0) {
-        // Konvertiere itemId/vehicleId zurueck zu Objekten
-        const stockLevelsToSave = data.stockLevels.map((sl: any) => ({
-          id: sl.id,
-          item: { id: sl.itemId },
+        await mgr.getRepository(StockLevel).save(data.stockLevels.map((sl: any) => ({
+          id: sl.id, item: { id: sl.itemId },
           vehicle: sl.vehicleId ? { id: sl.vehicleId } : null,
           location: sl.locationId ? { id: sl.locationId } : null,
-          quantity: sl.quantity,
-          targetQuantity: sl.targetQuantity,
-        }));
-        await this.stockLevelRepository.save(stockLevelsToSave);
+          quantity: sl.quantity, targetQuantity: sl.targetQuantity,
+        })));
       }
 
       if (data.stockMovements?.length > 0) {
-        const stockMovementsToSave = data.stockMovements.map((sm: any) => ({
-          id: sm.id,
-          type: sm.type,
-          item: { id: sm.itemId },
+        await mgr.getRepository(StockMovement).save(data.stockMovements.map((sm: any) => ({
+          id: sm.id, type: sm.type, item: { id: sm.itemId },
           vehicle: sm.vehicleId ? { id: sm.vehicleId } : null,
           location: sm.locationId ? { id: sm.locationId } : null,
           user: sm.userId ? { id: sm.userId } : null,
-          quantity: sm.quantity,
-          occurredAt: sm.occurredAt,
-          note: sm.note,
-          source: sm.source,
-        }));
-        await this.stockMovementRepository.save(stockMovementsToSave);
+          quantity: sm.quantity, occurredAt: sm.occurredAt, note: sm.note, source: sm.source,
+        })));
       }
 
-      if (data.inventorySessions?.length > 0) {
-        await this.inventorySessionRepository.save(data.inventorySessions);
-      }
+      if (data.inventorySessions?.length > 0) await mgr.getRepository(InventorySession).save(data.inventorySessions);
 
       if (data.inventoryLines?.length > 0) {
-        const inventoryLinesToSave = data.inventoryLines.map((il: any) => ({
-          id: il.id,
-          session: { id: il.sessionId },
-          item: { id: il.itemId },
+        await mgr.getRepository(InventoryLine).save(data.inventoryLines.map((il: any) => ({
+          id: il.id, session: { id: il.sessionId }, item: { id: il.itemId },
           vehicle: il.vehicleId ? { id: il.vehicleId } : null,
           location: il.locationId ? { id: il.locationId } : null,
-          expectedQuantity: il.expectedQuantity,
-          countedQuantity: il.countedQuantity,
-          note: il.note,
-        }));
-        await this.inventoryLineRepository.save(inventoryLinesToSave);
+          expectedQuantity: il.expectedQuantity, countedQuantity: il.countedQuantity, note: il.note,
+        })));
       }
+
+      await queryRunner.query('SET FOREIGN_KEY_CHECKS = 1');
+      await queryRunner.commitTransaction();
+    } catch (err) {
+      await queryRunner.query('SET FOREIGN_KEY_CHECKS = 1').catch(() => {});
+      await queryRunner.rollbackTransaction();
+      throw err;
     } finally {
-      // Aktiviere Foreign Key Checks wieder
-      await this.dataSource.query('SET FOREIGN_KEY_CHECKS = 1');
+      await queryRunner.release();
     }
   }
 
@@ -470,117 +399,110 @@ export class SetupService {
    * Nur die gewählten Sektionen werden gelöscht und neu befüllt.
    * Abhängigkeiten (z.B. items für stockLevels) müssen bereits in der DB existieren.
    */
-  async restoreSelective(backup: any, sections: string[]): Promise<void> {
-    const { data } = backup;
+  async restoreSelective(
+    backup: any,
+    sections: string[],
+    filters?: { targetBranchId?: string | null; vehicleIds?: string[] | null; locationIds?: string[] | null },
+  ): Promise<void> {
+    const rawData = backup.data;
+    const fallbackBranchId = filters?.targetBranchId
+      ?? rawData.branches?.[0]?.id
+      ?? rawData.locations?.find((l: any) => l.branchId)?.branchId
+      ?? null;
 
-    await this.dataSource.query('SET FOREIGN_KEY_CHECKS = 0');
+    const data = this.applyRestoreFilters(rawData, filters);
+
+    const queryRunner = this.dataSource.createQueryRunner();
+    await queryRunner.connect();
+    await queryRunner.startTransaction();
+    await queryRunner.query('SET FOREIGN_KEY_CHECKS = 0');
+
     try {
-      // --- 1. Gewählte Sektionen leeren (Reihenfolge: abhängige zuerst) ---
+      const mgr = queryRunner.manager;
+
+      // --- 1. Gewählte Sektionen leeren ---
       if (sections.includes('inventorySessions')) {
-        await this.inventoryLineRepository.clear();
-        await this.inventorySessionRepository.clear();
+        await mgr.getRepository(InventoryLine).clear();
+        await mgr.getRepository(InventorySession).clear();
       }
-      if (sections.includes('stockMovements')) {
-        await this.stockMovementRepository.clear();
-      }
-      if (sections.includes('stockLevels')) {
-        await this.stockLevelRepository.clear();
-      }
+      if (sections.includes('stockMovements')) await mgr.getRepository(StockMovement).clear();
+      if (sections.includes('stockLevels')) await mgr.getRepository(StockLevel).clear();
       if (sections.includes('purchaseOrders')) {
-        await this.purchaseOrderLineRepository.clear();
-        await this.purchaseOrderRepository.clear();
+        await mgr.getRepository(PurchaseOrderLine).clear();
+        await mgr.getRepository(PurchaseOrder).clear();
       }
       if (sections.includes('items')) {
-        await this.itemCodeRepository.clear();
-        await this.itemRepository.clear();
+        await mgr.getRepository(ItemCode).clear();
+        await mgr.getRepository(Item).clear();
       }
-      if (sections.includes('suppliers')) {
-        await this.supplierRepository.clear();
-      }
+      if (sections.includes('suppliers')) await mgr.getRepository(Supplier).clear();
       if (sections.includes('locations')) {
-        await this.dataSource.query('DELETE FROM user_locations');
-        await this.locationRepository.clear();
+        await mgr.query('DELETE FROM user_locations');
+        await mgr.getRepository(Location).clear();
       }
-      if (sections.includes('vehicles')) {
-        await this.vehicleRepository.clear();
-      }
+      if (sections.includes('vehicles')) await mgr.getRepository(Vehicle).clear();
       if (sections.includes('users')) {
-        await this.userPermissionRepository.clear();
-        await this.rolePermissionRepository.clear();
-        await this.dataSource.query('DELETE FROM user_locations');
-        await this.userRepository.clear();
+        await mgr.getRepository(UserPermission).clear();
+        await mgr.getRepository(RolePermission).clear();
+        await mgr.query('DELETE FROM user_locations');
+        await mgr.getRepository(User).clear();
       }
       if (sections.includes('systemConfig')) {
-        await this.branchConfigRepository.clear();
-        await this.configRepository.clear();
+        await mgr.getRepository(BranchConfig).clear();
+        await mgr.getRepository(SystemConfig).clear();
       }
 
-      // --- 2. Gewählte Sektionen wiederherstellen (unabhängige zuerst) ---
+      // --- 2. Daten wiederherstellen ---
       if (sections.includes('systemConfig')) {
-        if (data.systemConfigs?.length > 0) {
-          await this.configRepository.save(data.systemConfigs);
-        }
-        if (data.branchConfigs?.length > 0) {
-          await this.branchConfigRepository.save(data.branchConfigs);
-        }
+        if (data.systemConfigs?.length > 0) await mgr.getRepository(SystemConfig).save(data.systemConfigs);
+        if (data.branchConfigs?.length > 0) await mgr.getRepository(BranchConfig).save(data.branchConfigs);
       }
 
       if (sections.includes('users') && data.users?.length > 0) {
-        await this.userRepository.save(data.users.map((u: any) => ({
-          id: u.id,
-          username: u.username,
-          displayName: u.displayName,
-          email: u.email ?? null,
-          passwordHash: u.passwordHash,
-          role: u.role,
-          vehicleId: u.vehicleId ?? null,
-          branchId: u.branchId ?? null,
-          refreshInterval: u.refreshInterval,
-          locations: [],
+        await mgr.getRepository(User).save(data.users.map((u: any) => ({
+          id: u.id, username: u.username, displayName: u.displayName,
+          email: u.email ?? null, passwordHash: u.passwordHash, role: u.role,
+          vehicleId: u.vehicleId ?? null, branchId: u.branchId ?? null,
+          refreshInterval: u.refreshInterval, locations: [],
         })));
-        if (data.rolePermissions?.length > 0) {
-          await this.rolePermissionRepository.save(data.rolePermissions);
-        }
-        if (data.userPermissions?.length > 0) {
-          await this.userPermissionRepository.save(data.userPermissions);
-        }
+        if (data.rolePermissions?.length > 0) await mgr.getRepository(RolePermission).save(data.rolePermissions);
+        if (data.userPermissions?.length > 0) await mgr.getRepository(UserPermission).save(data.userPermissions);
         for (const u of data.users) {
           if (Array.isArray(u.locationIds) && u.locationIds.length > 0) {
-            await this.userRepository.save({ id: u.id, locations: u.locationIds.map((lid: string) => ({ id: lid })) });
+            await mgr.getRepository(User).save({ id: u.id, locations: u.locationIds.map((lid: string) => ({ id: lid })) });
           }
         }
       }
 
       if (sections.includes('vehicles') && data.vehicles?.length > 0) {
-        await this.vehicleRepository.save(data.vehicles);
+        await mgr.getRepository(Vehicle).save(data.vehicles);
       }
 
       if (sections.includes('locations') && data.locations?.length > 0) {
-        await this.locationRepository.save(data.locations.map((loc: any) => ({
+        await mgr.getRepository(Location).save(data.locations.map((loc: any) => ({
           id: loc.id, type: loc.type, code: loc.code, name: loc.name ?? null,
           parent: null, vehicle: loc.vehicleId ? { id: loc.vehicleId } : null,
-          branchId: loc.branchId ?? null, createdAt: loc.createdAt, updatedAt: loc.updatedAt,
+          branchId: loc.branchId ?? fallbackBranchId,
+          createdAt: loc.createdAt, updatedAt: loc.updatedAt,
         })));
         const withParent = data.locations.filter((l: any) => l.parentId)
           .map((l: any) => ({ id: l.id, parent: { id: l.parentId } }));
-        if (withParent.length > 0) {
-          await this.locationRepository.save(withParent);
-        }
+        if (withParent.length > 0) await mgr.getRepository(Location).save(withParent);
       }
 
       if (sections.includes('suppliers') && data.suppliers?.length > 0) {
-        await this.supplierRepository.save(data.suppliers);
+        await mgr.getRepository(Supplier).save(data.suppliers);
       }
 
       if (sections.includes('items')) {
         if (data.items?.length > 0) {
-          await this.itemRepository.save(data.items.map((item: any) => {
+          await mgr.getRepository(Item).save(data.items.map((item: any) => {
             const { storageLocationId, supplierId, ...rest } = item;
             return { ...rest, storageLocation: storageLocationId ? { id: storageLocationId } : null, supplier: supplierId ? { id: supplierId } : null };
           }));
         }
         if (data.itemCodes?.length > 0) {
-          await this.itemCodeRepository.save(data.itemCodes.map((ic: any) => ({
+          await mgr.getRepository(ItemCode).save(data.itemCodes.map((ic: any) => ({
             id: ic.id, branchId: ic.branchId, code: ic.code, kind: ic.kind,
             item: ic.itemId ? { id: ic.itemId } : null,
           })));
@@ -589,14 +511,14 @@ export class SetupService {
 
       if (sections.includes('purchaseOrders')) {
         if (data.purchaseOrders?.length > 0) {
-          await this.purchaseOrderRepository.save(data.purchaseOrders.map((o: any) => ({
+          await mgr.getRepository(PurchaseOrder).save(data.purchaseOrders.map((o: any) => ({
             id: o.id, supplier: o.supplierId ? { id: o.supplierId } : null,
             status: o.status, orderNumber: o.orderNumber, orderedAt: o.orderedAt,
             receivedAt: o.receivedAt, note: o.note, createdAt: o.createdAt, updatedAt: o.updatedAt,
           })));
         }
         if (data.purchaseOrderLines?.length > 0) {
-          await this.purchaseOrderLineRepository.save(data.purchaseOrderLines.map((l: any) => ({
+          await mgr.getRepository(PurchaseOrderLine).save(data.purchaseOrderLines.map((l: any) => ({
             id: l.id, order: { id: l.orderId }, item: { id: l.itemId },
             quantity: l.quantity, receivedQuantity: l.receivedQuantity, packSize: l.packSize,
           })));
@@ -604,7 +526,7 @@ export class SetupService {
       }
 
       if (sections.includes('stockLevels') && data.stockLevels?.length > 0) {
-        await this.stockLevelRepository.save(data.stockLevels.map((sl: any) => ({
+        await mgr.getRepository(StockLevel).save(data.stockLevels.map((sl: any) => ({
           id: sl.id, item: { id: sl.itemId },
           vehicle: sl.vehicleId ? { id: sl.vehicleId } : null,
           location: sl.locationId ? { id: sl.locationId } : null,
@@ -613,7 +535,7 @@ export class SetupService {
       }
 
       if (sections.includes('stockMovements') && data.stockMovements?.length > 0) {
-        await this.stockMovementRepository.save(data.stockMovements.map((sm: any) => ({
+        await mgr.getRepository(StockMovement).save(data.stockMovements.map((sm: any) => ({
           id: sm.id, type: sm.type, item: { id: sm.itemId },
           vehicle: sm.vehicleId ? { id: sm.vehicleId } : null,
           location: sm.locationId ? { id: sm.locationId } : null,
@@ -623,11 +545,9 @@ export class SetupService {
       }
 
       if (sections.includes('inventorySessions')) {
-        if (data.inventorySessions?.length > 0) {
-          await this.inventorySessionRepository.save(data.inventorySessions);
-        }
+        if (data.inventorySessions?.length > 0) await mgr.getRepository(InventorySession).save(data.inventorySessions);
         if (data.inventoryLines?.length > 0) {
-          await this.inventoryLineRepository.save(data.inventoryLines.map((il: any) => ({
+          await mgr.getRepository(InventoryLine).save(data.inventoryLines.map((il: any) => ({
             id: il.id, session: { id: il.sessionId }, item: { id: il.itemId },
             vehicle: il.vehicleId ? { id: il.vehicleId } : null,
             location: il.locationId ? { id: il.locationId } : null,
@@ -635,9 +555,54 @@ export class SetupService {
           })));
         }
       }
+
+      await queryRunner.query('SET FOREIGN_KEY_CHECKS = 1');
+      await queryRunner.commitTransaction();
+    } catch (err) {
+      await queryRunner.query('SET FOREIGN_KEY_CHECKS = 1').catch(() => {});
+      await queryRunner.rollbackTransaction();
+      throw err;
     } finally {
-      await this.dataSource.query('SET FOREIGN_KEY_CHECKS = 1');
+      await queryRunner.release();
     }
+  }
+
+  private applyRestoreFilters(
+    data: any,
+    filters?: { targetBranchId?: string | null; vehicleIds?: string[] | null; locationIds?: string[] | null },
+  ): any {
+    if (!filters) return data;
+    let result = { ...data };
+
+    // Branch filter: nur Daten der gewählten Niederlassung (plus branchId=null Daten)
+    if (filters.targetBranchId) {
+      const bId = filters.targetBranchId;
+      if (result.locations) result.locations = result.locations.filter((l: any) => !l.branchId || l.branchId === bId);
+      if (result.items)     result.items     = result.items.filter((i: any) => !i.branchId || i.branchId === bId);
+      if (result.itemCodes) result.itemCodes = result.itemCodes.filter((ic: any) => !ic.branchId || ic.branchId === bId);
+      if (result.users)     result.users     = result.users.filter((u: any) => !u.branchId || u.branchId === bId);
+    }
+
+    // Fahrzeugfilter: Fahrzeuge + fahrzeugbasierte Bestände + Buchungshistorie
+    if (filters.vehicleIds?.length) {
+      const vIds = new Set(filters.vehicleIds);
+      if (result.vehicles)       result.vehicles       = result.vehicles.filter((v: any) => vIds.has(v.id));
+      if (result.stockLevels)    result.stockLevels    = result.stockLevels.filter((sl: any) => sl.vehicleId && vIds.has(sl.vehicleId));
+      if (result.stockMovements) result.stockMovements = result.stockMovements.filter((sm: any) => sm.vehicleId && vIds.has(sm.vehicleId));
+    }
+
+    // Lagerortfilter: lagerbasierte Bestände + Artikel nach Lagerort
+    if (filters.locationIds?.length) {
+      const lIds = new Set(filters.locationIds);
+      if (result.stockLevels) result.stockLevels = result.stockLevels.filter((sl: any) => sl.locationId && lIds.has(sl.locationId));
+      if (result.items) {
+        result.items = result.items.filter((i: any) => i.storageLocationId && lIds.has(i.storageLocationId));
+        const filteredItemIds = new Set(result.items.map((i: any) => i.id));
+        if (result.itemCodes) result.itemCodes = result.itemCodes.filter((ic: any) => filteredItemIds.has(ic.itemId));
+      }
+    }
+
+    return result;
   }
 
   /**

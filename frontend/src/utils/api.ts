@@ -1638,8 +1638,19 @@ export const deleteAutoBackup = async (filename: string): Promise<{ success: boo
   return response.data;
 };
 
-export const restoreSelective = async (backup: any, sections: string[]): Promise<void> => {
-  await api.post('/setup/restore/selective', { backup, sections });
+export interface RestoreFilters {
+  targetBranchId?: string | null;
+  vehicleIds?: string[] | null;
+  locationIds?: string[] | null;
+}
+
+export const restoreSelective = async (backup: any, sections: string[], filters?: RestoreFilters): Promise<void> => {
+  await api.post('/setup/restore/selective', { backup, sections, filters });
+};
+
+export const loadBackupFromServer = async (filename: string): Promise<any> => {
+  const response = await api.get(`/setup/backup/download/${encodeURIComponent(filename)}`, { responseType: 'json' });
+  return response.data;
 };
 
 // Bewegungsverlauf
