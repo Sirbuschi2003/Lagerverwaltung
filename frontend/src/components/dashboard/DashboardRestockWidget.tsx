@@ -194,6 +194,7 @@ const DashboardRestockWidget: React.FC = () => {
   const shortages = useMemo(
     () =>
       (stock || []).filter((entry) => {
+        if (!entry.item) return false;
         const hasTargetShortage = entry.targetQuantity > 0 && entry.quantity < entry.targetQuantity;
         const hasMinStockShortage =
           entry.item.minimumStock != null &&

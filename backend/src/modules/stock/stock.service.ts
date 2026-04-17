@@ -455,11 +455,11 @@ export class StockService {
       throw new NotFoundException("Vehicle not found");
     }
 
-    // Da 0-Bestand EintrÃ¤ge nun gelÃ¶scht werden, normale Query ohne Filter
-    return this.stockLevelsRepository.find({
+    const levels = await this.stockLevelsRepository.find({
       where: { vehicle: { id: vehicleId } },
       order: { item: { manufacturer: "ASC", productGroup: "ASC", description: "ASC" } },
     });
+    return levels.filter((l) => l.item != null);
   }
 
   /**
@@ -584,7 +584,7 @@ export class StockService {
 
     // Nur die relevanten Stock-Levels bestimmen (Performance: nicht alle einzeln abfragen)
     const levelsWithShortage = allStockLevels.filter(
-      (level) => level.vehicle && level.targetQuantity > 0 && level.quantity < level.targetQuantity,
+      (level) => level.item && level.vehicle && level.targetQuantity > 0 && level.quantity < level.targetQuantity,
     );
 
     // Parallel synchronisieren (jeder Level ist unabhaengig voneinander)
@@ -1131,6 +1131,8 @@ export class StockService {
         continue;
       }
       // Typisierung erzwingen, damit bucket.stock als FleetOverviewStockEntry[] erkannt wird
+      if (!level.item) continue;
+
       const bucket: FleetOverviewResult = grouped.get(vehicle.id) ?? {
         vehicle: {
           id: vehicle.id,
