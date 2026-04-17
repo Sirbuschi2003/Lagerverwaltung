@@ -523,7 +523,11 @@ export class SetupService {
           await mgr.getRepository(PurchaseOrder).save(data.purchaseOrders.map((o: any) => ({
             id: o.id, supplier: o.supplierId ? { id: o.supplierId } : null,
             status: o.status, orderNumber: o.orderNumber, orderedAt: o.orderedAt,
-            receivedAt: o.receivedAt, note: o.note, createdAt: o.createdAt, updatedAt: o.updatedAt,
+            receivedAt: o.receivedAt, note: o.note ?? null,
+            deliveryNoteNumber: o.deliveryNoteNumber ?? null,
+            branchId: o.branchId ?? fallbackBranchId,
+            locationId: o.locationId ?? null,
+            createdAt: o.createdAt, updatedAt: o.updatedAt,
           })));
         }
         if (data.purchaseOrderLines?.length > 0) {
