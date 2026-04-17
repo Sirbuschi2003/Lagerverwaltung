@@ -21,7 +21,7 @@ import {
   Warehouse as WarehouseIcon,
   Business as BranchIcon,
 } from '@mui/icons-material';
-import {
+import api, {
   getAutoBackupConfig, setAutoBackupConfig, getLastAutoBackup,
   listAutoBackups, downloadAutoBackup, deleteAutoBackup,
   restoreSelective, restoreFullBackup, loadBackupFromServer,
@@ -284,9 +284,8 @@ const BackupPage = () => {
     setBackupLoading(true);
     setBackupMessage(null);
     try {
-      const response = await fetch('/api/setup/backup', { headers: { Authorization: `Bearer ${token}` } });
-      if (!response.ok) throw new Error(`HTTP ${response.status}`);
-      const backup = await response.json();
+      const response = await api.get('/setup/backup', { responseType: 'json', timeout: 120000 });
+      const backup = response.data;
       const blob = new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json' });
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
