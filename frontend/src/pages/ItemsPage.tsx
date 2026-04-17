@@ -1203,7 +1203,7 @@ const ItemsPage = () => {
 
         const existingItem = existingByCode.get(normalizeLookupKey(row.code));
         const supplierId = await ensureSupplierId(row.supplierName, row.supplierNumber, row.code);
-        const locationId = await ensureLocationId(row.locationRaw, row.code);
+        const locationId = (await ensureLocationId(row.locationRaw, row.code)) ?? parentIdForNewLocations ?? undefined;
         const productGroupResult = resolveKnownProductGroup(
           row.productGroupRaw,
           existingItem?.productGroup,
