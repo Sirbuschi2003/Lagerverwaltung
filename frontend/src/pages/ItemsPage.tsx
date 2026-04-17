@@ -1119,8 +1119,9 @@ const ItemsPage = () => {
           // Lager-spezifischer Schlüssel hat Priorität, um Kollisionen zu vermeiden
           // wenn gleiche Regal/Fach-Namen in verschiedenen Lagern existieren.
           const scopedKey = parentIdForNewLocations ? `${parsed.key}:${parentIdForNewLocations}` : null;
-          const existing = (scopedKey ? locationsByStructuredKey.get(scopedKey) : null)
-            ?? locationsByStructuredKey.get(parsed.key);
+          const existing = scopedKey
+            ? locationsByStructuredKey.get(scopedKey)
+            : locationsByStructuredKey.get(parsed.key);
           if (existing?.id) return existing.id;
         }
 
@@ -1128,7 +1129,8 @@ const ItemsPage = () => {
         const filteredMatches = parentIdForNewLocations
           ? directMatches.filter((loc) => rootAncestorMap.get(loc.id) === parentIdForNewLocations)
           : directMatches;
-        const matchesToUse = filteredMatches.length > 0 ? filteredMatches : directMatches;
+        // Wenn Ziellager gewählt: KEIN Fallback auf andere Lager
+        const matchesToUse = parentIdForNewLocations ? filteredMatches : (filteredMatches.length > 0 ? filteredMatches : directMatches);
         if (matchesToUse.length === 1) {
           return matchesToUse[0].id;
         }
