@@ -11,6 +11,7 @@ import {
   DialogContent,
   DialogTitle,
   Divider,
+  IconButton,
   InputAdornment,
   MenuItem,
   Paper,
@@ -32,6 +33,7 @@ import {
   useTheme,
 } from "@mui/material";
 import {
+  Close as CloseIcon,
   Edit as EditIcon,
   Refresh as RefreshIcon,
   TrendingDown as TrendingDownIcon,
@@ -50,10 +52,12 @@ import {
   saveSlowMoverSettings,
   fetchConsumptionTrend,
   fetchArticleActivity,
+  fetchMovementHistory,
   fetchWarehouses,
   type SlowMoverRow,
   type ConsumptionTrendEntry,
   type ArticleActivityRow,
+  type MovementDto,
   type LocationDto,
 } from "../utils/api";
 import useAuthStore from "../store/useAuthStore";
@@ -79,6 +83,196 @@ const getPresetRange = (days: number) => {
 const formatDate = (iso: string | null) => {
   if (!iso) return "—";
   return new Date(iso).toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit", year: "numeric" });
+};
+
+// ── Artikel-Detailstatistik ───────────────────────────────────────────────────
+
+const ArticleDetailDialog: React.FC<{
+  row: ArticleActivityRow | null;
+  open: boolean;
+  onClose: () => void;
+  from: string;
+  to: string;
+  warehouseId?: string;
+}> = ({ row, open, onClose, from, to, warehouseId }) => {
+  const theme = useTheme();
+  const [trend, setTrend] = useState<ConsumptionTrendEntry[]>([]);
+  const [movements, setMovements] = useState<MovementDto[]>([]);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    if (!open || !row) return;
+    setLoading(true);
+    Promise.all([
+      fetchConsumptionTrend(12, row.itemId, warehouseId),
+      fetchMovementHistory({ itemId: row.itemId, from, to, limit: 200 }),
+    ])
+      .then(([trendData, histData]) => {
+        setTrend(trendData);
+        setMovements(histData.movements);
+      })
+      .catch(() => null)
+      .finally(() => setLoading(false));
+  }, [open, row?.itemId, from, to, warehouseId]);
+
+  if (!row) return null;
+
+  const lastCheckin = movements.find((m) => m.type === "CHECKIN")?.occurredAt ?? null;
+  const lastCheckout = movements.find((m) => m.type === "CHECKOUT")?.occurredAt ?? null;
+
+  const maxTrend = Math.max(...trend.map((d) => Math.max(d.checkouts, d.checkins)), 1);
+  const fmt = (key: string) => {
+    const [year, month] = key.split("-");
+    const labels: Record<string, string> = { "01": "Jan", "02": "Feb", "03": "Mär", "04": "Apr", "05": "Mai", "06": "Jun", "07": "Jul", "08": "Aug", "09": "Sep", "10": "Okt", "11": "Nov", "12": "Dez" };
+    return `${labels[month] ?? month} ${String(year).slice(2)}`;
+  };
+
+  return (
+    <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth>
+      <DialogTitle sx={{ pb: 1 }}>
+        <Stack direction="row" justifyContent="space-between" alignItems="flex-start">
+          <Box>
+            <Typography variant="h6" sx={{ fontWeight: 700, fontFamily: "monospace" }}>{row.code}</Typography>
+            <Typography variant="body2" color="text.secondary">{row.description}</Typography>
+            {row.descriptionSecondary && <Typography variant="caption" color="text.secondary" display="block">{row.descriptionSecondary}</Typography>}
+            <Stack direction="row" spacing={0.5} sx={{ mt: 0.5 }} flexWrap="wrap">
+              {row.manufacturer && <Chip label={row.manufacturer} size="small" />}
+              {row.productGroup && <Chip label={row.productGroup} size="small" variant="outlined" />}
+            </Stack>
+          </Box>
+          <IconButton onClick={onClose} size="small" sx={{ ml: 1 }}><CloseIcon /></IconButton>
+        </Stack>
+      </DialogTitle>
+      <DialogContent dividers>
+        {loading ? (
+          <Box sx={{ display: "flex", justifyContent: "center", py: 4 }}><CircularProgress /></Box>
+        ) : (
+          <Stack spacing={2.5}>
+            {/* KPI-Karten */}
+            <Stack direction="row" spacing={1.5} flexWrap="wrap" useFlexGap>
+              <Paper variant="outlined" sx={{ p: 1.5, minWidth: 120, flex: 1 }}>
+                <Typography variant="caption" color="text.secondary">Entnahmen</Typography>
+                <Typography variant="h5" sx={{ fontWeight: 700, color: "error.main" }}>{row.checkoutCount}</Typography>
+                <Typography variant="caption" color="text.secondary">{row.checkoutQty} Stk. gesamt</Typography>
+              </Paper>
+              <Paper variant="outlined" sx={{ p: 1.5, minWidth: 120, flex: 1 }}>
+                <Typography variant="caption" color="text.secondary">Eingänge</Typography>
+                <Typography variant="h5" sx={{ fontWeight: 700, color: "success.main" }}>{row.checkinCount}</Typography>
+                <Typography variant="caption" color="text.secondary">{row.checkinQty} Stk. gesamt</Typography>
+              </Paper>
+              <Paper variant="outlined" sx={{ p: 1.5, minWidth: 120, flex: 1 }}>
+                <Typography variant="caption" color="text.secondary">Netto-Saldo</Typography>
+                <Typography variant="h5" sx={{ fontWeight: 700, color: row.checkinQty - row.checkoutQty >= 0 ? "success.main" : "error.main" }}>
+                  {row.checkinQty - row.checkoutQty >= 0 ? "+" : ""}{row.checkinQty - row.checkoutQty}
+                </Typography>
+                <Typography variant="caption" color="text.secondary">Stk. (Eingang − Entnahme)</Typography>
+              </Paper>
+              <Paper variant="outlined" sx={{ p: 1.5, minWidth: 160, flex: 1 }}>
+                <Stack spacing={0.5}>
+                  <Box>
+                    <Typography variant="caption" color="text.secondary">Letzte Entnahme</Typography>
+                    <Typography variant="body2" sx={{ fontWeight: 600, color: lastCheckout ? "error.main" : "text.disabled" }}>
+                      {formatDate(lastCheckout)}
+                    </Typography>
+                  </Box>
+                  <Box>
+                    <Typography variant="caption" color="text.secondary">Letzte Einbuchung</Typography>
+                    <Typography variant="body2" sx={{ fontWeight: 600, color: lastCheckin ? "success.main" : "text.disabled" }}>
+                      {formatDate(lastCheckin)}
+                    </Typography>
+                  </Box>
+                </Stack>
+              </Paper>
+            </Stack>
+
+            {/* 12-Monats-Trend */}
+            <Box>
+              <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 600 }}>12-Monats-Verlauf</Typography>
+              <Paper variant="outlined" sx={{ p: 1.5 }}>
+                <Box sx={{ display: "flex", alignItems: "flex-end", gap: 0.5, height: 150, overflowX: "auto", pb: 0.5 }}>
+                  {trend.map((entry) => {
+                    const coH = Math.round((entry.checkouts / maxTrend) * 120);
+                    const ciH = Math.round((entry.checkins / maxTrend) * 120);
+                    return (
+                      <Box key={entry.month} sx={{ display: "flex", flexDirection: "column", alignItems: "center", minWidth: 38, flex: 1 }}>
+                        <Box sx={{ display: "flex", alignItems: "flex-end", gap: 0.5, height: 125 }}>
+                          <Tooltip title={`Entnahmen: ${entry.checkouts}`}>
+                            <Box sx={{ width: 13, height: coH || 2, bgcolor: theme.palette.error.main, borderRadius: "3px 3px 0 0", opacity: 0.85 }} />
+                          </Tooltip>
+                          <Tooltip title={`Eingänge: ${entry.checkins}`}>
+                            <Box sx={{ width: 13, height: ciH || 2, bgcolor: theme.palette.success.main, borderRadius: "3px 3px 0 0", opacity: 0.85 }} />
+                          </Tooltip>
+                        </Box>
+                        <Typography variant="caption" sx={{ fontSize: 9, mt: 0.5, whiteSpace: "nowrap" }}>{fmt(entry.month)}</Typography>
+                      </Box>
+                    );
+                  })}
+                </Box>
+                <Stack direction="row" spacing={2} sx={{ mt: 1, justifyContent: "center" }}>
+                  <Stack direction="row" spacing={0.5} alignItems="center">
+                    <Box sx={{ width: 12, height: 12, bgcolor: "error.main", borderRadius: 0.5 }} />
+                    <Typography variant="caption">Entnahmen</Typography>
+                  </Stack>
+                  <Stack direction="row" spacing={0.5} alignItems="center">
+                    <Box sx={{ width: 12, height: 12, bgcolor: "success.main", borderRadius: 0.5 }} />
+                    <Typography variant="caption">Eingänge</Typography>
+                  </Stack>
+                </Stack>
+              </Paper>
+            </Box>
+
+            {/* Buchungsliste */}
+            <Box>
+              <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 600 }}>
+                Buchungen im Zeitraum {from} – {to} ({movements.length} Einträge)
+              </Typography>
+              {movements.length === 0 ? (
+                <Typography color="text.secondary" variant="body2">Keine Buchungen im gewählten Zeitraum.</Typography>
+              ) : (
+                <TableContainer component={Paper} variant="outlined" sx={{ maxHeight: 280 }}>
+                  <Table size="small" stickyHeader>
+                    <TableHead>
+                      <TableRow>
+                        <TableCell>Datum & Uhrzeit</TableCell>
+                        <TableCell>Typ</TableCell>
+                        <TableCell align="right">Menge</TableCell>
+                        <TableCell>Fahrzeug</TableCell>
+                        <TableCell>Benutzer</TableCell>
+                        <TableCell>Quelle</TableCell>
+                      </TableRow>
+                    </TableHead>
+                    <TableBody>
+                      {movements.map((m) => (
+                        <TableRow key={m.id} hover>
+                          <TableCell>
+                            <Typography variant="caption">
+                              {new Date(m.occurredAt).toLocaleString("de-DE", { day: "2-digit", month: "2-digit", year: "2-digit", hour: "2-digit", minute: "2-digit" })}
+                            </Typography>
+                          </TableCell>
+                          <TableCell>
+                            <Chip label={m.type === "CHECKIN" ? "Eingang" : "Ausgang"} size="small" color={m.type === "CHECKIN" ? "success" : "error"} variant="outlined" />
+                          </TableCell>
+                          <TableCell align="right" sx={{ fontWeight: 700, color: m.type === "CHECKIN" ? "success.main" : "error.main" }}>
+                            {m.type === "CHECKIN" ? "+" : "−"}{m.quantity}
+                          </TableCell>
+                          <TableCell><Typography variant="caption">{m.vehicle?.licensePlate || "–"}</Typography></TableCell>
+                          <TableCell><Typography variant="caption">{m.user?.displayName || "–"}</Typography></TableCell>
+                          <TableCell><Typography variant="caption" color="text.secondary">{m.source || "–"}</Typography></TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </TableContainer>
+              )}
+            </Box>
+          </Stack>
+        )}
+      </DialogContent>
+      <DialogActions>
+        <Button onClick={onClose}>Schließen</Button>
+      </DialogActions>
+    </Dialog>
+  );
 };
 
 // ── CSV-Export ────────────────────────────────────────────────────────────────
@@ -544,6 +738,7 @@ const ArticleActivityTab: React.FC<{ warehouseId?: string }> = ({ warehouseId })
   const [filterGroup, setFilterGroup] = useState("");
   const [sortField, setSortField] = useState<SortField>("checkoutCount");
   const [sortDir, setSortDir] = useState<SortDir>("desc");
+  const [selectedRow, setSelectedRow] = useState<ArticleActivityRow | null>(null);
 
   const load = useCallback(async (f: string, t: string) => {
     setLoading(true);
@@ -773,7 +968,12 @@ const ArticleActivityTab: React.FC<{ warehouseId?: string }> = ({ warehouseId })
             </TableHead>
             <TableBody>
               {filteredRows.map((row) => (
-                <TableRow key={row.itemId} hover>
+                <TableRow
+                  key={row.itemId}
+                  hover
+                  onClick={() => setSelectedRow(row)}
+                  sx={{ cursor: "pointer" }}
+                >
                   <TableCell sx={{ fontFamily: "monospace", fontWeight: 600 }}>{row.code}</TableCell>
                   <TableCell>
                     <Typography variant="body2" sx={{ fontWeight: 600 }}>{row.description}</Typography>
@@ -821,9 +1021,18 @@ const ArticleActivityTab: React.FC<{ warehouseId?: string }> = ({ warehouseId })
 
       {!loading && filteredRows.length > 0 && (
         <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: "block" }}>
-          {filteredRows.length} Artikel · Klick auf Spaltenköpfe zum Sortieren
+          {filteredRows.length} Artikel · Zeile anklicken für Detailstatistik
         </Typography>
       )}
+
+      <ArticleDetailDialog
+        row={selectedRow}
+        open={selectedRow !== null}
+        onClose={() => setSelectedRow(null)}
+        from={from}
+        to={to}
+        warehouseId={warehouseId}
+      />
     </Box>
   );
 };

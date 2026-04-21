@@ -587,7 +587,7 @@ const ItemsPage = () => {
           headerMap.has("code") &&
           headerMap.has("description") &&
           (headerMap.has("manufacturer") || headerMap.has("hersteller")) &&
-          (headerMap.has("product_group") || headerMap.has("productgroup") || headerMap.has("warengruppe"));
+          (headerMap.has("product_group") || headerMap.has("productgroup") || headerMap.has("warengruppe") || headerMap.has("produktgruppe"));
         const isHyrekaFormat = headerRow.join(";").includes("Warengruppe") && headerRow.join(";").includes("Artikel-Nr.");
 
         parsedRows.slice(1).forEach((rawRow, index: number) => {
@@ -602,7 +602,7 @@ const ItemsPage = () => {
               const description = readByHeader(cols, ["description", "bezeichnung", "beschreibung"]);
               const descriptionSecondary = readByHeader(cols, ["description_secondary", "bezeichnung_2", "beschreibung_2"]);
               const manufacturer = readByHeader(cols, ["manufacturer", "hersteller"]);
-              const productGroup = readByHeader(cols, ["product_group", "productgroup", "warengruppe"]);
+              const productGroup = readByHeader(cols, ["product_group", "productgroup", "warengruppe", "produktgruppe"]);
               if (!code || !description || !manufacturer || !productGroup) {
                 return;
               }
