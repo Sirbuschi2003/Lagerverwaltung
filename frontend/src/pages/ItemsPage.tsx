@@ -333,24 +333,22 @@ const resolveKnownProductGroup = (
   existingGroup: string | undefined,
   knownGroups: string[],
 ): { value: string; fallbackUsed: boolean } => {
-  const persisted = cleanHyrekaText(existingGroup);
-  if (persisted) {
-    return { value: persisted, fallbackUsed: false };
-  }
-
   const groupRaw = cleanHyrekaText(rawGroup);
 
-  // If no raw group is available, fall back to "Ersatzteil" immediately — never assign a
-  // random known group just because the header was not recognized in the source CSV.
+  // If the CSV provides no value at all, fall back to the persisted DB value or "Ersatzteil".
+  // Never pick a random known group — that caused all articles to inherit "Minolta Toner".
   if (!groupRaw) {
-    const ersatzteilGroup = knownGroups.map((v) => cleanHyrekaText(v)).find((g) => normalizeLookupKey(g) === "ersatzteil");
-    return { value: ersatzteilGroup ?? "Ersatzteil", fallbackUsed: true };
+    const persisted = cleanHyrekaText(existingGroup);
+    return { value: persisted || "Ersatzteil", fallbackUsed: !persisted };
   }
 
+  // CSV has a value → it takes precedence. Try to normalize against known groups first
+  // so minor spelling differences don't create duplicate groups.
   const available = knownGroups.map((value) => cleanHyrekaText(value)).filter(Boolean);
   if (available.length === 0) {
-    return { value: groupRaw || "Ersatzteil", fallbackUsed: false };
+    return { value: groupRaw, fallbackUsed: false };
   }
+
   const normalizedRaw = normalizeLookupKey(groupRaw);
   const exact = available.find((group) => normalizeLookupKey(group) === normalizedRaw);
   if (exact) {
@@ -382,9 +380,8 @@ const resolveKnownProductGroup = (
     return { value: containsMatch, fallbackUsed: false };
   }
 
-  const defaultGroup =
-    available.find((group) => normalizeLookupKey(group) === "ersatzteil") ?? available[0];
-  return { value: defaultGroup, fallbackUsed: true };
+  // No match found → use the CSV value as-is (creates a new product group).
+  return { value: groupRaw, fallbackUsed: false };
 };
 
 const resolveManufacturer = (
