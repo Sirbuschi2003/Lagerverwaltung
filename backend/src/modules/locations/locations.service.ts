@@ -53,6 +53,29 @@ export class LocationsService {
     return qb.getMany();
   }
 
+  async getDescendantLocationIds(warehouseId: string, branchId?: string | null): Promise<string[]> {
+    const params: unknown[] = [];
+    let sql = "SELECT id, parentId FROM locations WHERE type != 'VEHICLE'";
+    if (branchId) {
+      sql += " AND branchId = ?";
+      params.push(branchId);
+    }
+    const all: { id: string; parentId: string | null }[] = await this.repository.query(sql, params);
+
+    const ids = new Set<string>([warehouseId]);
+    let changed = true;
+    while (changed) {
+      changed = false;
+      for (const loc of all) {
+        if (loc.parentId && ids.has(loc.parentId) && !ids.has(loc.id)) {
+          ids.add(loc.id);
+          changed = true;
+        }
+      }
+    }
+    return [...ids];
+  }
+
   async findOne(id: string, branchId?: string | null): Promise<Location> {
     const where: Record<string, unknown> = { id };
     if (branchId) where.branchId = branchId;

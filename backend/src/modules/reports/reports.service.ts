@@ -2,6 +2,7 @@ import { Injectable } from "@nestjs/common";
 import { InjectRepository } from "@nestjs/typeorm";
 import { Repository } from "typeorm";
 
+import { LocationsService } from "../locations/locations.service";
 import { StockLevel } from "../stock/entities/stock-level.entity";
 import { StockMovement } from "../stock/entities/stock-movement.entity";
 import { SystemConfigService } from "../system-config/system-config.service";
@@ -43,7 +44,19 @@ export class ReportsService {
     @InjectRepository(StockLevel)
     private readonly stockLevelsRepository: Repository<StockLevel>,
     private readonly systemConfigService: SystemConfigService,
+    private readonly locationsService: LocationsService,
   ) {}
+
+  private async resolveLocationIds(
+    warehouseId?: string,
+    fallbackLocationIds?: string[],
+    branchId?: string | null,
+  ): Promise<string[] | undefined> {
+    if (warehouseId) {
+      return this.locationsService.getDescendantLocationIds(warehouseId, branchId);
+    }
+    return fallbackLocationIds;
+  }
 
   async getSlowMoverThreshold(branchId?: string | null): Promise<number> {
     const val = await this.systemConfigService.getJsonConfig<number>(SLOW_MOVER_DAYS_KEY, branchId);
@@ -55,7 +68,8 @@ export class ReportsService {
     return days;
   }
 
-  async slowMoverReport(thresholdDays: number, branchId?: string | null, locationIds?: string[]): Promise<SlowMoverRow[]> {
+  async slowMoverReport(thresholdDays: number, branchId?: string | null, locationIds?: string[], warehouseId?: string): Promise<SlowMoverRow[]> {
+    const effectiveLocationIds = await this.resolveLocationIds(warehouseId, locationIds, branchId);
     const levelsQb = this.stockLevelsRepository
       .createQueryBuilder("level")
       .select("level.itemId", "itemId")
@@ -68,10 +82,10 @@ export class ReportsService {
       levelsQb.where("item.branchId = :branchId", { branchId });
     }
 
-    if (locationIds?.length) {
+    if (effectiveLocationIds?.length) {
       levelsQb.andWhere(
         "(storageLocation.id IN (:...locationIds) OR slParent.id IN (:...locationIds))",
-        { locationIds },
+        { locationIds: effectiveLocationIds },
       );
     }
 
@@ -144,7 +158,8 @@ export class ReportsService {
     });
   }
 
-  async consumptionReport(from: Date, to: Date, branchId?: string | null, locationIds?: string[]) {
+  async consumptionReport(from: Date, to: Date, branchId?: string | null, locationIds?: string[], warehouseId?: string) {
+    const effectiveLocationIds = await this.resolveLocationIds(warehouseId, locationIds, branchId);
     const qb = this.movementsRepository
       .createQueryBuilder("movement")
       .leftJoin("movement.item", "item")
@@ -159,10 +174,10 @@ export class ReportsService {
       qb.andWhere("item.branchId = :branchId", { branchId });
     }
 
-    if (locationIds?.length) {
+    if (effectiveLocationIds?.length) {
       qb.andWhere(
         "(storageLocation.id IN (:...locationIds) OR slParent.id IN (:...locationIds))",
-        { locationIds },
+        { locationIds: effectiveLocationIds },
       );
     }
 
@@ -196,7 +211,9 @@ export class ReportsService {
     branchId?: string | null,
     itemId?: string | null,
     locationIds?: string[],
+    warehouseId?: string,
   ): Promise<Array<{ month: string; checkouts: number; checkins: number }>> {
+    const effectiveLocationIds = await this.resolveLocationIds(warehouseId, locationIds, branchId);
     const now = new Date();
     const from = new Date(now.getFullYear(), now.getMonth() - months + 1, 1);
 
@@ -211,16 +228,16 @@ export class ReportsService {
       .groupBy("month")
       .orderBy("month", "ASC");
 
-    if (branchId || itemId || locationIds?.length) {
+    if (branchId || itemId || effectiveLocationIds?.length) {
       qb.leftJoin("mv.item", "item");
       if (branchId) qb.andWhere("item.branchId = :branchId", { branchId });
       if (itemId) qb.andWhere("mv.itemId = :itemId", { itemId });
-      if (locationIds?.length) {
+      if (effectiveLocationIds?.length) {
         qb.leftJoin("item.storageLocation", "storageLocation")
           .leftJoin("storageLocation.parent", "slParent")
           .andWhere(
             "(storageLocation.id IN (:...locationIds) OR slParent.id IN (:...locationIds))",
-            { locationIds },
+            { locationIds: effectiveLocationIds },
           );
       }
     }
@@ -246,7 +263,9 @@ export class ReportsService {
     to: Date,
     branchId?: string | null,
     locationIds?: string[],
+    warehouseId?: string,
   ): Promise<ArticleActivityRow[]> {
+    const effectiveLocationIds = await this.resolveLocationIds(warehouseId, locationIds, branchId);
     const qb = this.movementsRepository
       .createQueryBuilder("mv")
       .select("mv.itemId", "itemId")
@@ -267,10 +286,10 @@ export class ReportsService {
       qb.andWhere("item.branchId = :branchId", { branchId });
     }
 
-    if (locationIds?.length) {
+    if (effectiveLocationIds?.length) {
       qb.andWhere(
         "(storageLocation.id IN (:...locationIds) OR slParent.id IN (:...locationIds))",
-        { locationIds },
+        { locationIds: effectiveLocationIds },
       );
     }
 

@@ -1719,6 +1719,7 @@ export const fetchMovementHistory = async (params: {
   to?: string;
   limit?: number;
   offset?: number;
+  warehouseId?: string;
 }): Promise<{ movements: MovementDto[]; summary: MovementSummary }> => {
   const query = new URLSearchParams();
   if (params.itemId) query.append("itemId", params.itemId);
@@ -1729,6 +1730,7 @@ export const fetchMovementHistory = async (params: {
   if (params.to) query.append("to", params.to);
   if (params.limit) query.append("limit", String(params.limit));
   if (params.offset) query.append("offset", String(params.offset));
+  if (params.warehouseId) query.append("warehouseId", params.warehouseId);
 
   const response = await api.get<{ movements: MovementDto[]; summary: MovementSummary }>(`/stock/movements/history?${query.toString()}`);
   return response.data;
@@ -2000,8 +2002,10 @@ export const saveSlowMoverSettings = async (days: number): Promise<{ days: numbe
   return response.data;
 };
 
-export const fetchSlowMovers = async (days?: number): Promise<SlowMoverRow[]> => {
-  const params = days !== undefined ? { days } : {};
+export const fetchSlowMovers = async (days?: number, warehouseId?: string): Promise<SlowMoverRow[]> => {
+  const params: Record<string, unknown> = {};
+  if (days !== undefined) params.days = days;
+  if (warehouseId) params.warehouseId = warehouseId;
   const response = await api.get<SlowMoverRow[]>("/reports/slow-movers", { params });
   return response.data;
 };
@@ -2012,10 +2016,11 @@ export interface ConsumptionTrendEntry {
   checkins: number;
 }
 
-export const fetchConsumptionTrend = async (months: 6 | 12 = 12, itemId?: string): Promise<ConsumptionTrendEntry[]> => {
-  const response = await api.get<ConsumptionTrendEntry[]>("/reports/consumption-trend", {
-    params: { months, ...(itemId ? { itemId } : {}) },
-  });
+export const fetchConsumptionTrend = async (months: 6 | 12 = 12, itemId?: string, warehouseId?: string): Promise<ConsumptionTrendEntry[]> => {
+  const params: Record<string, unknown> = { months };
+  if (itemId) params.itemId = itemId;
+  if (warehouseId) params.warehouseId = warehouseId;
+  const response = await api.get<ConsumptionTrendEntry[]>("/reports/consumption-trend", { params });
   return response.data;
 };
 
@@ -2033,9 +2038,13 @@ export interface ArticleActivityRow {
   lastMovementAt: string | null;
 }
 
-export const fetchArticleActivity = async (from: string, to: string): Promise<ArticleActivityRow[]> => {
-  const response = await api.get<ArticleActivityRow[]>("/reports/article-activity", {
-    params: { from, to },
-  });
+export const fetchArticleActivity = async (from: string, to: string, warehouseId?: string): Promise<ArticleActivityRow[]> => {
+  const params: Record<string, unknown> = { from, to };
+  if (warehouseId) params.warehouseId = warehouseId;
+  const response = await api.get<ArticleActivityRow[]>("/reports/article-activity", { params });
   return response.data;
+};
+
+export const fetchWarehouses = async (): Promise<LocationDto[]> => {
+  return fetchLocations({ type: "WAREHOUSE" });
 };

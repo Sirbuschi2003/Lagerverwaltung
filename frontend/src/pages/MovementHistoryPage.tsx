@@ -23,7 +23,7 @@ import {
 import dayjs from "dayjs";
 import useItemsStore from "../store/useItemsStore";
 import useUsersStore from "../store/useUsersStore";
-import { fetchMovementHistory, cleanupMovements, MovementDto } from "../utils/api";
+import { fetchMovementHistory, fetchWarehouses, cleanupMovements, MovementDto, type LocationDto } from "../utils/api";
 import ReportsPage from "./ReportsPage";
 
 const MovementHistoryTab: React.FC = () => {
@@ -37,6 +37,8 @@ const MovementHistoryTab: React.FC = () => {
     from: "",
     to: "",
   });
+  const [warehouseId, setWarehouseId] = useState<string>("");
+  const [warehouses, setWarehouses] = useState<LocationDto[]>([]);
   const [data, setData] = useState<MovementDto[]>([]);
   const [summary, setSummary] = useState<{ totalCheckinQty: number; totalCheckoutQty: number; totalCheckinCount: number; totalCheckoutCount: number } | null>(null);
   const [loading, setLoading] = useState(false);
@@ -53,6 +55,7 @@ const MovementHistoryTab: React.FC = () => {
     if (users.length === 0) {
       loadUsers().catch(() => null);
     }
+    fetchWarehouses().then(setWarehouses).catch(() => null);
   }, [items.length, loadItems, users.length, loadUsers]);
 
   const itemOptions = useMemo(
@@ -96,6 +99,7 @@ const MovementHistoryTab: React.FC = () => {
         from: fromDate?.isValid() ? fromDate.toDate().toISOString() : undefined,
         to: toDate?.isValid() ? toDate.toDate().toISOString() : undefined,
         limit: 500,
+        warehouseId: warehouseId || undefined,
       });
       // Clientseitiger Filter zur Sicherheit (falls Backend-Zeitzonen/Parsing abweicht)
       const filteredMovements = res.movements.filter((m) => {
@@ -140,6 +144,23 @@ const MovementHistoryTab: React.FC = () => {
 
       <Paper sx={{ p: 2, mb: 2 }}>
         <Stack spacing={2} direction={{ xs: "column", sm: "row" }} flexWrap="wrap" useFlexGap>
+          {warehouses.length > 1 && (
+            <TextField
+              select
+              size="small"
+              label="Lager"
+              value={warehouseId}
+              onChange={(e) => setWarehouseId(e.target.value)}
+              sx={{ minWidth: 200 }}
+            >
+              <MenuItem value="">Alle Lager</MenuItem>
+              {warehouses.map((w) => (
+                <MenuItem key={w.id} value={w.id}>
+                  {w.name ? `${w.code} – ${w.name}` : w.code}
+                </MenuItem>
+              ))}
+            </TextField>
+          )}
           <Autocomplete
             options={itemOptions}
             getOptionLabel={(opt) => opt.label}

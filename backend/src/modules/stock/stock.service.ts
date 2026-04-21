@@ -1677,7 +1677,12 @@ export class StockService {
     offset?: number;
     branchId?: string | null;
     locationIds?: string[];
+    warehouseId?: string;
   }): Promise<{ movements: StockMovement[]; summary: { totalCheckinQty: number; totalCheckoutQty: number; totalCheckinCount: number; totalCheckoutCount: number } }> {
+    const effectiveLocationIds = params.warehouseId
+      ? await this.locationsService.getDescendantLocationIds(params.warehouseId, params.branchId)
+      : params.locationIds;
+
     const qb = this.movementsRepository
       .createQueryBuilder('movement')
       .leftJoinAndSelect('movement.item', 'item')
@@ -1688,10 +1693,10 @@ export class StockService {
       .orderBy('movement.occurredAt', 'DESC');
 
     if (params.branchId) qb.andWhere('item.branchId = :branchId', { branchId: params.branchId });
-    if (params.locationIds?.length) {
+    if (effectiveLocationIds?.length) {
       qb.andWhere(
         '(storageLocation.id IN (:...locationIds) OR slParent.id IN (:...locationIds))',
-        { locationIds: params.locationIds },
+        { locationIds: effectiveLocationIds },
       );
     }
     if (params.itemId) qb.andWhere('item.id = :itemId', { itemId: params.itemId });
@@ -1717,10 +1722,10 @@ export class StockService {
       .addSelect('COUNT(*)', 'cnt');
 
     if (params.branchId) summaryQb.andWhere('item.branchId = :branchId', { branchId: params.branchId });
-    if (params.locationIds?.length) {
+    if (effectiveLocationIds?.length) {
       summaryQb.andWhere(
         '(storageLocation.id IN (:...locationIds) OR slParent.id IN (:...locationIds))',
-        { locationIds: params.locationIds },
+        { locationIds: effectiveLocationIds },
       );
     }
     if (params.itemId) summaryQb.andWhere('movement.itemId = :itemId', { itemId: params.itemId });

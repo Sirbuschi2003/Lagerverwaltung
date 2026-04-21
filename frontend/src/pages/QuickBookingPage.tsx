@@ -510,14 +510,6 @@ const QuickBookingPage: React.FC = () => {
             <Stack spacing={0.3} sx={{ minWidth: 200 }}>
               <Stack direction="row" justifyContent="space-between" spacing={4}>
                 <Typography variant="body2" color="text.secondary">
-                  Bestand:
-                </Typography>
-                <Typography variant="body2" sx={{ fontWeight: 600 }}>
-                  {currentItem.currentQuantity ?? "–"}
-                </Typography>
-              </Stack>
-              <Stack direction="row" justifyContent="space-between" spacing={4}>
-                <Typography variant="body2" color="text.secondary">
                   Lagerort:
                 </Typography>
                 <Typography variant="body2" sx={{ fontWeight: 600 }}>

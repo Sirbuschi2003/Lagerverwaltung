@@ -3,6 +3,7 @@ import { TypeOrmModule } from "@nestjs/typeorm";
 
 import { StockLevel } from "../stock/entities/stock-level.entity";
 import { StockMovement } from "../stock/entities/stock-movement.entity";
+import { LocationsModule } from "../locations/locations.module";
 import { SystemConfigModule } from "../system-config/system-config.module";
 import { ItemsModule } from "../items/items.module";
 
@@ -11,7 +12,7 @@ import { ReportsController } from "./reports.controller";
 import { ReportsService } from "./reports.service";
 
 @Module({
-  imports: [TypeOrmModule.forFeature([StockMovement, StockLevel]), SystemConfigModule, ItemsModule],
+  imports: [TypeOrmModule.forFeature([StockMovement, StockLevel]), SystemConfigModule, ItemsModule, LocationsModule],
   controllers: [ReportsController],
   providers: [ReportsService, ExportService],
   exports: [ExportService],

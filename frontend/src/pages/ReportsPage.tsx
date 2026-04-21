@@ -50,9 +50,11 @@ import {
   saveSlowMoverSettings,
   fetchConsumptionTrend,
   fetchArticleActivity,
+  fetchWarehouses,
   type SlowMoverRow,
   type ConsumptionTrendEntry,
   type ArticleActivityRow,
+  type LocationDto,
 } from "../utils/api";
 import useAuthStore from "../store/useAuthStore";
 import useItemsStore from "../store/useItemsStore";
@@ -110,7 +112,7 @@ const getDaysSeverity = (days: number | null): "error" | "warning" | "info" | "d
   return "info";
 };
 
-const SlowMoverTab: React.FC = () => {
+const SlowMoverTab: React.FC<{ warehouseId?: string }> = ({ warehouseId }) => {
   const { user } = useAuthStore();
   const isManager = user?.role === "MANAGER";
 
@@ -132,7 +134,7 @@ const SlowMoverTab: React.FC = () => {
     setLoading(true);
     setError(null);
     try {
-      const [settings, data] = await Promise.all([fetchSlowMoverSettings(), fetchSlowMovers()]);
+      const [settings, data] = await Promise.all([fetchSlowMoverSettings(), fetchSlowMovers(undefined, warehouseId)]);
       setThreshold(settings.days);
       setEditDays(settings.days);
       setRows(data);
@@ -141,7 +143,7 @@ const SlowMoverTab: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [warehouseId]);
 
   useEffect(() => { void load(); }, [load]);
 
@@ -152,7 +154,7 @@ const SlowMoverTab: React.FC = () => {
       setThreshold(saved.days);
       setSettingsOpen(false);
       setLoading(true);
-      const data = await fetchSlowMovers(saved.days);
+      const data = await fetchSlowMovers(saved.days, warehouseId);
       setRows(data);
     } catch (err: any) {
       setError(err?.response?.data?.message || err?.message || "Fehler beim Speichern");
@@ -336,7 +338,7 @@ const MONTH_LABELS: Record<string, string> = {
   "07": "Jul", "08": "Aug", "09": "Sep", "10": "Okt", "11": "Nov", "12": "Dez",
 };
 
-const ConsumptionTrendTab: React.FC = () => {
+const ConsumptionTrendTab: React.FC<{ warehouseId?: string }> = ({ warehouseId }) => {
   const theme = useTheme();
   const { items, loadItems } = useItemsStore();
 
@@ -359,14 +361,14 @@ const ConsumptionTrendTab: React.FC = () => {
     setLoading(true);
     setError(null);
     try {
-      const result = await fetchConsumptionTrend(m, itemId);
+      const result = await fetchConsumptionTrend(m, itemId, warehouseId);
       setData(result);
     } catch (err: any) {
       setError(err?.response?.data?.message || err?.message || "Fehler beim Laden");
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [warehouseId]);
 
   useEffect(() => { void load(months, selectedItem?.id); }, [load, months, selectedItem]);
 
@@ -525,7 +527,7 @@ const ConsumptionTrendTab: React.FC = () => {
 type SortField = "checkoutCount" | "checkinCount" | "checkoutQty" | "checkinQty" | "lastMovementAt" | "code";
 type SortDir = "asc" | "desc";
 
-const ArticleActivityTab: React.FC = () => {
+const ArticleActivityTab: React.FC<{ warehouseId?: string }> = ({ warehouseId }) => {
   const theme = useTheme();
 
   const defaultRange = getPresetRange(30);
@@ -547,16 +549,16 @@ const ArticleActivityTab: React.FC = () => {
     setLoading(true);
     setError(null);
     try {
-      const data = await fetchArticleActivity(f, t);
+      const data = await fetchArticleActivity(f, t, warehouseId);
       setRows(data);
     } catch (err: any) {
       setError(err?.response?.data?.message || err?.message || "Fehler beim Laden");
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [warehouseId]);
 
-  useEffect(() => { void load(from, to); }, []);
+  useEffect(() => { void load(from, to); }, [load]);
 
   const handlePreset = (days: number) => {
     const range = getPresetRange(days);
@@ -836,6 +838,12 @@ const TABS = [
 
 const ReportsPage: React.FC<{ embedded?: boolean }> = ({ embedded = false }) => {
   const [tab, setTab] = useState(0);
+  const [warehouses, setWarehouses] = useState<LocationDto[]>([]);
+  const [warehouseId, setWarehouseId] = useState<string>("");
+
+  useEffect(() => {
+    fetchWarehouses().then(setWarehouses).catch(() => null);
+  }, []);
 
   return (
     <Box sx={embedded ? {} : { p: { xs: 1, sm: 2 } }}>
@@ -844,6 +852,34 @@ const ReportsPage: React.FC<{ embedded?: boolean }> = ({ embedded = false }) => 
           <Typography variant="h5" sx={{ fontWeight: 700, mb: 2 }}>Berichte & Analysen</Typography>
           <Divider sx={{ mb: 2 }} />
         </>
+      )}
+
+      {warehouses.length > 1 && (
+        <Paper variant="outlined" sx={{ p: 1.5, mb: 2 }}>
+          <Stack direction="row" alignItems="center" spacing={2}>
+            <FilterIcon fontSize="small" sx={{ color: "text.secondary" }} />
+            <TextField
+              select
+              size="small"
+              label="Lager"
+              value={warehouseId}
+              onChange={(e) => setWarehouseId(e.target.value)}
+              sx={{ minWidth: 220 }}
+            >
+              <MenuItem value="">Alle Lager</MenuItem>
+              {warehouses.map((w) => (
+                <MenuItem key={w.id} value={w.id}>
+                  {w.name ? `${w.code} – ${w.name}` : w.code}
+                </MenuItem>
+              ))}
+            </TextField>
+            {warehouseId && (
+              <Button size="small" startIcon={<ClearIcon />} onClick={() => setWarehouseId("")}>
+                Zurücksetzen
+              </Button>
+            )}
+          </Stack>
+        </Paper>
       )}
 
       <Tabs
@@ -858,9 +894,9 @@ const ReportsPage: React.FC<{ embedded?: boolean }> = ({ embedded = false }) => 
         ))}
       </Tabs>
 
-      {tab === 0 && <ArticleActivityTab />}
-      {tab === 1 && <ConsumptionTrendTab />}
-      {tab === 2 && <SlowMoverTab />}
+      {tab === 0 && <ArticleActivityTab warehouseId={warehouseId || undefined} />}
+      {tab === 1 && <ConsumptionTrendTab warehouseId={warehouseId || undefined} />}
+      {tab === 2 && <SlowMoverTab warehouseId={warehouseId || undefined} />}
     </Box>
   );
 };
