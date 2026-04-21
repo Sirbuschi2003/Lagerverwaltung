@@ -108,7 +108,7 @@ const DashboardRecentMovementsWidget: React.FC = () => {
                   </TableCell>
                 </TableRow>
               ))}
-              {movements.map((m) => (
+              {movements.filter((m) => m.item != null).map((m) => (
                 <TableRow key={m.id}>
                   <TableCell>
                     <Typography variant="body2" sx={{ fontWeight: 600 }}>
