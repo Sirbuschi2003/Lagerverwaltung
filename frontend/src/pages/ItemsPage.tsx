@@ -338,13 +338,19 @@ const resolveKnownProductGroup = (
     return { value: persisted, fallbackUsed: false };
   }
 
-  const available = knownGroups.map((value) => cleanHyrekaText(value)).filter(Boolean);
-  if (available.length === 0) {
-    const fallback = cleanHyrekaText(rawGroup) || "Ersatzteil";
-    return { value: fallback, fallbackUsed: false };
+  const groupRaw = cleanHyrekaText(rawGroup);
+
+  // If no raw group is available, fall back to "Ersatzteil" immediately — never assign a
+  // random known group just because the header was not recognized in the source CSV.
+  if (!groupRaw) {
+    const ersatzteilGroup = knownGroups.map((v) => cleanHyrekaText(v)).find((g) => normalizeLookupKey(g) === "ersatzteil");
+    return { value: ersatzteilGroup ?? "Ersatzteil", fallbackUsed: true };
   }
 
-  const groupRaw = cleanHyrekaText(rawGroup);
+  const available = knownGroups.map((value) => cleanHyrekaText(value)).filter(Boolean);
+  if (available.length === 0) {
+    return { value: groupRaw || "Ersatzteil", fallbackUsed: false };
+  }
   const normalizedRaw = normalizeLookupKey(groupRaw);
   const exact = available.find((group) => normalizeLookupKey(group) === normalizedRaw);
   if (exact) {
@@ -833,7 +839,7 @@ const ItemsPage = () => {
 
         // "Bezeichnung (2)" → "bezeichnung_2"
         const descriptionSecondary = readByHeader(cols, ["artikelbe2", "beschreibung2", "bezeichnung_2", "description_secondary"]);
-        const productGroupRaw = readByHeader(cols, ["warengrupp", "warengruppe", "product_group"]);
+        const productGroupRaw = readByHeader(cols, ["warengrupp", "warengruppe", "product_group", "produktgruppe"]);
         const supplierName = readByHeader(cols, ["kundnum", "lieferant", "supplier_name"]);
         // "Bestell-Nr." → "bestellnr"
         const supplierNumber = readByHeader(cols, ["lifernum", "bestellnr", "supplier_number", "supplier_no"]);
