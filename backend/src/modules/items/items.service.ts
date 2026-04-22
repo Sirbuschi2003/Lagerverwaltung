@@ -371,14 +371,14 @@ export class ItemsService {
         return alias?.item ?? null;
       })();
 
-      if (found?.storageLocation?.id) {
-        const stock = await this.stockLevelsRepository.findOne({
-          where: { itemId: found.id, locationId: found.storageLocation.id } as any,
-          select: ['quantity'],
-        });
-        (found as any).currentQuantity = stock ? Number(stock.quantity) : 0;
-      } else if (found) {
-        (found as any).currentQuantity = null;
+      if (found) {
+        const rows = await this.stockLevelsRepository
+          .createQueryBuilder('sl')
+          .select('COALESCE(SUM(sl.quantity), 0)', 'total')
+          .where('sl.itemId = :itemId', { itemId: found.id })
+          .andWhere('sl.vehicleId IS NULL')
+          .getRawOne<{ total: string }>();
+        (found as any).currentQuantity = Number(rows?.total ?? 0);
       }
       return found;
     } catch (error) {
