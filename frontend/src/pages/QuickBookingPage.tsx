@@ -52,6 +52,7 @@ interface BookingEntry {
   locationId?: string;
   locationName?: string;
   reference?: string;
+  currentQuantity?: number;
 }
 
 interface CameraScanFeedback {
@@ -249,6 +250,7 @@ const QuickBookingPage: React.FC = () => {
         ? `${found.storageLocation.code}${found.storageLocation.name ? ` – ${found.storageLocation.name}` : ""}`
         : undefined,
       reference: reference || undefined,
+      currentQuantity: found.currentQuantity ?? undefined,
     };
 
     if (sofortBuchen) {
@@ -356,6 +358,14 @@ const QuickBookingPage: React.FC = () => {
     setReference("");
     setItemNotFound(false);
     refocusBarcode();
+  };
+
+  const computeEffectiveStock = (entry: BookingEntry): number | null => {
+    if (entry.currentQuantity == null) return null;
+    const delta = bookingList
+      .filter((e) => e.itemId === entry.itemId)
+      .reduce((sum, e) => sum + (e.mode === "CHECKOUT" ? -e.quantity : e.quantity), 0);
+    return entry.currentQuantity + delta;
   };
 
   return (
@@ -518,6 +528,35 @@ const QuickBookingPage: React.FC = () => {
                     : "–"}
                 </Typography>
               </Stack>
+              <Stack direction="row" justifyContent="space-between" spacing={4}>
+                <Typography variant="body2" color="text.secondary">
+                  Buchungsmenge:
+                </Typography>
+                <Typography variant="body2" sx={{ fontWeight: 700 }}>
+                  {quantity} Stk.
+                </Typography>
+              </Stack>
+              <Stack direction="row" justifyContent="space-between" spacing={4}>
+                <Typography variant="body2" color="text.secondary">
+                  Verfügbarer Bestand:
+                </Typography>
+                <Typography
+                  variant="body2"
+                  sx={{
+                    fontWeight: 700,
+                    color:
+                      currentItem.currentQuantity == null
+                        ? "text.secondary"
+                        : currentItem.currentQuantity <= 0
+                        ? "error.main"
+                        : currentItem.currentQuantity <= (currentItem.minimumStock ?? 0)
+                        ? "warning.main"
+                        : "success.main",
+                  }}
+                >
+                  {currentItem.currentQuantity ?? "–"} Stk.
+                </Typography>
+              </Stack>
               {!currentItem.storageLocation && (
                 <Typography variant="caption" color="warning.main">
                   Kein Lagerort am Artikel hinterlegt
@@ -594,6 +633,20 @@ const QuickBookingPage: React.FC = () => {
                             {entry.quantity}
                           </Box>
                         </Typography>
+                        {computeEffectiveStock(entry) != null && (
+                          <Typography variant="caption" color="text.secondary">
+                            Bestand:{" "}
+                            <Box
+                              component="span"
+                              sx={{
+                                fontWeight: 700,
+                                color: (computeEffectiveStock(entry) ?? 0) < 0 ? "error.main" : (computeEffectiveStock(entry) ?? 0) === 0 ? "warning.main" : "text.primary",
+                              }}
+                            >
+                              {computeEffectiveStock(entry)}
+                            </Box>
+                          </Typography>
+                        )}
                         {entry.locationName && (
                           <Typography variant="caption" color="text.secondary">
                             {entry.locationName}
@@ -630,6 +683,7 @@ const QuickBookingPage: React.FC = () => {
                 <TableCell>Artikel-Nr.</TableCell>
                 <TableCell>Bezeichnung</TableCell>
                 <TableCell align="right">Menge</TableCell>
+                <TableCell align="right">Bestand</TableCell>
                 <TableCell>Lagerort</TableCell>
                 <TableCell>Vorgang</TableCell>
                 <TableCell padding="none" />
@@ -639,7 +693,7 @@ const QuickBookingPage: React.FC = () => {
               {bookingList.length === 0 ? (
                 <TableRow>
                   <TableCell
-                    colSpan={7}
+                    colSpan={8}
                     sx={{ textAlign: "center", py: 5, color: "text.secondary" }}
                   >
                     Noch keine Artikel in der Liste
@@ -668,6 +722,9 @@ const QuickBookingPage: React.FC = () => {
                     <TableCell>{entry.itemName}</TableCell>
                     <TableCell align="right" sx={{ fontWeight: 700 }}>
                       {entry.quantity}
+                    </TableCell>
+                    <TableCell align="right" sx={{ fontWeight: 700, color: (() => { const s = computeEffectiveStock(entry); return s == null ? "text.secondary" : s < 0 ? "error.main" : s === 0 ? "warning.main" : "text.primary"; })() }}>
+                      {computeEffectiveStock(entry) ?? "–"}
                     </TableCell>
                     <TableCell sx={{ color: "text.secondary" }}>
                       {entry.locationName || "–"}
