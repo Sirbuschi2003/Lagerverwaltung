@@ -372,12 +372,17 @@ export class ItemsService {
       })();
 
       if (found) {
-        const rows = await this.stockLevelsRepository
+        const qb = this.stockLevelsRepository
           .createQueryBuilder('sl')
+          .innerJoin('sl.location', 'loc')
           .select('COALESCE(SUM(sl.quantity), 0)', 'total')
           .where('sl.itemId = :itemId', { itemId: found.id })
           .andWhere('sl.vehicleId IS NULL')
-          .getRawOne<{ total: string }>();
+          .andWhere('loc.type != :vehicleType', { vehicleType: 'VEHICLE' });
+        if (branchId) {
+          qb.andWhere('loc.branchId = :branchId', { branchId });
+        }
+        const rows = await qb.getRawOne<{ total: string }>();
         (found as any).currentQuantity = Number(rows?.total ?? 0);
       }
       return found;
