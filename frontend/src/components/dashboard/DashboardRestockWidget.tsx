@@ -155,20 +155,6 @@ const DashboardRestockWidget: React.FC = () => {
       });
   }, [vehicleId, stockRefreshKey]);
 
-  // Polling
-  useEffect(() => {
-    if (!vehicleId && !canManageRequests) return;
-    const timer = setInterval(() => {
-      if (canManageRequests) {
-        void loadFleet("OPEN");
-      } else if (vehicleId) {
-        const loadForVehicle = useRestockStore.getState().loadForVehicle;
-        void loadForVehicle(vehicleId);
-      }
-    }, refreshInterval);
-    return () => clearInterval(timer);
-  }, [vehicleId, refreshInterval, canManageRequests, loadFleet]);
-
   // Initiales Laden
   useEffect(() => {
     if (canManageRequests) {

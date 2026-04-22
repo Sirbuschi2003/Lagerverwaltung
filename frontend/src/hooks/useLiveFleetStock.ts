@@ -27,7 +27,6 @@ export function useLiveFleetStock({
   useEffect(() => {
     let active = true;
     let timer: number | null = null;
-    console.log("[useLiveFleetStock] Timer gestartet mit Intervall:", interval);
 
     async function loadData() {
       try {
@@ -50,7 +49,6 @@ export function useLiveFleetStock({
       if (timer !== null) {
         clearInterval(timer);
         timer = null;
-        console.log("[useLiveFleetStock] Timer gestoppt");
       }
     };
   }, [interval]); // Nur bei Intervall-Änderung neu starten

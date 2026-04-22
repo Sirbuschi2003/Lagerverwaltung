@@ -1,5 +1,63 @@
 # Changelog
 
+## [3.6.0] – 2026-04-22
+
+### Feature: Lager-Trennung in Berichten & Bewegungshistorie
+
+- Artikel-Auswertung und Bewegungshistorie filtern jetzt strikt nach dem gewählten Lager – Toner-Artikel erscheinen nicht mehr in Teilelager-Berichten und umgekehrt
+- Neuer `ArticleDetailDialog`: Klick auf einen Artikel in der Artikel-Auswertung öffnet eine Detailansicht mit vollständiger Buchungshistorie des Artikels im gewählten Zeitraum
+
+### Feature: Schnellbuchung – Bestandsanzeige in Echtzeit
+
+- Artikel-Info zeigt jetzt den aktuell verfügbaren Lagerbestand direkt neben dem Artikel
+- Buchungsliste (CHECKIN/CHECKOUT) zeigt den virtuellen Bestand nach der geplanten Buchung – Überentnahmen werden sofort sichtbar
+
+### Bugfix: Schnellbuchung – CHECKIN ohne Lagerort buchte lautlos in Leere
+
+- CHECKIN-Buchungen ohne gewählten Lagerort wurden zuvor stillschweigend ignoriert
+- Fehlermeldung wird jetzt korrekt angezeigt; Buchung wird blockiert bis ein Lagerort gewählt ist
+
+### Bugfix: Unter-Sollbestand-Tabelle – falscher Sollbestand bei Mindestbestand
+
+- Wenn für einen Artikel ein Mindestbestand (`minimumStock`) gesetzt war, zeigte die Tabelle den Mindestbestand als Sollbestand an statt dem tatsächlichen `targetStock`
+
+### Bugfix: Dashboard-Crash bei gelöschten Artikeln
+
+- `DashboardRestockWidget` crashte mit „Cannot read properties of null" wenn eine Bewegung auf einen inzwischen gelöschten Artikel zeigte
+- Null-Check ergänzt; betroffene Einträge werden jetzt übersprungen
+
+### Bugfix: CSV-Import erkennt `Produktgruppe`-Spalte
+
+- CSV-Dateien mit der Spaltenbezeichnung `Produktgruppe` (statt `Warengruppe`) wurden bisher nicht erkannt
+- Beide Varianten werden jetzt akzeptiert
+
+### Bugfix: Hyreka-Import – Warengruppe wird nicht mehr überschrieben
+
+- Beim Hyreka-Import wurde die Warengruppe bestehender Artikel mit einem leeren Fallback-Wert überschrieben
+- Leere Werte aus dem Import werden jetzt ignoriert; bestehende Warengruppe bleibt erhalten
+
+### Docs: CSV-Import-Dialog mit vollständiger Spalten-Dokumentation
+
+- Der Import-Dialog listet jetzt alle unterstützten Spalten mit Beschreibung, Pflichtfeldern und Beispielwerten
+
+### Performance: Fehlende Datenbankindizes ergänzt
+
+- 7 neue Indizes für `stock_movements`, `stock_levels` und `items` – verhindert Full-Table-Scans bei wachsendem Datenvolumen und mehreren Niederlassungen
+- Composite-Index `(itemId, occurredAt)` und `(vehicleId, occurredAt)` beschleunigen Bewegungshistorie und Reports spürbar
+- Composite-Index `(branchId, targetStock)` auf `items` beschleunigt die Bestellvorschläge-Berechnung
+
+### Performance: Techniker-Map gecacht
+
+- Fleet-Overview wurde bei jedem Poll-Request (alle 15 s) komplett neu aus der DB geladen
+- User-Daten werden jetzt 5 Minuten in-memory gecacht → reduziert DB-Last beim Dashboard deutlich
+
+### Performance: Doppeltes Polling im Dashboard entfernt
+
+- `DashboardRestockWidget` pollte intern doppelt (manuelles Intervall + `useLiveFleetStock`)
+- Redundanter `setInterval`-Block entfernt; `useLiveFleetStock` übernimmt das Polling allein
+
+---
+
 ## [3.5.1] – 2026-04-17
 
 ### Feature: Selektive Wiederherstellung aus Backup

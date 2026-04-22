@@ -130,6 +130,10 @@ interface MovementSummaryRow {
 export class StockService {
   private readonly logger = new Logger(StockService.name);
 
+  // TTL cache for technician map (vehicleId → displayName) — expires after 5 minutes
+  private technicianCache: { data: Map<string, string>; expiresAt: number } | null = null;
+  private readonly TECHNICIAN_CACHE_TTL_MS = 5 * 60 * 1000;
+
   constructor(
     @InjectRepository(StockLevel)
     private readonly stockLevelsRepository: Repository<StockLevel>,
@@ -763,8 +767,8 @@ export class StockService {
       updated.status === "APPROVED" &&
       (previousStatus !== "APPROVED" || Number(updated.quantityProvided ?? 0) !== previousProvided);
     if (shouldNotifyReady) {
-      const users = await this.usersService.findAll();
-      const targetUsers = users.filter((u) => u.vehicleId === updated.vehicle.id);
+      const allUsers = await this.usersService.findAll(updated.vehicle.branchId ?? null);
+      const targetUsers = allUsers.filter((u) => u.vehicleId === updated.vehicle.id);
       if (targetUsers.length > 0) {
         await this.notificationsService.sendRestockApproved(targetUsers, {
           itemCode: updated.item.code,
@@ -1101,14 +1105,8 @@ export class StockService {
 
     const levels = await qb.getMany();
 
-    // Techniker-Mapping aufbauen: vehicleId -> displayName
-    const allUsers = await this.usersService.findAll(params.branchId);
-    const vehicleTechnicianMap = new Map<string, string>();
-    for (const u of allUsers) {
-      if (u.vehicleId && u.displayName) {
-        vehicleTechnicianMap.set(u.vehicleId, u.displayName);
-      }
-    }
+    // Techniker-Mapping aufbauen: vehicleId -> displayName (gecacht für 5 Minuten)
+    const vehicleTechnicianMap = await this.getTechnicianMap(params.branchId);
 
     if (levels.length === 0 && params.vehicleId) {
       const vehicle = await this.vehiclesService.findOne(params.vehicleId);
@@ -1862,6 +1860,22 @@ export class StockService {
       totalDuplicatesRemoved: totalRemoved,
       affectedStockLevels
     };
+  }
+
+  private async getTechnicianMap(branchId: string | null | undefined): Promise<Map<string, string>> {
+    const now = Date.now();
+    if (this.technicianCache && now < this.technicianCache.expiresAt) {
+      return this.technicianCache.data;
+    }
+    const users = await this.usersService.findAll(branchId ?? undefined);
+    const map = new Map<string, string>();
+    for (const u of users) {
+      if (u.vehicleId && u.displayName) {
+        map.set(u.vehicleId, u.displayName);
+      }
+    }
+    this.technicianCache = { data: map, expiresAt: now + this.TECHNICIAN_CACHE_TTL_MS };
+    return map;
   }
 }
 
