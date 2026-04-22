@@ -2,7 +2,6 @@ import {
   Column,
   CreateDateColumn,
   Entity,
-  Index,
   JoinColumn,
   ManyToOne,
   OneToMany,
@@ -17,7 +16,6 @@ import { Supplier } from "../../suppliers/entities/supplier.entity";
 import { Branch } from "../../branches/entities/branch.entity";
 
 @Entity({ name: "items" })
-@Index("idx_items_branch_target", ["branchId", "targetStock"])
 export class Item {
   @PrimaryGeneratedColumn("uuid")
   id!: string;

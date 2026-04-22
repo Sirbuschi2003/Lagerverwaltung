@@ -2,7 +2,6 @@
   Column,
   CreateDateColumn,
   Entity,
-  Index,
   ManyToOne,
   PrimaryGeneratedColumn,
 } from "typeorm";
@@ -16,10 +15,6 @@ export const STOCK_MOVEMENT_TYPES = ["CHECKOUT", "CHECKIN", "ADJUSTMENT"] as con
 export type StockMovementType = (typeof STOCK_MOVEMENT_TYPES)[number];
 
 @Entity({ name: "stock_movements" })
-@Index("idx_sm_item_occurred", ["item", "occurredAt"])
-@Index("idx_sm_vehicle_occurred", ["vehicle", "occurredAt"])
-@Index("idx_sm_type", ["type"])
-@Index("idx_sm_is_voided", ["isVoided"])
 export class StockMovement {
   @PrimaryGeneratedColumn("uuid")
   id!: string;

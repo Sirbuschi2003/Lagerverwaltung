@@ -2,7 +2,6 @@ import {
   Column,
   CreateDateColumn,
   Entity,
-  Index,
   ManyToOne,
   PrimaryGeneratedColumn,
   Unique,
@@ -15,8 +14,6 @@ import { Vehicle } from "../../vehicles/entities/vehicle.entity";
 
 @Entity({ name: "stock_levels" })
 @Unique(["item", "location"])
-@Index("idx_sl_vehicle", ["vehicle"])
-@Index("idx_sl_location", ["location"])
 export class StockLevel {
   @PrimaryGeneratedColumn("uuid")
   id!: string;
