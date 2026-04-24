@@ -356,6 +356,12 @@ const QuickBookingPage: React.FC = () => {
       setBookingList([]);
       setCurrentItem(null);
       setReference("");
+      setTimeout(() => {
+        if (referenceRef.current) {
+          referenceRef.current.value = "";
+          referenceRef.current.focus();
+        }
+      }, 80);
     } else {
       showError(
         failedMessages.length === 1
@@ -363,7 +369,6 @@ const QuickBookingPage: React.FC = () => {
           : `${failedMessages.length} Fehler: ${failedMessages.slice(0, 3).join(" | ")}${failedMessages.length > 3 ? " …" : ""}`,
       );
     }
-    setTimeout(() => referenceRef.current?.focus(), 80);
   };
 
   const handleLoschen = () => {
@@ -515,6 +520,7 @@ const QuickBookingPage: React.FC = () => {
               }
               value={reference}
               onChange={(e) => setReference(e.target.value)}
+              autoComplete="off"
               onKeyDown={(e) => {
                 if (e.key === "Enter") refocusBarcode();
               }}
