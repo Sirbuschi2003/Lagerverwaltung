@@ -1,6 +1,8 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   Alert,
+  Autocomplete,
+  type AutocompleteRenderInputParams,
   Box,
   Button,
   Checkbox,
@@ -80,7 +82,7 @@ const QuickBookingPage: React.FC = () => {
   const [cameraScanFeedback, setCameraScanFeedback] = useState<CameraScanFeedback | null>(null);
   const [syncConnected, setSyncConnected] = useState(false);
 
-  const barcodeRef = useRef<HTMLInputElement>(null);
+  const barcodeWrapperRef = useRef<HTMLDivElement>(null);
   const referenceRef = useRef<HTMLInputElement>(null);
   // Ref damit handleScan immer den aktuellen Inhalt der Liste sieht (stale-closure-safe)
   const bookingListRef = useRef<BookingEntry[]>([]);
@@ -143,7 +145,7 @@ const QuickBookingPage: React.FC = () => {
     socketRef.current.emit("quickbook:update", { userId: user.id, list: bookingList });
   }, [bookingList]);
 
-  const refocusBarcode = () => setTimeout(() => barcodeRef.current?.focus(), 80);
+  const refocusBarcode = () => setTimeout(() => barcodeWrapperRef.current?.querySelector<HTMLInputElement>("input")?.focus(), 80);
 
   const showSuccess = (msg: string) => {
     setSuccessMsg(msg);
@@ -198,29 +200,7 @@ const QuickBookingPage: React.FC = () => {
     }
   };
 
-  const handleScan = async (code: string) => {
-    if (!code.trim()) return;
-    // Verhindert parallele Verarbeitung falls Cooldown kürzer als API-Antwortzeit
-    if (busyRef.current) return;
-    busyRef.current = true;
-    setBusy(true);
-    setItemNotFound(false);
-
-    const found = await lookupItem(code.trim());
-    setBarcodeInput("");
-
-    if (!found) {
-      playError();
-      setItemNotFound(true);
-      setCurrentItem(null);
-      setCameraScanFeedback({ type: "error", text: `"${code.trim()}" – Artikel nicht gefunden` });
-      busyRef.current = false;
-      setBusy(false);
-      refocusBarcode();
-      return;
-    }
-
-    // Bei CHECKOUT: prüfen ob Gesamtmenge (Liste + neuer Scan) den Bestand überschreitet
+  const processFoundItem = async (found: ItemDto) => {
     if (mode === "CHECKOUT" && found.currentQuantity !== null && found.currentQuantity !== undefined) {
       const alreadyBooked = bookingListRef.current
         .filter((e) => e.itemId === found.id && e.mode === "CHECKOUT")
@@ -299,6 +279,40 @@ const QuickBookingPage: React.FC = () => {
     busyRef.current = false;
     setBusy(false);
     refocusBarcode();
+  };
+
+  const handleScan = async (code: string) => {
+    if (!code.trim()) return;
+    // Verhindert parallele Verarbeitung falls Cooldown kürzer als API-Antwortzeit
+    if (busyRef.current) return;
+    busyRef.current = true;
+    setBusy(true);
+    setItemNotFound(false);
+    setBarcodeInput("");
+
+    const found = await lookupItem(code.trim());
+
+    if (!found) {
+      playError();
+      setItemNotFound(true);
+      setCurrentItem(null);
+      setCameraScanFeedback({ type: "error", text: `"${code.trim()}" – Artikel nicht gefunden` });
+      busyRef.current = false;
+      setBusy(false);
+      refocusBarcode();
+      return;
+    }
+
+    await processFoundItem(found);
+  };
+
+  const handleScanItem = async (item: ItemDto) => {
+    if (busyRef.current) return;
+    busyRef.current = true;
+    setBusy(true);
+    setItemNotFound(false);
+    setBarcodeInput("");
+    await processFoundItem(item);
   };
 
   // Kamera-Scanner: bleibt offen nach jedem Scan für den nächsten Code
@@ -411,41 +425,78 @@ const QuickBookingPage: React.FC = () => {
           <Divider orientation="vertical" flexItem sx={{ display: { xs: "none", sm: "block" } }} />
 
           {/* Barcode + Kamera-Button */}
-          <Box sx={{ flex: 2, minWidth: 200 }}>
-            <TextField
-              inputRef={barcodeRef}
-              label="Barcode"
-              value={barcodeInput}
-              onChange={(e) => setBarcodeInput(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") void handleScan(barcodeInput);
+          <Box ref={barcodeWrapperRef} sx={{ flex: 2, minWidth: 200 }}>
+            <Autocomplete<ItemDto, false, true, true>
+              freeSolo
+              disableClearable
+              options={items}
+              inputValue={barcodeInput}
+              onInputChange={(_: React.SyntheticEvent, val: string, reason: string) => {
+                if (reason === "input") setBarcodeInput(val);
               }}
-              size="small"
-              fullWidth
-              disabled={busy}
-              error={itemNotFound}
-              helperText={itemNotFound ? "Artikel nicht gefunden" : " "}
-              InputProps={{
-                startAdornment: (
-                  <InputAdornment position="start">
-                    <SearchIcon fontSize="small" />
-                  </InputAdornment>
-                ),
-                endAdornment: (
-                  <InputAdornment position="end">
-                    <Tooltip title="Kamera-Scanner öffnen">
-                      <IconButton
-                        size="small"
-                        onClick={() => { setCameraOpen(true); setCameraScanFeedback(null); }}
-                        edge="end"
-                        color="primary"
-                      >
-                        <QrCodeScannerIcon />
-                      </IconButton>
-                    </Tooltip>
-                  </InputAdornment>
-                ),
+              filterOptions={(opts: ItemDto[], { inputValue }: { inputValue: string }) => {
+                const q = inputValue.trim().toLowerCase();
+                if (q.length < 2) return [];
+                return opts.filter((item) =>
+                  item.code.toLowerCase().includes(q) ||
+                  (item.description ?? "").toLowerCase().includes(q) ||
+                  (item.descriptionSecondary ?? "").toLowerCase().includes(q)
+                ).slice(0, 15);
               }}
+              getOptionLabel={(opt: ItemDto | string) => (typeof opt === "string" ? opt : opt.code)}
+              onChange={(_: React.SyntheticEvent, value: ItemDto | string | null) => {
+                if (value && typeof value !== "string") void handleScanItem(value);
+              }}
+              renderOption={(props: React.HTMLAttributes<HTMLLIElement>, option: ItemDto) => (
+                <li {...props} key={option.id}>
+                  <Stack spacing={0}>
+                    <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                      {option.code}
+                    </Typography>
+                    <Typography variant="caption" color="text.secondary">
+                      {option.description}
+                      {option.descriptionSecondary ? ` – ${option.descriptionSecondary}` : ""}
+                    </Typography>
+                  </Stack>
+                </li>
+              )}
+              noOptionsText="Kein Artikel gefunden"
+              renderInput={(params: AutocompleteRenderInputParams) => (
+                <TextField
+                  {...params}
+                  label="Barcode / Suche"
+                  size="small"
+                  fullWidth
+                  disabled={busy}
+                  error={itemNotFound}
+                  helperText={itemNotFound ? "Artikel nicht gefunden" : " "}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && !e.defaultPrevented) void handleScan(barcodeInput);
+                  }}
+                  InputProps={{
+                    ...params.InputProps,
+                    startAdornment: (
+                      <InputAdornment position="start">
+                        <SearchIcon fontSize="small" />
+                      </InputAdornment>
+                    ),
+                    endAdornment: (
+                      <InputAdornment position="end">
+                        <Tooltip title="Kamera-Scanner öffnen">
+                          <IconButton
+                            size="small"
+                            onClick={() => { setCameraOpen(true); setCameraScanFeedback(null); }}
+                            edge="end"
+                            color="primary"
+                          >
+                            <QrCodeScannerIcon />
+                          </IconButton>
+                        </Tooltip>
+                      </InputAdornment>
+                    ),
+                  }}
+                />
+              )}
             />
           </Box>
 
