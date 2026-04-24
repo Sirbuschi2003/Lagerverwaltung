@@ -1722,7 +1722,8 @@ export const fetchMovementHistory = async (params: {
   limit?: number;
   offset?: number;
   warehouseId?: string;
-}): Promise<{ movements: MovementDto[]; summary: MovementSummary }> => {
+  source?: string;
+}): Promise<{ movements: MovementDto[]; total: number; summary: MovementSummary }> => {
   const query = new URLSearchParams();
   if (params.itemId) query.append("itemId", params.itemId);
   if (params.vehicleId) query.append("vehicleId", params.vehicleId);
@@ -1733,8 +1734,9 @@ export const fetchMovementHistory = async (params: {
   if (params.limit) query.append("limit", String(params.limit));
   if (params.offset) query.append("offset", String(params.offset));
   if (params.warehouseId) query.append("warehouseId", params.warehouseId);
+  if (params.source) query.append("source", params.source);
 
-  const response = await api.get<{ movements: MovementDto[]; summary: MovementSummary }>(`/stock/movements/history?${query.toString()}`);
+  const response = await api.get<{ movements: MovementDto[]; total: number; summary: MovementSummary }>(`/stock/movements/history?${query.toString()}`);
   return response.data;
 };
 

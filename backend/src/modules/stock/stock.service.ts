@@ -1676,7 +1676,8 @@ export class StockService {
     branchId?: string | null;
     locationIds?: string[];
     warehouseId?: string;
-  }): Promise<{ movements: StockMovement[]; summary: { totalCheckinQty: number; totalCheckoutQty: number; totalCheckinCount: number; totalCheckoutCount: number } }> {
+    source?: string;
+  }): Promise<{ movements: StockMovement[]; total: number; summary: { totalCheckinQty: number; totalCheckoutQty: number; totalCheckinCount: number; totalCheckoutCount: number } }> {
     const effectiveLocationIds = params.warehouseId
       ? await this.locationsService.getDescendantLocationIds(params.warehouseId, params.branchId)
       : params.locationIds;
@@ -1703,12 +1704,13 @@ export class StockService {
     if (params.type) qb.andWhere('movement.type = :type', { type: params.type });
     if (params.from) qb.andWhere('movement.occurredAt >= :from', { from: params.from });
     if (params.to) qb.andWhere('movement.occurredAt <= :to', { to: params.to });
+    if (params.source) qb.andWhere('movement.source LIKE :source', { source: `%${params.source}%` });
 
-    const limit = Math.min(params.limit || 200, 1000);
+    const limit = Math.min(params.limit || 50, 500);
     const offset = params.offset || 0;
     qb.take(limit).skip(offset);
 
-    const movements = await qb.getMany();
+    const [movements, total] = await qb.getManyAndCount();
 
     const summaryQb = this.movementsRepository
       .createQueryBuilder('movement')
@@ -1750,7 +1752,7 @@ export class StockService {
       }
     });
 
-    return { movements, summary };
+    return { movements, total, summary };
   }
 
   /**

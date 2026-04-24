@@ -151,6 +151,7 @@ export class StockController {
     @Query("limit") limit?: string,
     @Query("offset") offset?: string,
     @Query("warehouseId") warehouseId?: string,
+    @Query("source") source?: string,
   ) {
     const parsedFrom = from ? new Date(from) : undefined;
     const parsedTo = to ? new Date(to) : undefined;
@@ -168,6 +169,7 @@ export class StockController {
       branchId: req.user?.branchId,
       locationIds: req.user?.locationIds,
       warehouseId,
+      source: source || undefined,
     });
     return data;
   }

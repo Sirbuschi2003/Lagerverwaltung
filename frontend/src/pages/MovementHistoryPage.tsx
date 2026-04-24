@@ -16,6 +16,7 @@ import {
   TableContainer,
   TableHead,
   TableRow,
+  TablePagination,
   CircularProgress,
   Alert,
   Autocomplete,
@@ -40,6 +41,9 @@ const MovementHistoryTab: React.FC = () => {
   const [warehouseId, setWarehouseId] = useState<string>("");
   const [warehouses, setWarehouses] = useState<LocationDto[]>([]);
   const [data, setData] = useState<MovementDto[]>([]);
+  const [total, setTotal] = useState(0);
+  const [page, setPage] = useState(0);
+  const [rowsPerPage, setRowsPerPage] = useState(50);
   const [sourceSearch, setSourceSearch] = useState("");
   const [summary, setSummary] = useState<{ totalCheckinQty: number; totalCheckoutQty: number; totalCheckinCount: number; totalCheckoutCount: number } | null>(null);
   const [loading, setLoading] = useState(false);
@@ -86,7 +90,7 @@ const MovementHistoryTab: React.FC = () => {
     return opts;
   }, [users, data]);
 
-  const loadData = async () => {
+  const loadData = async (currentPage = page, rpp = rowsPerPage) => {
     setLoading(true);
     setError(null);
     const fromDate = filters.from ? dayjs(filters.from, "YYYY-MM-DD").startOf("day") : null;
@@ -99,39 +103,24 @@ const MovementHistoryTab: React.FC = () => {
         type: filters.type ? (filters.type as "CHECKIN" | "CHECKOUT") : undefined,
         from: fromDate?.isValid() ? fromDate.toDate().toISOString() : undefined,
         to: toDate?.isValid() ? toDate.toDate().toISOString() : undefined,
-        limit: 500,
+        limit: rpp,
+        offset: currentPage * rpp,
         warehouseId: warehouseId || undefined,
+        source: sourceSearch.trim() || undefined,
       });
-      // Clientseitiger Filter zur Sicherheit (falls Backend-Zeitzonen/Parsing abweicht)
-      const filteredMovements = res.movements.filter((m) => {
-        const ts = dayjs(m.occurredAt);
-        if (fromDate && fromDate.isValid() && ts.isBefore(fromDate)) return false;
-        if (toDate && toDate.isValid() && ts.isAfter(toDate)) return false;
-        return true;
-      });
-
-      const computedSummary = filteredMovements.reduce(
-        (acc, m) => {
-          if (m.type === "CHECKIN") {
-            acc.totalCheckinQty += m.quantity;
-            acc.totalCheckinCount += 1;
-          } else if (m.type === "CHECKOUT") {
-            acc.totalCheckoutQty += m.quantity;
-            acc.totalCheckoutCount += 1;
-          }
-          return acc;
-        },
-        { totalCheckinQty: 0, totalCheckoutQty: 0, totalCheckinCount: 0, totalCheckoutCount: 0 }
-      );
-
-      setData(filteredMovements);
-      setSourceSearch("");
-      setSummary(computedSummary);
+      setData(res.movements);
+      setTotal(res.total);
+      setSummary(res.summary);
     } catch (err: any) {
       setError(err?.response?.data?.message || "Bewegungen konnten nicht geladen werden");
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleFilter = () => {
+    setPage(0);
+    void loadData(0, rowsPerPage);
   };
 
   useEffect(() => {
@@ -237,7 +226,7 @@ const MovementHistoryTab: React.FC = () => {
             sx={{ minWidth: 200 }}
             placeholder="z.B. A-1234"
           />
-          <Button variant="contained" onClick={loadData} disabled={loading}>
+          <Button variant="contained" onClick={handleFilter} disabled={loading}>
             {loading ? "Lade..." : "Filtern"}
           </Button>
         </Stack>
@@ -313,6 +302,7 @@ const MovementHistoryTab: React.FC = () => {
         ) : data.length === 0 ? (
           <Alert severity="info">Keine Bewegungen gefunden.</Alert>
         ) : (
+          <>
           <TableContainer>
             <Table size="small">
               <TableHead>
@@ -328,9 +318,7 @@ const MovementHistoryTab: React.FC = () => {
                 </TableRow>
               </TableHead>
               <TableBody>
-                {data
-                  .filter((m) => !sourceSearch.trim() || (m.source ?? "").toLowerCase().includes(sourceSearch.trim().toLowerCase()))
-                  .map((m) => (
+                {data.map((m) => (
                   <TableRow key={m.id}>
                     <TableCell>{dayjs(m.occurredAt).format("DD.MM.YYYY HH:mm")}</TableCell>
                     <TableCell>{m.type === "CHECKIN" ? "Einbuchung" : "Ausbuchung"}</TableCell>
@@ -345,6 +333,26 @@ const MovementHistoryTab: React.FC = () => {
               </TableBody>
             </Table>
           </TableContainer>
+          <TablePagination
+            component="div"
+            count={total}
+            page={page}
+            rowsPerPage={rowsPerPage}
+            onPageChange={(_, newPage) => {
+              setPage(newPage);
+              void loadData(newPage, rowsPerPage);
+            }}
+            onRowsPerPageChange={(e) => {
+              const rpp = parseInt(e.target.value, 10);
+              setRowsPerPage(rpp);
+              setPage(0);
+              void loadData(0, rpp);
+            }}
+            rowsPerPageOptions={[25, 50, 100]}
+            labelRowsPerPage="Zeilen:"
+            labelDisplayedRows={({ from, to, count }) => `${from}–${to} von ${count}`}
+          />
+          </>
         )}
       </Paper>
 
