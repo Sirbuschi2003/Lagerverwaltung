@@ -40,6 +40,7 @@ const MovementHistoryTab: React.FC = () => {
   const [warehouseId, setWarehouseId] = useState<string>("");
   const [warehouses, setWarehouses] = useState<LocationDto[]>([]);
   const [data, setData] = useState<MovementDto[]>([]);
+  const [sourceSearch, setSourceSearch] = useState("");
   const [summary, setSummary] = useState<{ totalCheckinQty: number; totalCheckoutQty: number; totalCheckinCount: number; totalCheckoutCount: number } | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -124,6 +125,7 @@ const MovementHistoryTab: React.FC = () => {
       );
 
       setData(filteredMovements);
+      setSourceSearch("");
       setSummary(computedSummary);
     } catch (err: any) {
       setError(err?.response?.data?.message || "Bewegungen konnten nicht geladen werden");
@@ -227,6 +229,14 @@ const MovementHistoryTab: React.FC = () => {
             onChange={(e) => setFilters((f) => ({ ...f, to: e.target.value }))}
             sx={{ minWidth: 180 }}
           />
+          <TextField
+            size="small"
+            label="Vorgangsnummer / Quelle"
+            value={sourceSearch}
+            onChange={(e) => setSourceSearch(e.target.value)}
+            sx={{ minWidth: 200 }}
+            placeholder="z.B. A-1234"
+          />
           <Button variant="contained" onClick={loadData} disabled={loading}>
             {loading ? "Lade..." : "Filtern"}
           </Button>
@@ -318,7 +328,9 @@ const MovementHistoryTab: React.FC = () => {
                 </TableRow>
               </TableHead>
               <TableBody>
-                {data.map((m) => (
+                {data
+                  .filter((m) => !sourceSearch.trim() || (m.source ?? "").toLowerCase().includes(sourceSearch.trim().toLowerCase()))
+                  .map((m) => (
                   <TableRow key={m.id}>
                     <TableCell>{dayjs(m.occurredAt).format("DD.MM.YYYY HH:mm")}</TableCell>
                     <TableCell>{m.type === "CHECKIN" ? "Einbuchung" : "Ausbuchung"}</TableCell>
