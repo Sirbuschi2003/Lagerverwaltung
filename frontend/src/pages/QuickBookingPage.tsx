@@ -348,7 +348,7 @@ const QuickBookingPage: React.FC = () => {
           : `${failedMessages.length} Fehler: ${failedMessages.slice(0, 3).join(" | ")}${failedMessages.length > 3 ? " …" : ""}`,
       );
     }
-    refocusBarcode();
+    setTimeout(() => referenceRef.current?.focus(), 80);
   };
 
   const handleLoschen = () => {
