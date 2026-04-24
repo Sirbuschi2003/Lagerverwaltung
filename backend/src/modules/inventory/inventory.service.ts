@@ -70,7 +70,7 @@ export class InventoryService {
     this.hmacSecret = `inventory-checksum-v1:${secret}`;
   }
 
-  findSessions(branchId?: string | null) {
+  findSessions(branchId?: string | null, requestingUserId?: string, isManager?: boolean) {
     const where: Record<string, unknown> = {};
     if (branchId) {
       where.branchId = branchId;
@@ -79,6 +79,12 @@ export class InventoryService {
       where,
       relations: ["lines", "vehicleStatuses", "vehicleStatuses.vehicle", "branch"],
       order: { startedAt: "DESC" },
+    }).then((sessions) => {
+      if (isManager) return sessions;
+      // Nicht-Manager sehen nur Sitzungen ohne Zuordnung ODER die ihnen zugeordnet sind
+      return sessions.filter(
+        (s) => s.assignedUserId === null || s.assignedUserId === requestingUserId,
+      );
     });
   }
 
@@ -158,6 +164,7 @@ export class InventoryService {
       completedAt: null,
       status: InventorySessionStatus.DRAFT,
       branchId: dto.branchId ?? null,
+      assignedUserId: dto.assignedUserId ?? null,
     });
     return this.sessionsRepository.save(session);
   }

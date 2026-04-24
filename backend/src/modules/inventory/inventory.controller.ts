@@ -54,7 +54,8 @@ export class InventoryController {
   @Get()
   @Roles("MANAGER", "WAREHOUSE", "TECHNICIAN")
   findSessions(@Req() req: InventoryRequest) {
-    return this.inventoryService.findSessions(req.user?.branchId);
+    const isManager = req.user?.role === "MANAGER";
+    return this.inventoryService.findSessions(req.user?.branchId, req.user?.id, isManager);
   }
 
   @Post("start")

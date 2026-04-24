@@ -22,7 +22,7 @@ const refreshAccessToken = async (): Promise<string> => {
       ...state,
       token: accessToken,
       lastActivity: Date.now(),
-      user: state.user, // unverändert
+      user: state.user, 
     }));
   } catch (err) {
     console.warn("[API] Konnte Auth-Store nach Refresh nicht aktualisieren", err);
@@ -977,6 +977,7 @@ export interface InventorySessionDto {
   lines: InventoryLineDto[];
   branchId?: string | null;
   branch?: { id: string; name: string } | null;
+  assignedUserId?: string | null;
 }
 
 export interface InventoryLineDto {
@@ -996,6 +997,7 @@ export interface StartInventoryRequest {
   createdBy: string;
   location?: string | null;
   startedAt?: string;
+  assignedUserId?: string | null;
 }
 
 export interface RecordInventoryLineRequest {

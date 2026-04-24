@@ -1,4 +1,4 @@
-import { IsDateString, IsOptional, IsString, MaxLength } from "class-validator";
+import { IsDateString, IsOptional, IsString, IsUUID, MaxLength } from "class-validator";
 
 export class StartInventoryDto {
   @IsString()
@@ -17,5 +17,9 @@ export class StartInventoryDto {
   @IsOptional()
   @IsDateString()
   startedAt?: string;
+
+  @IsOptional()
+  @IsUUID()
+  assignedUserId?: string | null;
 }
 

@@ -74,6 +74,9 @@ export class InventorySession {
   vehicleStatuses?: InventoryVehicleStatus[];
 
   @Column({ type: "char", length: 36, nullable: true })
+  assignedUserId!: string | null;
+
+  @Column({ type: "char", length: 36, nullable: true })
   branchId!: string | null;
 
   @ManyToOne(() => Branch, { nullable: true, onDelete: "RESTRICT", eager: false })
