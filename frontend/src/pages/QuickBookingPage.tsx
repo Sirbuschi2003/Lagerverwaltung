@@ -81,6 +81,7 @@ const QuickBookingPage: React.FC = () => {
   const [syncConnected, setSyncConnected] = useState(false);
 
   const barcodeRef = useRef<HTMLInputElement>(null);
+  const referenceRef = useRef<HTMLInputElement>(null);
   // Ref damit handleScan immer den aktuellen Inhalt der Liste sieht (stale-closure-safe)
   const bookingListRef = useRef<BookingEntry[]>([]);
   useEffect(() => { bookingListRef.current = bookingList; }, [bookingList]);
@@ -93,6 +94,10 @@ const QuickBookingPage: React.FC = () => {
 
   useEffect(() => {
     void loadItems();
+  }, []);
+
+  useEffect(() => {
+    setTimeout(() => referenceRef.current?.focus(), 100);
   }, []);
 
   // ── Socket.io Echtzeit-Sync ───────────────────────────────────────────────
@@ -388,7 +393,7 @@ const QuickBookingPage: React.FC = () => {
             <Typography variant="caption" sx={{ fontWeight: 700, display: "block", mb: 0.5 }}>
               Buchungsart
             </Typography>
-            <RadioGroup value={mode} onChange={(e) => setMode(e.target.value as BookingMode)}>
+            <RadioGroup value={mode} onChange={(e) => { setMode(e.target.value as BookingMode); refocusBarcode(); }}>
               <FormControlLabel
                 value="CHECKOUT"
                 control={<Radio size="small" />}
@@ -417,7 +422,6 @@ const QuickBookingPage: React.FC = () => {
               }}
               size="small"
               fullWidth
-              autoFocus
               disabled={busy}
               error={itemNotFound}
               helperText={itemNotFound ? "Artikel nicht gefunden" : " "}
@@ -448,6 +452,7 @@ const QuickBookingPage: React.FC = () => {
           {/* Vorgangsnummer */}
           <Box sx={{ flex: 1, minWidth: 160 }}>
             <TextField
+              inputRef={referenceRef}
               label={
                 <Stack direction="row" spacing={0.5} alignItems="center">
                   <span>Vorgangsnummer</span>
@@ -458,6 +463,9 @@ const QuickBookingPage: React.FC = () => {
               }
               value={reference}
               onChange={(e) => setReference(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") refocusBarcode();
+              }}
               size="small"
               fullWidth
               helperText=" "
