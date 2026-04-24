@@ -355,6 +355,7 @@ const QuickBookingPage: React.FC = () => {
       remoteUpdateRef.current = true;
       setBookingList([]);
       setCurrentItem(null);
+      setReference("");
     } else {
       showError(
         failedMessages.length === 1
