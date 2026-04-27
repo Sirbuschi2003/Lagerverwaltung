@@ -30,7 +30,6 @@ import useAuthStore from "../../store/useAuthStore";
 
 const WIDGET_LABELS: Record<DashboardWidgetId, string> = {
   kpi: "KPI Übersicht (Artikel, Sollbestand, Inventuren)",
-  "quick-actions": "Schnellzugriff-Buttons (Dashboard-Widget)",
   restock: "Nachbestellung / Teileübersicht",
   "recent-movements": "Letzte Buchungen",
 };

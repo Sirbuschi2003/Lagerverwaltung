@@ -5,7 +5,6 @@ import { useBackgroundSync } from "../hooks/useBackgroundSync";
 import { useUserSettingsStore } from "../store/useUserSettingsStore";
 import type { DashboardWidgetId } from "../store/useUserSettingsStore";
 import DashboardKpiWidget from "../components/dashboard/DashboardKpiWidget";
-import DashboardQuickActionsWidget from "../components/dashboard/DashboardQuickActionsWidget";
 import DashboardRestockWidget from "../components/dashboard/DashboardRestockWidget";
 import DashboardRecentMovementsWidget from "../components/dashboard/DashboardRecentMovementsWidget";
 import DashboardSettingsDialog from "../components/dashboard/DashboardSettingsDialog";
@@ -30,8 +29,6 @@ const DashboardPage = () => {
     switch (widgetId) {
       case "kpi":
         return <DashboardKpiWidget />;
-      case "quick-actions":
-        return <DashboardQuickActionsWidget />;
       case "restock":
         return <DashboardRestockWidget />;
       case "recent-movements":
