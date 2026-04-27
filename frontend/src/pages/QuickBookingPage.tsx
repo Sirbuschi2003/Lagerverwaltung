@@ -82,9 +82,10 @@ const QuickBookingPage: React.FC = () => {
   const [cameraOpen, setCameraOpen] = useState(false);
   const [cameraScanFeedback, setCameraScanFeedback] = useState<CameraScanFeedback | null>(null);
   const [syncConnected, setSyncConnected] = useState(false);
+  const workflowKey = `lv-qb-workflow-${user?.id ?? "default"}`;
   const [vorgangsnummerFirst, setVorgangsnummerFirst] = useState<boolean>(() => {
     try {
-      const stored = localStorage.getItem("lv-qb-workflow");
+      const stored = localStorage.getItem(`lv-qb-workflow-${user?.id ?? "default"}`);
       return stored === null ? true : stored === "true";
     } catch {
       return true;
@@ -94,7 +95,7 @@ const QuickBookingPage: React.FC = () => {
   const toggleWorkflow = () => {
     setVorgangsnummerFirst((prev) => {
       const next = !prev;
-      try { localStorage.setItem("lv-qb-workflow", String(next)); } catch { /* ignore */ }
+      try { localStorage.setItem(workflowKey, String(next)); } catch { /* ignore */ }
       return next;
     });
   };
