@@ -573,6 +573,7 @@ export class StockService {
     });
     const warehouseAvailability = await this.getWarehouseAvailabilityByItemIds(
       requests.map((request) => request.item.id),
+      vehicle.branchId ?? undefined,
     );
     return requests.map((request: RestockRequest) => this.mapRestockRequest(request, warehouseAvailability));
   }
@@ -633,6 +634,8 @@ export class StockService {
     const requests = await requestsQb.getMany();
     const warehouseAvailability = await this.getWarehouseAvailabilityByItemIds(
       requests.map((request) => request.item.id),
+      branchId,
+      locationIds,
     );
     return requests.map((request: RestockRequest) => this.mapRestockRequest(request, warehouseAvailability));
   }
@@ -708,7 +711,10 @@ export class StockService {
       }
 
       await this.logRestockRequest(finalized, finalized.preparedBy);
-      const warehouseAvailability = await this.getWarehouseAvailabilityByItemIds([finalized.item.id]);
+      const warehouseAvailability = await this.getWarehouseAvailabilityByItemIds(
+        [finalized.item.id],
+        finalized.vehicle?.branchId ?? undefined,
+      );
       return this.mapRestockRequest(finalized, warehouseAvailability);
     }
 
@@ -792,27 +798,46 @@ export class StockService {
       }
     }
 
-    const warehouseAvailability = await this.getWarehouseAvailabilityByItemIds([updated.item.id]);
+    const warehouseAvailability = await this.getWarehouseAvailabilityByItemIds(
+      [updated.item.id],
+      updated.vehicle?.branchId ?? undefined,
+    );
     return this.mapRestockRequest(updated, warehouseAvailability);
   }
 
-  private async getWarehouseAvailabilityByItemIds(itemIds: string[]): Promise<Map<string, number>> {
+  private async getWarehouseAvailabilityByItemIds(
+    itemIds: string[],
+    branchId?: string | null,
+    locationIds?: string[],
+  ): Promise<Map<string, number>> {
     const uniqueItemIds = Array.from(new Set(itemIds.filter(Boolean)));
     const result = new Map<string, number>();
     if (uniqueItemIds.length === 0) {
       return result;
     }
 
-    const rows = await this.stockLevelsRepository
+    const qb = this.stockLevelsRepository
       .createQueryBuilder("stock")
       .leftJoin("stock.location", "location")
       .select("stock.itemId", "itemId")
       .addSelect("COALESCE(SUM(stock.quantity), 0)", "quantity")
       .where("stock.itemId IN (:...itemIds)", { itemIds: uniqueItemIds })
       .andWhere("stock.vehicleId IS NULL")
-      .andWhere("(location.type IS NULL OR location.type != :vehicleType)", { vehicleType: "VEHICLE" })
-      .groupBy("stock.itemId")
-      .getRawMany<{ itemId: string; quantity: string }>();
+      .andWhere("(location.type IS NULL OR location.type != :vehicleType)", { vehicleType: "VEHICLE" });
+
+    if (branchId) {
+      qb.andWhere("location.branchId = :branchId", { branchId });
+    }
+
+    if (locationIds?.length) {
+      qb.leftJoin("location.parent", "locationParent");
+      qb.andWhere(
+        "(location.id IN (:...locationIds) OR locationParent.id IN (:...locationIds))",
+        { locationIds },
+      );
+    }
+
+    const rows = await qb.groupBy("stock.itemId").getRawMany<{ itemId: string; quantity: string }>();
 
     for (const row of rows) {
       result.set(row.itemId, Number(row.quantity) || 0);
