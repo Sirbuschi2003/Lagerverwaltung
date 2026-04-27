@@ -80,7 +80,11 @@ export class StockController {
   @Get("shortages")
   getRestockOverview(@Req() req: StockRequest, @Query("status") status?: string) {
     this.logger.debug(`getRestockOverview status=${status}`);
-    return this.stockService.getRestockOverview({ status: this.parseRestockStatus(status) }, req.user?.branchId);
+    return this.stockService.getRestockOverview(
+      { status: this.parseRestockStatus(status) },
+      req.user?.branchId,
+      req.user?.locationIds,
+    );
   }
 
   @Patch("vehicle/:vehicleId/target")

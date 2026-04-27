@@ -577,7 +577,7 @@ export class StockService {
     return requests.map((request: RestockRequest) => this.mapRestockRequest(request, warehouseAvailability));
   }
 
-  async getRestockOverview(params: { status?: RestockRequestStatus | "OPEN" }, branchId?: string | null): Promise<RestockRequestView[]> {
+  async getRestockOverview(params: { status?: RestockRequestStatus | "OPEN" }, branchId?: string | null, locationIds?: string[]): Promise<RestockRequestView[]> {
     // Erledigte Requests aelter als 5 Stunden bereinigen
     const fiveHoursAgo = new Date(Date.now() - 5 * 60 * 60 * 1000);
     await this.restockRepository.delete({ status: "FULFILLED", fulfilledAt: LessThan(fiveHoursAgo) });
@@ -604,6 +604,8 @@ export class StockService {
     const requestsQb = this.restockRepository
       .createQueryBuilder("request")
       .leftJoinAndSelect("request.item", "item")
+      .leftJoin("item.storageLocation", "itemStorageLocation")
+      .leftJoin("itemStorageLocation.parent", "itemStorageLocationParent")
       .leftJoinAndSelect("request.vehicle", "vehicle")
       .leftJoinAndSelect("request.stockLevel", "stockLevel")
       .leftJoinAndSelect("request.location", "location")
@@ -620,6 +622,12 @@ export class StockService {
     }
     if (branchId) {
       requestsQb.andWhere("vehicle.branchId = :branchId", { branchId });
+    }
+    if (locationIds?.length) {
+      requestsQb.andWhere(
+        "(itemStorageLocation.id IN (:...locationIds) OR itemStorageLocationParent.id IN (:...locationIds))",
+        { locationIds },
+      );
     }
 
     const requests = await requestsQb.getMany();
