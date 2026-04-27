@@ -309,9 +309,6 @@ const OrderSuggestionsTab: React.FC = () => {
   useEffect(() => {
     const timers: ReturnType<typeof setTimeout>[] = [];
     wizardGroups.forEach((group) => {
-      // Keine Suche wenn bereits ein Artikel ausgewählt
-      if (addItems[group.supplierId]) return;
-
       const search = addSearches[group.supplierId] ?? "";
       if (search.length < 2) {
         setAddOptions((prev) => ({ ...prev, [group.supplierId]: [] }));
@@ -319,7 +316,7 @@ const OrderSuggestionsTab: React.FC = () => {
       }
       const t = setTimeout(async () => {
         try {
-          const result = await fetchItems({ search, limit: 15 });
+          const result = await fetchItems({ search, limit: 50 });
           setAddOptions((prev) => ({ ...prev, [group.supplierId]: result.items ?? [] }));
         } catch {
           // ignore
@@ -328,7 +325,7 @@ const OrderSuggestionsTab: React.FC = () => {
       timers.push(t);
     });
     return () => timers.forEach(clearTimeout);
-  }, [addSearches, addItems, wizardGroups]);
+  }, [addSearches, wizardGroups]);
 
   const supplierOptions = useMemo(() => {
     const seen = new Map<string, string>();
@@ -1086,6 +1083,7 @@ const OrderSuggestionsTab: React.FC = () => {
                         onInputChange={(_, val, reason) => {
                           if (reason === "input") {
                             setAddSearches((prev) => ({ ...prev, [group.supplierId]: val }));
+                            setAddItems((prev) => ({ ...prev, [group.supplierId]: null }));
                           } else if (reason === "clear") {
                             setAddSearches((prev) => ({ ...prev, [group.supplierId]: "" }));
                             setAddItems((prev) => ({ ...prev, [group.supplierId]: null }));
