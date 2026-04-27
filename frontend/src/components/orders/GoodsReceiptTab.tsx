@@ -37,6 +37,7 @@ import {
   type PurchaseOrderLineDto,
 } from "../../utils/api";
 import { findItemByCode } from "../../utils/itemLookup";
+import ItemEditDialog from "../items/ItemEditDialog";
 
 type DeliveryState = "OPEN" | "PARTIAL" | "COMPLETE";
 
@@ -153,6 +154,7 @@ const GoodsReceiptTab: React.FC = () => {
   const [scanCandidate, setScanCandidate] = useState<ScanCandidate | null>(null);
   const [scanFeedback, setScanFeedback] = useState<string | null>(null);
   const barcodeInputRef = useRef<HTMLInputElement | null>(null);
+  const [itemDialogId, setItemDialogId] = useState<string | null>(null);
 
   const focusBarcodeInput = () => {
     window.setTimeout(() => {
@@ -657,7 +659,9 @@ const GoodsReceiptTab: React.FC = () => {
                   return (
                     <TableRow
                       key={line.id}
+                      onDoubleClick={() => { if (line.item?.id) setItemDialogId(line.item.id); }}
                       sx={{
+                        cursor: "pointer",
                         backgroundColor: highlighted
                           ? alpha(theme.palette.primary.main, 0.1)
                           : undefined,
@@ -682,6 +686,7 @@ const GoodsReceiptTab: React.FC = () => {
                           size="small"
                           value={value}
                           inputProps={{ min: 0, max: remaining }}
+                          onFocus={(e) => e.target.select()}
                           onChange={(event) => {
                             const parsed = Number.parseInt(event.target.value, 10);
                             handleQuantityChange(line.id, Number.isNaN(parsed) ? 0 : parsed, remaining);
@@ -708,6 +713,8 @@ const GoodsReceiptTab: React.FC = () => {
           </Button>
         </DialogActions>
       </Dialog>
+
+      <ItemEditDialog itemId={itemDialogId} open={!!itemDialogId} onClose={() => setItemDialogId(null)} />
     </Box>
   );
 };

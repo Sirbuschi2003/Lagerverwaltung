@@ -35,6 +35,7 @@ import ArchiveIcon from "@mui/icons-material/Archive";
 import CheckCircleIcon from "@mui/icons-material/CheckCircle";
 
 import useAuthStore from "../../store/useAuthStore";
+import ItemEditDialog from "../items/ItemEditDialog";
 import {
   deletePurchaseOrder,
   fetchPurchaseOrderPdf,
@@ -104,6 +105,7 @@ const ActiveOrdersTab: React.FC = () => {
   const [receiving, setReceiving] = useState(false);
 
   const [deleteTarget, setDeleteTarget] = useState<PurchaseOrderDto | null>(null);
+  const [itemDialogId, setItemDialogId] = useState<string | null>(null);
 
   const loadOrders = async (status?: PurchaseOrderStatus) => {
     setLoading(true);
@@ -520,7 +522,13 @@ const ActiveOrdersTab: React.FC = () => {
                 return (
                   <TableRow key={line.id}>
                     <TableCell>
-                      <Typography variant="body2" sx={{ fontWeight: 600 }}>{line.item.code} – {line.item.description}</Typography>
+                      <Typography
+                        variant="body2"
+                        sx={{ fontWeight: 600, cursor: line.item?.id ? "pointer" : undefined, "&:hover": line.item?.id ? { textDecoration: "underline" } : undefined }}
+                        onClick={() => { if (line.item?.id) setItemDialogId(line.item.id); }}
+                      >
+                        {line.item.code} – {line.item.description}
+                      </Typography>
                       {line.item.descriptionSecondary && (
                         <Typography variant="body2" color="text.secondary">{line.item.descriptionSecondary}</Typography>
                       )}
@@ -533,6 +541,7 @@ const ActiveOrdersTab: React.FC = () => {
                         type="number"
                         size="small"
                         value={currentReceiving}
+                        onFocus={(e) => e.target.select()}
                         onChange={(event) => {
                           const value = Math.max(0, Math.min(remaining, Number.parseInt(event.target.value, 10) || 0));
                           setReceiveQuantities({
@@ -576,6 +585,8 @@ const ActiveOrdersTab: React.FC = () => {
           </Button>
         </DialogActions>
       </Dialog>
+
+      <ItemEditDialog itemId={itemDialogId} open={!!itemDialogId} onClose={() => setItemDialogId(null)} />
     </Box>
   );
 };

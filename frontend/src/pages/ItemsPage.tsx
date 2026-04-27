@@ -2743,7 +2743,7 @@ TB-FC330,Toner Schwarz,Toshiba,Toner,5,89.90,Regal 3 / Fach 1`}
             </TableHead>
           <TableBody>
             {paginatedItems.map((item: any) => (
-              <TableRow key={item.id} hover>
+              <TableRow key={item.id} hover onClick={() => handleOpenEdit(item.id)} sx={{ cursor: "pointer" }}>
                 <TableCell sx={{ width: 48, p: 0.5 }}>
                   {item.imagePath ? (
                     <Box
@@ -2788,7 +2788,7 @@ TB-FC330,Toner Schwarz,Toshiba,Toner,5,89.90,Regal 3 / Fach 1`}
                     <IconButton
                       size="small"
                       color="error"
-                      onClick={() => setDeleteTarget(item.id)}
+                      onClick={(e) => { e.stopPropagation(); setDeleteTarget(item.id); }}
                     >
                       <DeleteIcon fontSize="small" />
                     </IconButton>

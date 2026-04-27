@@ -9,8 +9,10 @@ import {
   DialogActions,
   DialogContent,
   DialogTitle,
+  Divider,
   Grid,
   IconButton,
+  Stack,
   TextField,
   Tooltip,
   Typography,
@@ -18,6 +20,8 @@ import {
 import QrCodeScannerIcon from "@mui/icons-material/QrCodeScanner";
 import AddPhotoAlternateIcon from "@mui/icons-material/AddPhotoAlternate";
 import DeleteIcon from "@mui/icons-material/Delete";
+import AddIcon from "@mui/icons-material/Add";
+import RemoveIcon from "@mui/icons-material/Remove";
 import {
   fetchItemById,
   updateItem,
@@ -169,6 +173,8 @@ const ItemEditDialog: React.FC<ItemEditDialogProps> = ({ itemId, open, onClose, 
   const [altCodeScanOpen, setAltCodeScanOpen] = useState(false);
   const [imageUploading, setImageUploading] = useState(false);
   const [imageKey, setImageKey] = useState(0); // bump to force img reload
+  const [bookingLoading, setBookingLoading] = useState(false);
+  const [bookingSuccess, setBookingSuccess] = useState<string | null>(null);
 
   // Daten laden wenn Dialog öffnet
   useEffect(() => {
@@ -197,6 +203,8 @@ const ItemEditDialog: React.FC<ItemEditDialogProps> = ({ itemId, open, onClose, 
       setForm(emptyForm());
       setOriginalItem(null);
       setError(null);
+      setBookingLoading(false);
+      setBookingSuccess(null);
     }
   }, [open]);
 
@@ -324,6 +332,35 @@ const ItemEditDialog: React.FC<ItemEditDialogProps> = ({ itemId, open, onClose, 
       orderQuantity: form.orderQuantity !== undefined && form.orderQuantity > 0 ? form.orderQuantity : undefined,
       alternateCodes,
     };
+  };
+
+  // ─── Manuelle Buchung ─────────────────────────────────────────────────────
+
+  const handleManualBooking = async (type: "CHECKIN" | "CHECKOUT") => {
+    if (!itemId || !originalItem?.storageLocation?.id) return;
+    setBookingLoading(true);
+    setBookingSuccess(null);
+    setError(null);
+    try {
+      await recordMovement({
+        itemId,
+        locationId: originalItem.storageLocation.id,
+        userId: user?.id ?? undefined,
+        type,
+        quantity: 1,
+        occurredAt: new Date().toISOString(),
+        source: "Manuelle Buchung",
+      });
+      const updated = await fetchItemById(itemId);
+      setOriginalItem(updated);
+      setForm((f) => ({ ...f, currentQuantity: updated.storageLocation ? (updated.currentQuantity ?? 0) : undefined }));
+      setBookingSuccess(type === "CHECKIN" ? "+1 eingebucht" : "-1 ausgebucht");
+      setTimeout(() => setBookingSuccess(null), 3000);
+    } catch {
+      setError("Buchung fehlgeschlagen.");
+    } finally {
+      setBookingLoading(false);
+    }
   };
 
   // ─── Submit ───────────────────────────────────────────────────────────────
@@ -674,6 +711,42 @@ const ItemEditDialog: React.FC<ItemEditDialogProps> = ({ itemId, open, onClose, 
                     </Tooltip>
                   </Box>
                 </Grid>
+                {originalItem?.storageLocation && (
+                  <Grid item xs={12}>
+                    <Divider sx={{ mb: 1.5 }} />
+                    <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 700 }}>
+                      Manuelle Buchung
+                    </Typography>
+                    <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap">
+                      <Button
+                        variant="outlined"
+                        color="success"
+                        size="small"
+                        disabled={bookingLoading || loadingItem}
+                        onClick={() => void handleManualBooking("CHECKIN")}
+                        startIcon={bookingLoading ? <CircularProgress size={14} /> : <AddIcon />}
+                      >
+                        +1 einbuchen
+                      </Button>
+                      <Button
+                        variant="outlined"
+                        color="error"
+                        size="small"
+                        disabled={bookingLoading || loadingItem}
+                        onClick={() => void handleManualBooking("CHECKOUT")}
+                        startIcon={<RemoveIcon />}
+                      >
+                        -1 ausbuchen
+                      </Button>
+                      {bookingSuccess && (
+                        <Typography variant="body2" color="success.main" sx={{ fontWeight: 600 }}>
+                          {bookingSuccess}
+                        </Typography>
+                      )}
+                    </Stack>
+                  </Grid>
+                )}
+
                 {error && (
                   <Grid item xs={12}>
                     <Alert severity="error">{error}</Alert>
