@@ -568,7 +568,7 @@ export class StockService {
 
     const requests = await this.restockRepository.find({
       where: { vehicle: { id: vehicleId }, status: Not<RestockRequestStatus>("FULFILLED") },
-      relations: ["location", "location.parent"],
+      relations: ["item", "vehicle", "stockLevel", "location", "location.parent"],
       order: { status: "ASC", createdAt: "ASC" },
     });
     const warehouseAvailability = await this.getWarehouseAvailabilityByItemIds(
@@ -605,6 +605,7 @@ export class StockService {
       .createQueryBuilder("request")
       .leftJoinAndSelect("request.item", "item")
       .leftJoinAndSelect("request.vehicle", "vehicle")
+      .leftJoinAndSelect("request.stockLevel", "stockLevel")
       .leftJoinAndSelect("request.location", "location")
       .leftJoinAndSelect("location.parent", "locationParent")
       .orderBy("request.status", "ASC")
