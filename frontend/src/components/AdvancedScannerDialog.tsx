@@ -2,6 +2,7 @@ import React from "react";
 import {
   Box,
   Button,
+  CircularProgress,
   Dialog,
   DialogContent,
   DialogTitle,
@@ -41,21 +42,39 @@ const AdvancedScannerDialog: React.FC<AdvancedScannerDialogProps> = ({
         </IconButton>
       </DialogTitle>
       <DialogContent sx={{ p: 1 }}>
-        {!isSupported || error ? (
-          <Box sx={{ p: 2, textAlign: "center" }}>
-            <Typography color="error" gutterBottom>
-              {error ?? "Kamera wird auf diesem Gerät nicht unterstützt."}
-            </Typography>
-            <Button onClick={onClose} variant="outlined">Schließen</Button>
-          </Box>
-        ) : (
-          <Box sx={{ position: "relative", width: "100%", aspectRatio: "4/3", bgcolor: "black", borderRadius: 1, overflow: "hidden" }}>
-            <video
-              ref={videoRef}
-              style={{ width: "100%", height: "100%", objectFit: "cover" }}
-              playsInline
-              muted
-            />
+        <Box sx={{ position: "relative", width: "100%", aspectRatio: "4/3", bgcolor: "black", borderRadius: 1, overflow: "hidden" }}>
+          <video
+            ref={videoRef}
+            style={{ width: "100%", height: "100%", objectFit: "cover", display: error ? "none" : "block" }}
+            playsInline
+            muted
+          />
+
+          {/* Loading spinner while camera initializes */}
+          {!isSupported && !error && (
+            <Box sx={{
+              position: "absolute", inset: 0,
+              display: "flex", alignItems: "center", justifyContent: "center",
+              bgcolor: "black",
+            }}>
+              <CircularProgress sx={{ color: "white" }} />
+            </Box>
+          )}
+
+          {/* Error state */}
+          {error && (
+            <Box sx={{
+              position: "absolute", inset: 0,
+              display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
+              bgcolor: "black", p: 2, textAlign: "center",
+            }}>
+              <Typography color="error" gutterBottom>{error}</Typography>
+              <Button onClick={onClose} variant="outlined" sx={{ color: "white", borderColor: "white" }}>Schließen</Button>
+            </Box>
+          )}
+
+          {/* Scan frame overlay */}
+          {isSupported && !error && (
             <Box sx={{
               position: "absolute", inset: 0,
               display: "flex", alignItems: "center", justifyContent: "center",
@@ -68,8 +87,8 @@ const AdvancedScannerDialog: React.FC<AdvancedScannerDialogProps> = ({
                 boxShadow: "0 0 0 9999px rgba(0,0,0,0.45)",
               }} />
             </Box>
-          </Box>
-        )}
+          )}
+        </Box>
       </DialogContent>
     </Dialog>
   );
