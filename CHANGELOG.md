@@ -1,5 +1,29 @@
 # Changelog
 
+## [3.6.3] – 2026-04-27
+
+### Refactor: Benutzereinstellungen in der Datenbank gespeichert
+
+Alle benutzerspezifischen Einstellungen werden jetzt serverseitig im vorhandenen
+`/users/me/settings`-Endpunkt gespeichert und sind damit auf allen Geräten synchron.
+
+**Migrierte Einstellungen:**
+- **Schnellbuchung-Workflow** (Vorgangsnummer zuerst / direkt Barcode) – war gerätespezifisch in localStorage
+- **Theme-Modus** (hell / dunkel) – war gerätespezifisch in localStorage
+- **Theme-Preset** (Farbschema) – war gerätespezifisch in localStorage
+
+**Verhalten:**
+- Beim Login wird das Theme automatisch aus den DB-Settings angewendet
+- Änderungen werden sofort gespeichert und gelten auf allen Geräten
+- Offline-Fallback: localStorage bleibt als Cache erhalten
+
+**Nicht migriert (bewusst gerätespezifisch belassen):**
+- Kamera-Auswahl (Barcode-Scanner) – gerätespezifisches Peripheriegerät
+- Offline-Buchungsqueue, Offline-Inventur – ephemere Gerätedaten
+- Dashboard-Cache – Offline-Cache, kein Setting
+
+---
+
 ## [3.6.2] – 2026-04-27
 
 ### Feature: Schnellbuchung – konfigurierbarer Startfokus

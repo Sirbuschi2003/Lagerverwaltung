@@ -1,8 +1,3 @@
-/**
- * Theme context with mode + preset selection.
- * Stores user preference in localStorage.
- */
-
 import React, { createContext, useContext, useEffect, useMemo, useState, ReactNode } from "react";
 
 import {
@@ -12,6 +7,7 @@ import {
   defaultThemePreset,
   themePresets,
 } from "../styles/designTokens";
+import { useUserSettingsStore } from "../store/useUserSettingsStore";
 
 interface ThemeContextType {
   mode: ThemeMode;
@@ -20,15 +16,16 @@ interface ThemeContextType {
   toggleTheme: () => void;
   setTheme: (mode: ThemeMode) => void;
   setPreset: (preset: ThemePresetId) => void;
+  syncFromExternal: (mode: string, preset: string) => void;
 }
 
 const THEME_MODE_STORAGE_KEY = "theme-mode";
 const THEME_PRESET_STORAGE_KEY = "theme-preset";
 
-const isThemeMode = (value: string | null): value is ThemeMode =>
+const isThemeMode = (value: string | null | undefined): value is ThemeMode =>
   value === "light" || value === "dark";
 
-const isThemePreset = (value: string | null): value is ThemePresetId =>
+const isThemePreset = (value: string | null | undefined): value is ThemePresetId =>
   value === "sunset" || value === "ocean" || value === "graphite" || value === "emerald";
 
 const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
@@ -36,10 +33,7 @@ const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
 export const ThemeProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [mode, setMode] = useState<ThemeMode>(() => {
     const savedMode = localStorage.getItem(THEME_MODE_STORAGE_KEY);
-    if (isThemeMode(savedMode)) {
-      return savedMode;
-    }
-
+    if (isThemeMode(savedMode)) return savedMode;
     if (typeof window !== "undefined") {
       return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
     }
@@ -54,7 +48,6 @@ export const ThemeProvider: React.FC<{ children: ReactNode }> = ({ children }) =
   useEffect(() => {
     localStorage.setItem(THEME_MODE_STORAGE_KEY, mode);
     localStorage.setItem(THEME_PRESET_STORAGE_KEY, preset);
-
     document.documentElement.setAttribute("data-theme", mode);
     document.documentElement.setAttribute("data-theme-mode", mode);
     document.documentElement.setAttribute("data-theme-preset", preset);
@@ -64,37 +57,37 @@ export const ThemeProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     const mediaQuery = window.matchMedia("(prefers-color-scheme: dark)");
     const handleChange = (event: MediaQueryListEvent) => {
       const savedMode = localStorage.getItem(THEME_MODE_STORAGE_KEY);
-      if (!savedMode) {
-        setMode(event.matches ? "dark" : "light");
-      }
+      if (!savedMode) setMode(event.matches ? "dark" : "light");
     };
-
     mediaQuery.addEventListener("change", handleChange);
     return () => mediaQuery.removeEventListener("change", handleChange);
   }, []);
 
-  const toggleTheme = () => {
-    setMode((prev) => (prev === "light" ? "dark" : "light"));
+  // Nur lokalen State und Cache aktualisieren, KEIN DB-Save (verhindert Loop)
+  const syncFromExternal = (newMode: string, newPreset: string) => {
+    if (isThemeMode(newMode)) setMode(newMode);
+    if (isThemePreset(newPreset)) setPresetState(newPreset);
   };
 
   const setTheme = (newMode: ThemeMode) => {
     setMode(newMode);
+    void useUserSettingsStore.getState().updateTheme(newMode, preset);
   };
 
   const setPreset = (newPreset: ThemePresetId) => {
     setPresetState(newPreset);
+    void useUserSettingsStore.getState().updateTheme(mode, newPreset);
+  };
+
+  const toggleTheme = () => {
+    const next: ThemeMode = mode === "light" ? "dark" : "light";
+    setMode(next);
+    void useUserSettingsStore.getState().updateTheme(next, preset);
   };
 
   const contextValue = useMemo<ThemeContextType>(
-    () => ({
-      mode,
-      preset,
-      availablePresets: themePresets,
-      toggleTheme,
-      setTheme,
-      setPreset,
-    }),
-    [mode, preset],
+    () => ({ mode, preset, availablePresets: themePresets, toggleTheme, setTheme, setPreset, syncFromExternal }),
+    [mode, preset], // eslint-disable-line react-hooks/exhaustive-deps
   );
 
   return <ThemeContext.Provider value={contextValue}>{children}</ThemeContext.Provider>;
@@ -102,8 +95,6 @@ export const ThemeProvider: React.FC<{ children: ReactNode }> = ({ children }) =
 
 export const useThemeMode = (): ThemeContextType => {
   const context = useContext(ThemeContext);
-  if (!context) {
-    throw new Error("useThemeMode muss innerhalb von ThemeProvider verwendet werden");
-  }
+  if (!context) throw new Error("useThemeMode muss innerhalb von ThemeProvider verwendet werden");
   return context;
 };

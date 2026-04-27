@@ -5,7 +5,9 @@ import { Outlet, useNavigate } from "react-router-dom";
 import axios from "axios";
 
 import useAuthStore from "../store/useAuthStore";
+import { useUserSettingsStore } from "../store/useUserSettingsStore";
 import { useNetworkStatus } from "../hooks/useNetworkStatus";
+import { useThemeMode } from "../hooks/useThemeMode";
 import NavigationDrawer from "./NavigationDrawer";
 import AppHeader from "./AppHeader";
 import { getAppLayoutStyles } from "../styles/componentStyles";
@@ -16,11 +18,25 @@ const AppLayout = () => {
   const user = useAuthStore((state: any) => state.user);
   const { isOnline } = useNetworkStatus();
   const layoutStyles = getAppLayoutStyles(theme);
+  const { settings, loaded: settingsLoaded, loadSettings } = useUserSettingsStore();
+  const { syncFromExternal } = useThemeMode();
 
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [vehicleData, setVehicleData] = useState<{ licensePlate?: string | null } | null>(null);
 
   const toggleDrawer = () => setDrawerOpen((prev) => !prev);
+
+  // Settings einmalig laden wenn noch nicht geladen
+  useEffect(() => {
+    if (!settingsLoaded) void loadSettings();
+  }, [settingsLoaded, loadSettings]);
+
+  // Theme aus DB-Settings anwenden sobald geladen
+  useEffect(() => {
+    if (!settingsLoaded) return;
+    const { themeMode, themePreset } = settings;
+    if (themeMode || themePreset) syncFromExternal(themeMode, themePreset);
+  }, [settingsLoaded]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const getVehicleId = () => {
     if (user?.vehicleId && user?.id) {
@@ -28,23 +44,17 @@ const AppLayout = () => {
       localStorage.setItem(cacheKey, user.vehicleId);
       return user.vehicleId;
     }
-
     if (user?.id) {
       const cacheKey = `lv-offline-vehicleId-${user.id}`;
       return localStorage.getItem(cacheKey);
     }
-
     return null;
   };
 
   useEffect(() => {
     const loadVehicle = async () => {
       const vehicleId = getVehicleId();
-      if (!vehicleId) {
-        setVehicleData(null);
-        return;
-      }
-
+      if (!vehicleId) { setVehicleData(null); return; }
       try {
         const response = await axios.get(`/api/vehicles/${vehicleId}`);
         setVehicleData(response.data ?? null);
@@ -52,14 +62,11 @@ const AppLayout = () => {
         setVehicleData(null);
       }
     };
-
     void loadVehicle();
   }, [user?.id, user?.vehicleId]);
 
   return (
-    <Box
-      sx={layoutStyles.root}
-    >
+    <Box sx={layoutStyles.root}>
       <AppHeader onMenuToggle={toggleDrawer} menuOpen={drawerOpen} />
       <NavigationDrawer open={drawerOpen} onClose={toggleDrawer} />
 

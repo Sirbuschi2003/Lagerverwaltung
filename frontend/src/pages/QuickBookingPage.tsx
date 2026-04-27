@@ -39,6 +39,7 @@ import CloseIcon from "@mui/icons-material/Close";
 import { io, type Socket } from "socket.io-client";
 import useItemsStore from "../store/useItemsStore";
 import useAuthStore from "../store/useAuthStore";
+import { useUserSettingsStore } from "../store/useUserSettingsStore";
 import { findItemByAnyCode, recordMovement, type ItemDto } from "../utils/api";
 import useScanSound from "../hooks/useScanSound";
 import { findItemByCode } from "../utils/itemLookup";
@@ -82,23 +83,10 @@ const QuickBookingPage: React.FC = () => {
   const [cameraOpen, setCameraOpen] = useState(false);
   const [cameraScanFeedback, setCameraScanFeedback] = useState<CameraScanFeedback | null>(null);
   const [syncConnected, setSyncConnected] = useState(false);
-  const workflowKey = `lv-qb-workflow-${user?.id ?? "default"}`;
-  const [vorgangsnummerFirst, setVorgangsnummerFirst] = useState<boolean>(() => {
-    try {
-      const stored = localStorage.getItem(`lv-qb-workflow-${user?.id ?? "default"}`);
-      return stored === null ? true : stored === "true";
-    } catch {
-      return true;
-    }
-  });
+  const { settings: userSettings, loaded: settingsLoaded, loadSettings, updateQuickBookingWorkflow } = useUserSettingsStore();
+  const vorgangsnummerFirst = userSettings.quickBookingWorkflow;
 
-  const toggleWorkflow = () => {
-    setVorgangsnummerFirst((prev) => {
-      const next = !prev;
-      try { localStorage.setItem(workflowKey, String(next)); } catch { /* ignore */ }
-      return next;
-    });
-  };
+  const toggleWorkflow = () => { void updateQuickBookingWorkflow(!vorgangsnummerFirst); };
 
   const barcodeWrapperRef = useRef<HTMLDivElement>(null);
   const referenceRef = useRef<HTMLInputElement>(null);
@@ -114,15 +102,17 @@ const QuickBookingPage: React.FC = () => {
 
   useEffect(() => {
     void loadItems();
-  }, []);
+    if (!settingsLoaded) void loadSettings();
+  }, []);  // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
+    if (!settingsLoaded) return;
     if (vorgangsnummerFirst) {
       setTimeout(() => referenceRef.current?.focus(), 100);
     } else {
       setTimeout(() => barcodeWrapperRef.current?.querySelector<HTMLInputElement>("input")?.focus(), 100);
     }
-  }, []);  // eslint-disable-line react-hooks/exhaustive-deps
+  }, [settingsLoaded]);  // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Socket.io Echtzeit-Sync ───────────────────────────────────────────────
   useEffect(() => {

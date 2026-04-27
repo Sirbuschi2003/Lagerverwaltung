@@ -21,6 +21,11 @@ export interface UserSettings {
   };
   quickActions: QuickAction[];
   privacyAcceptedVersion?: string;
+  // Workflow-Einstellungen
+  quickBookingWorkflow: boolean; // true = Vorgangsnummer zuerst, false = direkt Barcode
+  // Theme-Einstellungen ("" = nicht gesetzt, Gerät bestimmt)
+  themeMode: string;
+  themePreset: string;
 }
 
 const DEFAULT_SETTINGS: UserSettings = {
@@ -31,6 +36,9 @@ const DEFAULT_SETTINGS: UserSettings = {
   quickActions: [
     { id: "default-myvehicle", label: "Mein Fahrzeug", icon: "DirectionsCar", route: "/my-vehicle", color: "primary" },
   ],
+  quickBookingWorkflow: true,
+  themeMode: "",
+  themePreset: "",
 };
 
 function mergeWithDefaults(raw: Record<string, unknown>): UserSettings {
@@ -54,6 +62,9 @@ function mergeWithDefaults(raw: Record<string, unknown>): UserSettings {
     },
     quickActions,
     privacyAcceptedVersion: typeof raw.privacyAcceptedVersion === "string" ? raw.privacyAcceptedVersion : undefined,
+    quickBookingWorkflow: typeof raw.quickBookingWorkflow === "boolean" ? raw.quickBookingWorkflow : DEFAULT_SETTINGS.quickBookingWorkflow,
+    themeMode: typeof raw.themeMode === "string" ? raw.themeMode : "",
+    themePreset: typeof raw.themePreset === "string" ? raw.themePreset : "",
   };
 }
 
@@ -65,6 +76,8 @@ interface UserSettingsState {
   saveSettings: (settings: UserSettings) => Promise<void>;
   updateDashboardWidgets: (visibleWidgets: DashboardWidgetId[], widgetOrder: DashboardWidgetId[]) => Promise<void>;
   updateQuickActions: (quickActions: QuickAction[]) => Promise<void>;
+  updateQuickBookingWorkflow: (value: boolean) => Promise<void>;
+  updateTheme: (mode: string, preset: string) => Promise<void>;
   acceptPrivacy: (version: string) => Promise<void>;
   reset: () => void;
 }
@@ -113,17 +126,19 @@ export const useUserSettingsStore = create<UserSettingsState>((set, get) => ({
 
   updateDashboardWidgets: async (visibleWidgets, widgetOrder) => {
     const current = get().settings;
-    const updated: UserSettings = {
-      ...current,
-      dashboard: { visibleWidgets, widgetOrder },
-    };
-    await get().saveSettings(updated);
+    await get().saveSettings({ ...current, dashboard: { visibleWidgets, widgetOrder } });
   },
 
   updateQuickActions: async (quickActions) => {
-    const current = get().settings;
-    const updated: UserSettings = { ...current, quickActions };
-    await get().saveSettings(updated);
+    await get().saveSettings({ ...get().settings, quickActions });
+  },
+
+  updateQuickBookingWorkflow: async (value: boolean) => {
+    await get().saveSettings({ ...get().settings, quickBookingWorkflow: value });
+  },
+
+  updateTheme: async (mode: string, preset: string) => {
+    await get().saveSettings({ ...get().settings, themeMode: mode, themePreset: preset });
   },
 
   acceptPrivacy: async (version: string) => {
