@@ -309,6 +309,9 @@ const OrderSuggestionsTab: React.FC = () => {
   useEffect(() => {
     const timers: ReturnType<typeof setTimeout>[] = [];
     wizardGroups.forEach((group) => {
+      // Keine Suche wenn bereits ein Artikel ausgewählt
+      if (addItems[group.supplierId]) return;
+
       const search = addSearches[group.supplierId] ?? "";
       if (search.length < 2) {
         setAddOptions((prev) => ({ ...prev, [group.supplierId]: [] }));
@@ -325,7 +328,7 @@ const OrderSuggestionsTab: React.FC = () => {
       timers.push(t);
     });
     return () => timers.forEach(clearTimeout);
-  }, [addSearches, wizardGroups]);
+  }, [addSearches, addItems, wizardGroups]);
 
   const supplierOptions = useMemo(() => {
     const seen = new Map<string, string>();
@@ -514,21 +517,15 @@ const OrderSuggestionsTab: React.FC = () => {
   const handleOrderAndDownload = async () => {
     setProcessingAction(true);
     try {
-      // Status auf ORDERED setzen für alle Bestellungen
       for (const order of createdOrders) {
-        await updatePurchaseOrder(order.id, { 
-          status: "ORDERED" as any,
-        });
-      }
-      
-      // PDFs herunterladen
-      for (const order of createdOrders) {
+        // Status auf ORDERED setzen — dabei wird die Bestellnummer generiert
+        const updatedOrder = await updatePurchaseOrder(order.id, { status: "ORDERED" as any });
         try {
-          const blob = await fetchPurchaseOrderPdf(order.id);
+          const blob = await fetchPurchaseOrderPdf(updatedOrder.id);
           const url = window.URL.createObjectURL(blob);
           const a = document.createElement("a");
           a.href = url;
-          a.download = `${(order.orderNumber || order.id).replace(/[^a-zA-Z0-9_.-]/g, "_")}.pdf`;
+          a.download = `${(updatedOrder.orderNumber || updatedOrder.id).replace(/[^a-zA-Z0-9_.-]/g, "_")}.pdf`;
           document.body.appendChild(a);
           a.click();
           document.body.removeChild(a);
@@ -579,21 +576,19 @@ const OrderSuggestionsTab: React.FC = () => {
           const mailtoUrl = buildExternalOrderMail(order, emailTo);
           triggerMailClient(mailtoUrl);
 
-          const blob = await fetchPurchaseOrderPdf(order.id);
+          // Status auf ORDERED setzen (generiert Bestellnummer) VOR PDF-Download
+          const updatedOrder = await updatePurchaseOrder(order.id, { status: "ORDERED" as any });
+
+          const blob = await fetchPurchaseOrderPdf(updatedOrder.id);
           const pdfUrl = window.URL.createObjectURL(blob);
           const pdfAnchor = document.createElement("a");
-          const fileName = `${(order.orderNumber || order.id).replace(/[^a-zA-Z0-9_.-]/g, "_")}.pdf`;
+          const fileName = `${(updatedOrder.orderNumber || updatedOrder.id).replace(/[^a-zA-Z0-9_.-]/g, "_")}.pdf`;
           pdfAnchor.href = pdfUrl;
           pdfAnchor.download = fileName;
           document.body.appendChild(pdfAnchor);
           pdfAnchor.click();
           document.body.removeChild(pdfAnchor);
           window.URL.revokeObjectURL(pdfUrl);
-
-          // Bei erfolgreicher Vorbereitung als bestellt markieren
-          await updatePurchaseOrder(order.id, {
-            status: "ORDERED" as any,
-          });
 
           results.push({ order, success: true });
           downloadedAttachments.push({
@@ -1088,10 +1083,12 @@ const OrderSuggestionsTab: React.FC = () => {
                         isOptionEqualToValue={(opt, val) => opt.id === val.id}
                         filterOptions={(x) => x}
                         value={addItems[group.supplierId] ?? null}
-                        inputValue={addSearches[group.supplierId] ?? ""}
                         onInputChange={(_, val, reason) => {
                           if (reason === "input") {
                             setAddSearches((prev) => ({ ...prev, [group.supplierId]: val }));
+                          } else if (reason === "clear") {
+                            setAddSearches((prev) => ({ ...prev, [group.supplierId]: "" }));
+                            setAddItems((prev) => ({ ...prev, [group.supplierId]: null }));
                           }
                         }}
                         onChange={(_, val) => {
