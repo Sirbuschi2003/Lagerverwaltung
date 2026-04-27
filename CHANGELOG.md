@@ -1,5 +1,32 @@
 # Changelog
 
+## [3.6.1] – 2026-04-27
+
+### Feature: Schnellbuchung – UX-Verbesserungen (Fokus & Freitextsuche)
+
+- Beim Start liegt der Fokus automatisch auf dem Vorgangsnummer-Feld; Enter springt in das Barcode-Feld
+- Nach „Übernehmen" springt der Fokus zurück auf die Vorgangsnummer und leert das Feld
+- Buchungsart wechseln setzt den Fokus ebenfalls auf das Barcode-Feld
+- Barcode-Feld unterstützt jetzt Freitextsuche ab 2 Zeichen: Treffer in Artikelcode, Bezeichnung 1 und Bezeichnung 2 (max. 15 Ergebnisse)
+
+### Feature: Bewegungshistorie – Pagination & Serverfilter
+
+- Serverseitige Pagination: Standard 50 Zeilen, wählbar 25 / 50 / 100
+- Suche nach Vorgangsnummer/Quelle wird jetzt als SQL-LIKE im Backend ausgeführt (war bisher client-seitig)
+- Max. Limit auf 500 reduziert (war 1000)
+
+### Feature: Inventur – Zuweisung an einzelnen Benutzer
+
+- Manager können beim Erstellen einer Inventursitzung einen Benutzer aus der Niederlassung zuweisen
+- Nicht-Manager sehen nur eigene oder nicht zugewiesene Sitzungen; Manager sehen weiterhin alle
+
+### Bugfix: Dashboard – Letzte Buchungen zeigte nur eigene Buchungen
+
+- Das Widget „Letzte Buchungen" filterte bisher nach der eigenen User-ID – Außendienst-Buchungen waren für Lagermitarbeiter unsichtbar
+- Filter entfernt; das Widget zeigt jetzt die letzten Buchungen der gesamten Niederlassung (Lagerort-Trennung über Benutzerzuweisung bleibt aktiv)
+
+---
+
 ## [3.6.0] – 2026-04-22
 
 ### Feature: Lager-Trennung in Berichten & Bewegungshistorie
