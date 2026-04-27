@@ -1,5 +1,17 @@
 # Changelog
 
+## [3.6.4] – 2026-04-27
+
+### Feature: Schnellzugriff-Buttons im Header
+
+- Konfigurierbare Buttons erscheinen jetzt oben im Header (neben „Lagerverwaltung") – auf jeder Seite sichtbar
+- Getrennte Konfiguration für **PC/Desktop** (Icon + Beschriftung) und **Mobil/Tablet** (nur Icon)
+- Pro Benutzer und Gerät konfigurierbar: Zielseite, Bezeichnung, Farbe
+- Konfiguration über „Dashboard anpassen" → Tab „PC / Desktop" oder „Mobil / Tablet"
+- Das bestehende Dashboard-Schnellzugriff-Widget bleibt erhalten und zeigt weiterhin die Desktop-Buttons
+
+---
+
 ## [3.6.3] – 2026-04-27
 
 ### Refactor: Benutzereinstellungen in der Datenbank gespeichert

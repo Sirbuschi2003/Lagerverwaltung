@@ -1,9 +1,10 @@
-﻿import React from "react";
+import React from "react";
 import {
   AppBar,
   Avatar,
   Badge,
   Box,
+  Button,
   Chip,
   Divider,
   IconButton,
@@ -24,10 +25,12 @@ import SettingsIcon from "@mui/icons-material/Settings";
 import PaletteIcon from "@mui/icons-material/Palette";
 import CheckIcon from "@mui/icons-material/Check";
 import SystemUpdateAltIcon from "@mui/icons-material/SystemUpdateAlt";
+import * as MuiIcons from "@mui/icons-material";
 import { useNavigate } from "react-router-dom";
 import { fetchUpdateStatus } from "../utils/api";
 
 import useAuthStore from "../store/useAuthStore";
+import { useUserSettingsStore } from "../store/useUserSettingsStore";
 import { useNetworkStatus } from "../hooks/useNetworkStatus";
 import { useThemeMode } from "../hooks/useThemeMode";
 import { getAppHeaderStyles } from "../styles/componentStyles";
@@ -39,6 +42,11 @@ interface AppHeaderProps {
   menuOpen: boolean;
 }
 
+const getIcon = (iconName: string): React.ReactElement => {
+  const Icon = (MuiIcons as Record<string, React.ComponentType<{ fontSize?: string }>>)[iconName];
+  return Icon ? <Icon fontSize="small" /> : <MuiIcons.Star fontSize="small" />;
+};
+
 const AppHeader: React.FC<AppHeaderProps> = ({ onMenuToggle, menuOpen }) => {
   const theme = useTheme();
   const navigate = useNavigate();
@@ -49,6 +57,9 @@ const AppHeader: React.FC<AppHeaderProps> = ({ onMenuToggle, menuOpen }) => {
   const { isOnline } = useNetworkStatus();
   const { mode, toggleTheme, preset, setPreset, availablePresets } = useThemeMode();
   const headerStyles = getAppHeaderStyles(theme, isMobile);
+  const quickActions = useUserSettingsStore((s) => s.settings.quickActions);
+
+  const activeActions = isMobile ? quickActions.mobile : quickActions.desktop;
 
   const activePreset = React.useMemo(
     () => availablePresets.find((entry) => entry.id === preset),
@@ -59,7 +70,6 @@ const AppHeader: React.FC<AppHeaderProps> = ({ onMenuToggle, menuOpen }) => {
   const [themeMenuAnchor, setThemeMenuAnchor] = React.useState<null | HTMLElement>(null);
   const [updateAvailable, setUpdateAvailable] = React.useState(false);
 
-  // Update-Check alle 10 Minuten (nur fuer Manager)
   React.useEffect(() => {
     if (user?.role !== "MANAGER") return;
     const check = () => {
@@ -72,21 +82,10 @@ const AppHeader: React.FC<AppHeaderProps> = ({ onMenuToggle, menuOpen }) => {
     return () => clearInterval(interval);
   }, [user?.role]);
 
-  const handleUserMenuOpen = (event: React.MouseEvent<HTMLElement>) => {
-    setUserMenuAnchor(event.currentTarget);
-  };
-
-  const handleUserMenuClose = () => {
-    setUserMenuAnchor(null);
-  };
-
-  const handleThemeMenuOpen = (event: React.MouseEvent<HTMLElement>) => {
-    setThemeMenuAnchor(event.currentTarget);
-  };
-
-  const handleThemeMenuClose = () => {
-    setThemeMenuAnchor(null);
-  };
+  const handleUserMenuOpen = (event: React.MouseEvent<HTMLElement>) => setUserMenuAnchor(event.currentTarget);
+  const handleUserMenuClose = () => setUserMenuAnchor(null);
+  const handleThemeMenuOpen = (event: React.MouseEvent<HTMLElement>) => setThemeMenuAnchor(event.currentTarget);
+  const handleThemeMenuClose = () => setThemeMenuAnchor(null);
 
   const handlePresetSelect = (nextPresetId: ThemePresetId) => {
     setPreset(nextPresetId);
@@ -95,9 +94,7 @@ const AppHeader: React.FC<AppHeaderProps> = ({ onMenuToggle, menuOpen }) => {
 
   const handleNavigateSettings = () => {
     handleUserMenuClose();
-    if (hasPermission("settings.company")) {
-      navigate("/settings");
-    }
+    if (hasPermission("settings.company")) navigate("/settings");
   };
 
   const handleLogout = () => {
@@ -106,17 +103,15 @@ const AppHeader: React.FC<AppHeaderProps> = ({ onMenuToggle, menuOpen }) => {
   };
 
   const userInitials = user?.displayName
-    ? String(user.displayName)
-        .split(" ")
-        .map((name: string) => name[0])
-        .join("")
-        .toUpperCase()
+    ? String(user.displayName).split(" ").map((n: string) => n[0]).join("").toUpperCase()
     : String(user?.username?.charAt(0) || "U").toUpperCase();
 
   return (
     <AppBar position="sticky" elevation={0} sx={headerStyles.appBar}>
-      <Toolbar sx={{ justifyContent: "space-between", minHeight: { xs: 58, sm: 66 } }}>
-        <Box sx={{ display: "flex", alignItems: "center", gap: 1, minWidth: 0 }}>
+      <Toolbar sx={{ justifyContent: "space-between", minHeight: { xs: 58, sm: 66 }, gap: 1 }}>
+
+        {/* Links: Hamburger + Titel */}
+        <Box sx={{ display: "flex", alignItems: "center", gap: 1, minWidth: 0, flexShrink: 0 }}>
           <Tooltip title={menuOpen ? "Navigation schließen" : "Navigation öffnen"}>
             <IconButton edge="start" onClick={onMenuToggle} aria-label="menu">
               <MenuIcon />
@@ -126,7 +121,7 @@ const AppHeader: React.FC<AppHeaderProps> = ({ onMenuToggle, menuOpen }) => {
           {!isMobileSmall && (
             <Typography
               variant="h6"
-              sx={{ ...headerStyles.title, cursor: "pointer", "&:hover": { opacity: 0.75 } }}
+              sx={{ ...headerStyles.title, cursor: "pointer", "&:hover": { opacity: 0.75 }, whiteSpace: "nowrap" }}
               onClick={() => navigate("/dashboard")}
             >
               Lagerverwaltung
@@ -134,7 +129,40 @@ const AppHeader: React.FC<AppHeaderProps> = ({ onMenuToggle, menuOpen }) => {
           )}
         </Box>
 
-        <Box sx={{ display: "flex", alignItems: "center", gap: 1.25 }}>
+        {/* Mitte: Schnellzugriff-Buttons (pro Gerät konfigurierbar) */}
+        {activeActions.length > 0 && (
+          <Box sx={{ display: "flex", alignItems: "center", gap: 0.75, flexShrink: 1, overflow: "hidden" }}>
+            {activeActions.map((action) => (
+              isMobile ? (
+                <Tooltip key={action.id} title={action.label}>
+                  <IconButton
+                    size="small"
+                    color={action.color as any}
+                    onClick={() => navigate(action.route)}
+                    sx={{ flexShrink: 0 }}
+                  >
+                    {getIcon(action.icon)}
+                  </IconButton>
+                </Tooltip>
+              ) : (
+                <Button
+                  key={action.id}
+                  size="small"
+                  color={action.color as any}
+                  variant="outlined"
+                  startIcon={getIcon(action.icon)}
+                  onClick={() => navigate(action.route)}
+                  sx={{ flexShrink: 0, whiteSpace: "nowrap", textTransform: "none", py: 0.5 }}
+                >
+                  {action.label}
+                </Button>
+              )
+            ))}
+          </Box>
+        )}
+
+        {/* Rechts: Status + Benutzer */}
+        <Box sx={{ display: "flex", alignItems: "center", gap: 1.25, flexShrink: 0 }}>
           {!isOnline && (
             <Chip
               icon={<WifiOffIcon />}
@@ -170,38 +198,16 @@ const AppHeader: React.FC<AppHeaderProps> = ({ onMenuToggle, menuOpen }) => {
             onClose={handleThemeMenuClose}
             anchorOrigin={{ vertical: "bottom", horizontal: "right" }}
             transformOrigin={{ vertical: "top", horizontal: "right" }}
-            slotProps={{
-              paper: {
-                sx: headerStyles.themeMenuPaper,
-              },
-            }}
+            slotProps={{ paper: { sx: headerStyles.themeMenuPaper } }}
           >
             {availablePresets.map((entry) => (
-              <MenuItem
-                key={entry.id}
-                selected={entry.id === preset}
-                onClick={() => handlePresetSelect(entry.id)}
-              >
-                <Box
-                  sx={{
-                    width: "100%",
-                    display: "flex",
-                    alignItems: "flex-start",
-                    justifyContent: "space-between",
-                    gap: 1,
-                  }}
-                >
+              <MenuItem key={entry.id} selected={entry.id === preset} onClick={() => handlePresetSelect(entry.id)}>
+                <Box sx={{ width: "100%", display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 1 }}>
                   <Box>
-                    <Typography variant="body2" sx={{ fontWeight: 700 }}>
-                      {entry.label}
-                    </Typography>
-                    <Typography variant="caption" color="text.secondary">
-                      {entry.description}
-                    </Typography>
+                    <Typography variant="body2" sx={{ fontWeight: 700 }}>{entry.label}</Typography>
+                    <Typography variant="caption" color="text.secondary">{entry.description}</Typography>
                   </Box>
-                  {entry.id === preset ? (
-                    <CheckIcon fontSize="small" sx={headerStyles.activeThemeIcon} />
-                  ) : null}
+                  {entry.id === preset ? <CheckIcon fontSize="small" sx={headerStyles.activeThemeIcon} /> : null}
                 </Box>
               </MenuItem>
             ))}
@@ -211,11 +217,9 @@ const AppHeader: React.FC<AppHeaderProps> = ({ onMenuToggle, menuOpen }) => {
 
           <Tooltip title={mode === "dark" ? "Hellmodus" : "Dunkelmodus"}>
             <IconButton onClick={toggleTheme} size="small" aria-label="theme toggle">
-              {mode === "dark" ? (
-                <Brightness7Icon sx={{ color: theme.palette.warning.light }} />
-              ) : (
-                <Brightness4Icon sx={{ color: theme.palette.secondary.main }} />
-              )}
+              {mode === "dark"
+                ? <Brightness7Icon sx={{ color: theme.palette.warning.light }} />
+                : <Brightness4Icon sx={{ color: theme.palette.secondary.main }} />}
             </IconButton>
           </Tooltip>
 
@@ -226,9 +230,7 @@ const AppHeader: React.FC<AppHeaderProps> = ({ onMenuToggle, menuOpen }) => {
                   <Typography variant="body2" sx={{ lineHeight: 1.1, fontWeight: 600 }}>
                     {user.displayName || user.username}
                   </Typography>
-                  <Typography variant="caption" color="text.secondary">
-                    {user.role}
-                  </Typography>
+                  <Typography variant="caption" color="text.secondary">{user.role}</Typography>
                 </Box>
               )}
 
@@ -246,22 +248,14 @@ const AppHeader: React.FC<AppHeaderProps> = ({ onMenuToggle, menuOpen }) => {
                 onClose={handleUserMenuClose}
                 anchorOrigin={{ vertical: "bottom", horizontal: "right" }}
                 transformOrigin={{ vertical: "top", horizontal: "right" }}
-                slotProps={{
-                  paper: {
-                    sx: headerStyles.userMenuPaper,
-                  },
-                }}
+                slotProps={{ paper: { sx: headerStyles.userMenuPaper } }}
               >
                 {isMobile && (
                   <>
                     <MenuItem disabled>
                       <Box>
-                        <Typography variant="body2" fontWeight={600}>
-                          {user.displayName || user.username}
-                        </Typography>
-                        <Typography variant="caption" color="text.secondary">
-                          {user.role}
-                        </Typography>
+                        <Typography variant="body2" fontWeight={600}>{user.displayName || user.username}</Typography>
+                        <Typography variant="caption" color="text.secondary">{user.role}</Typography>
                       </Box>
                     </MenuItem>
                     <Divider />
@@ -289,4 +283,3 @@ const AppHeader: React.FC<AppHeaderProps> = ({ onMenuToggle, menuOpen }) => {
 };
 
 export default AppHeader;
-

@@ -12,7 +12,7 @@ const getIcon = (iconName: string): React.ReactElement => {
 
 const DashboardQuickActionsWidget: React.FC = () => {
   const navigate = useNavigate();
-  const quickActions = useUserSettingsStore((state) => state.settings.quickActions);
+  const quickActions = useUserSettingsStore((state) => state.settings.quickActions.desktop);
 
   if (quickActions.length === 0) {
     return (

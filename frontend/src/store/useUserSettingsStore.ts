@@ -9,9 +9,14 @@ export type DashboardWidgetId = "kpi" | "quick-actions" | "restock" | "recent-mo
 export interface QuickAction {
   id: string;
   label: string;
-  icon: string;   // Name des MUI-Icons als String
-  route: string;  // z.B. '/scanner', '/quick-booking'
-  color: string;  // 'primary' | 'secondary' | 'success' | 'warning' | 'info'
+  icon: string;
+  route: string;
+  color: string;
+}
+
+export interface QuickActions {
+  desktop: QuickAction[];
+  mobile: QuickAction[];
 }
 
 export interface UserSettings {
@@ -19,37 +24,66 @@ export interface UserSettings {
     visibleWidgets: DashboardWidgetId[];
     widgetOrder: DashboardWidgetId[];
   };
-  quickActions: QuickAction[];
+  quickActions: QuickActions;
   privacyAcceptedVersion?: string;
-  // Workflow-Einstellungen
-  quickBookingWorkflow: boolean; // true = Vorgangsnummer zuerst, false = direkt Barcode
-  // Theme-Einstellungen ("" = nicht gesetzt, Gerät bestimmt)
+  quickBookingWorkflow: boolean;
   themeMode: string;
   themePreset: string;
 }
+
+const DEFAULT_QUICK_ACTION: QuickAction = {
+  id: "default-myvehicle",
+  label: "Mein Fahrzeug",
+  icon: "DirectionsCar",
+  route: "/my-vehicle",
+  color: "primary",
+};
 
 const DEFAULT_SETTINGS: UserSettings = {
   dashboard: {
     visibleWidgets: ["kpi", "quick-actions", "restock", "recent-movements"],
     widgetOrder: ["kpi", "quick-actions", "restock", "recent-movements"],
   },
-  quickActions: [
-    { id: "default-myvehicle", label: "Mein Fahrzeug", icon: "DirectionsCar", route: "/my-vehicle", color: "primary" },
-  ],
+  quickActions: {
+    desktop: [DEFAULT_QUICK_ACTION],
+    mobile: [DEFAULT_QUICK_ACTION],
+  },
   quickBookingWorkflow: true,
   themeMode: "",
   themePreset: "",
 };
 
+function migrateAction(qa: QuickAction): QuickAction {
+  if (qa.id === "default-booking" && qa.route === "/quick-booking") {
+    return { ...qa, id: "default-myvehicle", label: "Mein Fahrzeug", icon: "DirectionsCar", route: "/my-vehicle" };
+  }
+  return qa;
+}
+
+function parseActionList(raw: unknown, fallback: QuickAction[]): QuickAction[] {
+  if (!Array.isArray(raw)) return fallback;
+  return (raw as QuickAction[]).map(migrateAction);
+}
+
 function mergeWithDefaults(raw: Record<string, unknown>): UserSettings {
   const dashboard = (raw.dashboard as any) ?? {};
-  // Migration: alte "default-booking" → "Mein Fahrzeug"
-  const rawActions = Array.isArray(raw.quickActions) ? (raw.quickActions as QuickAction[]) : DEFAULT_SETTINGS.quickActions;
-  const quickActions = rawActions.map((qa) =>
-    qa.id === "default-booking" && qa.route === "/quick-booking"
-      ? { ...qa, id: "default-myvehicle", label: "Mein Fahrzeug", icon: "DirectionsCar", route: "/my-vehicle" }
-      : qa,
-  );
+
+  // Migration: quickActions kann altes Array-Format oder neues {desktop, mobile}-Format sein
+  let quickActions: QuickActions;
+  const rawQA = raw.quickActions;
+  if (Array.isArray(rawQA)) {
+    // Altes Format: Array → wird zu Desktop, Mobile erhält gleiche Liste
+    const migrated = (rawQA as QuickAction[]).map(migrateAction);
+    quickActions = { desktop: migrated, mobile: migrated };
+  } else if (rawQA && typeof rawQA === "object") {
+    const qa = rawQA as Record<string, unknown>;
+    quickActions = {
+      desktop: parseActionList(qa.desktop, DEFAULT_SETTINGS.quickActions.desktop),
+      mobile: parseActionList(qa.mobile, DEFAULT_SETTINGS.quickActions.mobile),
+    };
+  } else {
+    quickActions = DEFAULT_SETTINGS.quickActions;
+  }
 
   return {
     dashboard: {
@@ -75,7 +109,7 @@ interface UserSettingsState {
   loadSettings: () => Promise<void>;
   saveSettings: (settings: UserSettings) => Promise<void>;
   updateDashboardWidgets: (visibleWidgets: DashboardWidgetId[], widgetOrder: DashboardWidgetId[]) => Promise<void>;
-  updateQuickActions: (quickActions: QuickAction[]) => Promise<void>;
+  updateQuickActions: (quickActions: QuickActions) => Promise<void>;
   updateQuickBookingWorkflow: (value: boolean) => Promise<void>;
   updateTheme: (mode: string, preset: string) => Promise<void>;
   acceptPrivacy: (version: string) => Promise<void>;
@@ -97,7 +131,6 @@ export const useUserSettingsStore = create<UserSettingsState>((set, get) => ({
       localStorage.setItem(SETTINGS_LS_KEY, JSON.stringify(settings));
       set({ settings, loaded: true });
     } catch {
-      // Offline-Fallback: vollständige Settings aus localStorage
       try {
         const raw = localStorage.getItem(SETTINGS_LS_KEY);
         if (raw) {
@@ -125,11 +158,10 @@ export const useUserSettingsStore = create<UserSettingsState>((set, get) => ({
   },
 
   updateDashboardWidgets: async (visibleWidgets, widgetOrder) => {
-    const current = get().settings;
-    await get().saveSettings({ ...current, dashboard: { visibleWidgets, widgetOrder } });
+    await get().saveSettings({ ...get().settings, dashboard: { visibleWidgets, widgetOrder } });
   },
 
-  updateQuickActions: async (quickActions) => {
+  updateQuickActions: async (quickActions: QuickActions) => {
     await get().saveSettings({ ...get().settings, quickActions });
   },
 
@@ -144,16 +176,13 @@ export const useUserSettingsStore = create<UserSettingsState>((set, get) => ({
   acceptPrivacy: async (version: string) => {
     const current = get().settings;
     const updated: UserSettings = { ...current, privacyAcceptedVersion: version };
-    // Sofort lokal setzen (Dialog schließt auch offline)
     set({ settings: updated });
-    // Offline-Cache aktualisieren
     localStorage.setItem(PRIVACY_LS_KEY, version);
-    // Best-effort Server-Sync (klappt nicht offline, aber beim nächsten loadSettings)
     try {
       set({ saving: true });
       await saveUserSettings(updated as unknown as Record<string, unknown>);
     } catch {
-      // Offline – wird beim nächsten Online-Login nachgeholt
+      // Offline – wird beim nächsten Login nachgeholt
     } finally {
       set({ saving: false });
     }
