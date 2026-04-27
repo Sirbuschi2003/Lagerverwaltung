@@ -20,10 +20,10 @@
 - Manager können beim Erstellen einer Inventursitzung einen Benutzer aus der Niederlassung zuweisen
 - Nicht-Manager sehen nur eigene oder nicht zugewiesene Sitzungen; Manager sehen weiterhin alle
 
-### Bugfix: Dashboard – Letzte Buchungen zeigte nur eigene Buchungen
+### Bugfix: Dashboard – Offene Anforderungen für Lagermitarbeiter nicht sichtbar
 
-- Das Widget „Letzte Buchungen" filterte bisher nach der eigenen User-ID – Außendienst-Buchungen waren für Lagermitarbeiter unsichtbar
-- Filter entfernt; das Widget zeigt jetzt die letzten Buchungen der gesamten Niederlassung (Lagerort-Trennung über Benutzerzuweisung bleibt aktiv)
+- Lagermitarbeiter (kein Fahrzeug, aber Lagerort zugewiesen) sahen das Widget „Offene Anforderungen" nicht, obwohl Techniker Fehlbestände gemeldet hatten
+- Widget erkennt jetzt Lagermitarbeiter anhand fehlender Fahrzeug-ID + vorhandener Lagerortzuweisung und lädt die Fleet-Anforderungen automatisch
 
 ---
 

@@ -67,6 +67,9 @@ const DashboardRestockWidget: React.FC = () => {
   const user = useAuthStore((state) => state.user);
   const canManageRequests = hasPermission("restock.manage");
   const canViewFleet = hasPermission("fleet.view");
+  // Lagermitarbeiter: kein Fahrzeug, aber Lagerort zugewiesen → sieht + bearbeitet offene Anforderungen
+  const isWarehouseStaff = !user?.vehicleId && (user?.locationIds?.length ?? 0) > 0;
+  const canSeeFleetRequests = canManageRequests || isWarehouseStaff;
 
   const fleetRequests = useRestockStore((state) => state.fleetRequests);
   const updateStatus = useRestockStore((state) => state.updateStatus);
@@ -99,7 +102,7 @@ const DashboardRestockWidget: React.FC = () => {
 
   // Techniker laden
   useEffect(() => {
-    if (!canViewFleet && !canManageRequests) return;
+    if (!canViewFleet && !canSeeFleetRequests) return;
     if (!navigator.onLine) return;
 
     const loadTechnicians = async () => {
@@ -113,7 +116,7 @@ const DashboardRestockWidget: React.FC = () => {
     };
 
     void loadTechnicians();
-  }, [canViewFleet, canManageRequests]);
+  }, [canViewFleet, canSeeFleetRequests]);
 
   // Fahrzeugbestand für Techniker laden
   useEffect(() => {
@@ -157,17 +160,17 @@ const DashboardRestockWidget: React.FC = () => {
 
   // Initiales Laden
   useEffect(() => {
-    if (canManageRequests) {
+    if (canSeeFleetRequests) {
       void loadFleet("OPEN");
     } else if (vehicleId) {
       const loadForVehicle = useRestockStore.getState().loadForVehicle;
       void loadForVehicle(vehicleId);
     }
-  }, [canManageRequests, vehicleId, loadFleet]);
+  }, [canSeeFleetRequests, vehicleId, loadFleet]);
 
   useLiveFleetStock({
     onUpdate: () => {
-      if (canManageRequests) {
+      if (canSeeFleetRequests) {
         void loadFleet("OPEN");
       } else if (vehicleId) {
         const loadForVehicle = useRestockStore.getState().loadForVehicle;
@@ -533,7 +536,7 @@ const DashboardRestockWidget: React.FC = () => {
     });
   };
 
-  if (!vehicleId && !canManageRequests) return null;
+  if (!vehicleId && !canSeeFleetRequests) return null;
 
   return (
     <>
@@ -693,7 +696,7 @@ const DashboardRestockWidget: React.FC = () => {
       )}
 
       {/* Lager-Ansicht */}
-      {canManageRequests && (
+      {canSeeFleetRequests && (
         <Paper sx={{ p: 3, backgroundColor: "background.paper" }}>
           <Box sx={{ display: "flex", alignItems: "center", mb: 2, gap: 2 }}>
             <Typography variant="h6" sx={{ flex: 1 }}>

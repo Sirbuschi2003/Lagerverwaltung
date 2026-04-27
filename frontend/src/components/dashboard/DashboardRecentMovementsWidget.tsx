@@ -24,7 +24,9 @@ const DashboardRecentMovementsWidget: React.FC = () => {
   const pendingMovements = useOfflineQueue((state) => state.movements);
 
   useEffect(() => {
-    const cacheKey = `lv-dashboard-movements`;
+    if (!userId) return;
+
+    const cacheKey = `lv-dashboard-movements-${userId}`;
 
     if (!navigator.onLine) {
       try {
@@ -37,7 +39,7 @@ const DashboardRecentMovementsWidget: React.FC = () => {
     }
 
     setLoading(true);
-    void fetchMovementHistory({ limit: 10 })
+    void fetchMovementHistory({ userId, limit: 10 })
       .then((result) => {
         localStorage.setItem(cacheKey, JSON.stringify(result.movements));
         setMovements(result.movements);
