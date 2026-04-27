@@ -112,6 +112,7 @@ const OrderSuggestionsTab: React.FC = () => {
   const [addOptions, setAddOptions] = useState<Record<string, ItemDto[]>>({});
   const [addItems, setAddItems] = useState<Record<string, ItemDto | null>>({});
   const [addQtys, setAddQtys] = useState<Record<string, number>>({});
+  const [addCounters, setAddCounters] = useState<Record<string, number>>({});
 
   // Dialog für Bestellaktionen
   const [actionDialogOpen, setActionDialogOpen] = useState(false);
@@ -307,6 +308,7 @@ const OrderSuggestionsTab: React.FC = () => {
   }, []);
 
   useEffect(() => {
+    let cancelled = false;
     const timers: ReturnType<typeof setTimeout>[] = [];
     wizardGroups.forEach((group) => {
       const search = addSearches[group.supplierId] ?? "";
@@ -317,14 +319,19 @@ const OrderSuggestionsTab: React.FC = () => {
       const t = setTimeout(async () => {
         try {
           const result = await fetchItems({ search, limit: 50 });
-          setAddOptions((prev) => ({ ...prev, [group.supplierId]: result.items ?? [] }));
+          if (!cancelled) {
+            setAddOptions((prev) => ({ ...prev, [group.supplierId]: result.items ?? [] }));
+          }
         } catch {
           // ignore
         }
       }, 300);
       timers.push(t);
     });
-    return () => timers.forEach(clearTimeout);
+    return () => {
+      cancelled = true;
+      timers.forEach(clearTimeout);
+    };
   }, [addSearches, wizardGroups]);
 
   const supplierOptions = useMemo(() => {
@@ -468,6 +475,7 @@ const OrderSuggestionsTab: React.FC = () => {
     setAddOptions({});
     setAddItems({});
     setAddQtys({});
+    setAddCounters({});
     setWizardOpen(true);
   };
 
@@ -1072,7 +1080,7 @@ const OrderSuggestionsTab: React.FC = () => {
                   <TableRow>
                     <TableCell colSpan={2}>
                       <Autocomplete
-                        key={`add-${group.supplierId}-${group.lines.length}`}
+                        key={`add-${group.supplierId}-${addCounters[group.supplierId] ?? 0}`}
                         freeSolo={false}
                         size="small"
                         options={addOptions[group.supplierId] ?? []}
@@ -1083,7 +1091,6 @@ const OrderSuggestionsTab: React.FC = () => {
                         onInputChange={(_, val, reason) => {
                           if (reason === "input") {
                             setAddSearches((prev) => ({ ...prev, [group.supplierId]: val }));
-                            setAddItems((prev) => ({ ...prev, [group.supplierId]: null }));
                           } else if (reason === "clear") {
                             setAddSearches((prev) => ({ ...prev, [group.supplierId]: "" }));
                             setAddItems((prev) => ({ ...prev, [group.supplierId]: null }));
@@ -1163,6 +1170,7 @@ const OrderSuggestionsTab: React.FC = () => {
                           setAddItems((prev) => ({ ...prev, [group.supplierId]: null }));
                           setAddSearches((prev) => ({ ...prev, [group.supplierId]: "" }));
                           setAddQtys((prev) => ({ ...prev, [group.supplierId]: 1 }));
+                          setAddCounters((prev) => ({ ...prev, [group.supplierId]: (prev[group.supplierId] ?? 0) + 1 }));
                         }}
                       >
                         <AddIcon fontSize="small" />
