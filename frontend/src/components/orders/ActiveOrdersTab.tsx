@@ -323,7 +323,7 @@ const ActiveOrdersTab: React.FC = () => {
       const url = window.URL.createObjectURL(blob);
       const anchor = document.createElement("a");
       anchor.href = url;
-      anchor.download = `Bestellung_${order.supplier?.name || "Lieferant"}_${order.orderNumber || order.id}.pdf`;
+      anchor.download = `${(order.orderNumber || order.id).replace(/[^a-zA-Z0-9_.-]/g, "_")}.pdf`;
       document.body.appendChild(anchor);
       anchor.click();
       document.body.removeChild(anchor);

@@ -528,7 +528,7 @@ const OrderSuggestionsTab: React.FC = () => {
           const url = window.URL.createObjectURL(blob);
           const a = document.createElement("a");
           a.href = url;
-          a.download = `Bestellung_${order.supplier?.name || 'Lieferant'}.pdf`;
+          a.download = `${(order.orderNumber || order.id).replace(/[^a-zA-Z0-9_.-]/g, "_")}.pdf`;
           document.body.appendChild(a);
           a.click();
           document.body.removeChild(a);
@@ -582,9 +582,7 @@ const OrderSuggestionsTab: React.FC = () => {
           const blob = await fetchPurchaseOrderPdf(order.id);
           const pdfUrl = window.URL.createObjectURL(blob);
           const pdfAnchor = document.createElement("a");
-          const safeSupplier = (order.supplier?.name || "Lieferant").replace(/[^a-zA-Z0-9_-]/g, "_");
-          const safeOrder = (order.orderNumber || order.id).replace(/[^a-zA-Z0-9_-]/g, "_");
-          const fileName = `Bestellung_${safeSupplier}_${safeOrder}.pdf`;
+          const fileName = `${(order.orderNumber || order.id).replace(/[^a-zA-Z0-9_.-]/g, "_")}.pdf`;
           pdfAnchor.href = pdfUrl;
           pdfAnchor.download = fileName;
           document.body.appendChild(pdfAnchor);
@@ -1082,16 +1080,20 @@ const OrderSuggestionsTab: React.FC = () => {
                   <TableRow>
                     <TableCell colSpan={2}>
                       <Autocomplete
+                        key={`add-${group.supplierId}-${group.lines.length}`}
                         freeSolo={false}
                         size="small"
                         options={addOptions[group.supplierId] ?? []}
                         getOptionLabel={(o) => typeof o === "string" ? o : `${o.code} – ${o.description}`}
                         isOptionEqualToValue={(opt, val) => opt.id === val.id}
+                        filterOptions={(x) => x}
                         value={addItems[group.supplierId] ?? null}
                         inputValue={addSearches[group.supplierId] ?? ""}
-                        onInputChange={(_, val) =>
-                          setAddSearches((prev) => ({ ...prev, [group.supplierId]: val }))
-                        }
+                        onInputChange={(_, val, reason) => {
+                          if (reason === "input") {
+                            setAddSearches((prev) => ({ ...prev, [group.supplierId]: val }));
+                          }
+                        }}
                         onChange={(_, val) => {
                           setAddItems((prev) => ({ ...prev, [group.supplierId]: val as ItemDto | null }));
                         }}

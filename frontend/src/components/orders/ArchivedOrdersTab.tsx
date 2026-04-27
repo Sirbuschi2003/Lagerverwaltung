@@ -183,7 +183,7 @@ const ArchivedOrdersTab: React.FC = () => {
       const url = window.URL.createObjectURL(blob);
       const link = document.createElement("a");
       link.href = url;
-      link.download = `Bestellung_${order.supplier?.name || "Lieferant"}_${order.orderNumber || order.id}.pdf`;
+      link.download = `${(order.orderNumber || order.id).replace(/[^a-zA-Z0-9_.-]/g, "_")}.pdf`;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
