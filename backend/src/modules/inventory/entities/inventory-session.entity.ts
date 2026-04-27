@@ -73,8 +73,8 @@ export class InventorySession {
   @OneToMany(() => InventoryVehicleStatus, (vs) => vs.session, { cascade: true })
   vehicleStatuses?: InventoryVehicleStatus[];
 
-  @Column({ type: "char", length: 36, nullable: true })
-  assignedUserId!: string | null;
+  @Column({ type: "json", nullable: true })
+  assignedUserIds!: string[] | null;
 
   @Column({ type: "char", length: 36, nullable: true })
   branchId!: string | null;

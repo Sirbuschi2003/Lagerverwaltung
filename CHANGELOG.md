@@ -9,6 +9,12 @@
 - **AUS (Direkt Artikel):** Fokus landet beim Öffnen und nach Übernehmen direkt auf dem Barcode-Feld (z.B. Teilelager)
 - Einstellung wird pro Gerät in `localStorage` gespeichert und bleibt nach Browser-Neustart erhalten
 
+### Feature: Inventur – Mehrfachzuweisung an Benutzer
+
+- Manager können beim Erstellen einer Inventursitzung mehrere Benutzer zuweisen (war bisher max. einer)
+- Nicht-Manager sehen nur Sitzungen ohne Zuweisung oder Sitzungen, in denen sie selbst enthalten sind
+- DB-Spalte von `assignedUserId` (char) auf `assignedUserIds` (JSON-Array) migriert
+
 ### Bugfix: Offene Anforderungen – Lager-Trennung (Teilelager vs. Tonerlager)
 
 - Lagermitarbeiter sahen bisher alle offenen Fehlbestandsmeldungen aller Lager ihrer Niederlassung

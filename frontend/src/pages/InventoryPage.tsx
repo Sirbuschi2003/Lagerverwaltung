@@ -90,7 +90,7 @@ const InventoryPage = () => {
   const [startDialogOpen, setStartDialogOpen] = useState(false);
   const [newSessionName, setNewSessionName] = useState("");
   const [newSessionLocation, setNewSessionLocation] = useState("");
-  const [newSessionAssignedUserId, setNewSessionAssignedUserId] = useState<string | null>(null);
+  const [newSessionAssignedUserIds, setNewSessionAssignedUserIds] = useState<string[]>([]);
   
   // Inventory recording
   const [selectedItem, setSelectedItem] = useState<any>(null);
@@ -408,14 +408,14 @@ const InventoryPage = () => {
         createdBy: user?.displayName ?? "Unbekannt",
         location: newSessionLocation.trim() || undefined,
         startedAt: new Date().toISOString(),
-        assignedUserId: newSessionAssignedUserId || null,
+        assignedUserIds: newSessionAssignedUserIds.length ? newSessionAssignedUserIds : undefined,
       });
 
       await loadSessions();
       setStartDialogOpen(false);
       setNewSessionName("");
       setNewSessionLocation("");
-      setNewSessionAssignedUserId(null);
+      setNewSessionAssignedUserIds([]);
       setError(null);
     } catch (err) {
       console.error(err);
@@ -1633,7 +1633,7 @@ const InventoryPage = () => {
       </Paper>
 
       {/* Start Session Dialog */}
-      <Dialog open={startDialogOpen} onClose={() => { setStartDialogOpen(false); setNewSessionAssignedUserId(null); }} maxWidth="sm" fullWidth>
+      <Dialog open={startDialogOpen} onClose={() => { setStartDialogOpen(false); setNewSessionAssignedUserIds([]); }} maxWidth="sm" fullWidth>
         <DialogTitle>Neue Inventur starten</DialogTitle>
         <DialogContent>
           <Stack spacing={2} sx={{ pt: 1 }}>
@@ -1656,26 +1656,26 @@ const InventoryPage = () => {
             />
             {user?.role === "MANAGER" && (
               <Autocomplete
+                multiple
                 options={users.filter((u: any) => u.branchId === user.branchId || user.branchId === null)}
                 getOptionLabel={(u: any) => u.displayName || u.username}
-                value={users.find((u: any) => u.id === newSessionAssignedUserId) ?? null}
-                onChange={(_: any, val: any) => setNewSessionAssignedUserId(val?.id ?? null)}
+                value={users.filter((u: any) => newSessionAssignedUserIds.includes(u.id))}
+                onChange={(_: any, val: any[]) => setNewSessionAssignedUserIds(val.map((u: any) => u.id))}
                 renderInput={(params) => (
                   <TextField
                     {...params}
                     label="Zugewiesen an (optional)"
-                    placeholder="Alle Benutzer sehen diese Inventur"
+                    placeholder={newSessionAssignedUserIds.length === 0 ? "Alle Benutzer sehen diese Inventur" : ""}
                     helperText="Wenn leer: für alle Benutzer der Niederlassung sichtbar"
                   />
                 )}
-                clearOnEscape
                 noOptionsText="Keine Benutzer gefunden"
               />
             )}
           </Stack>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => { setStartDialogOpen(false); setNewSessionAssignedUserId(null); }}>Abbrechen</Button>
+          <Button onClick={() => { setStartDialogOpen(false); setNewSessionAssignedUserIds([]); }}>Abbrechen</Button>
           <Button
             onClick={handleStartSession}
             variant="contained"

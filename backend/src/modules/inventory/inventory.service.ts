@@ -83,7 +83,7 @@ export class InventoryService {
       if (isManager) return sessions;
       // Nicht-Manager sehen nur Sitzungen ohne Zuordnung ODER die ihnen zugeordnet sind
       return sessions.filter(
-        (s) => s.assignedUserId === null || s.assignedUserId === requestingUserId,
+        (s) => !s.assignedUserIds?.length || (!!requestingUserId && s.assignedUserIds.includes(requestingUserId)),
       );
     });
   }
@@ -164,7 +164,7 @@ export class InventoryService {
       completedAt: null,
       status: InventorySessionStatus.DRAFT,
       branchId: dto.branchId ?? null,
-      assignedUserId: dto.assignedUserId ?? null,
+      assignedUserIds: dto.assignedUserIds?.length ? dto.assignedUserIds : null,
     });
     return this.sessionsRepository.save(session);
   }

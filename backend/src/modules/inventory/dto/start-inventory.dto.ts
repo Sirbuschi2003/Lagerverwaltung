@@ -1,4 +1,4 @@
-import { IsDateString, IsOptional, IsString, IsUUID, MaxLength } from "class-validator";
+import { IsArray, IsDateString, IsOptional, IsString, IsUUID, MaxLength } from "class-validator";
 
 export class StartInventoryDto {
   @IsString()
@@ -19,7 +19,8 @@ export class StartInventoryDto {
   startedAt?: string;
 
   @IsOptional()
-  @IsUUID()
-  assignedUserId?: string | null;
+  @IsArray()
+  @IsUUID("all", { each: true })
+  assignedUserIds?: string[];
 }
 

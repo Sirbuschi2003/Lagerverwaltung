@@ -977,7 +977,7 @@ export interface InventorySessionDto {
   lines: InventoryLineDto[];
   branchId?: string | null;
   branch?: { id: string; name: string } | null;
-  assignedUserId?: string | null;
+  assignedUserIds?: string[] | null;
 }
 
 export interface InventoryLineDto {
@@ -997,7 +997,7 @@ export interface StartInventoryRequest {
   createdBy: string;
   location?: string | null;
   startedAt?: string;
-  assignedUserId?: string | null;
+  assignedUserIds?: string[] | null;
 }
 
 export interface RecordInventoryLineRequest {
