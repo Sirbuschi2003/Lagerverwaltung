@@ -1,6 +1,7 @@
 ﻿import React, { useEffect, useMemo, useState } from "react";
 import {
   Alert,
+  Autocomplete,
   Box,
   Button,
   Chip,
@@ -9,12 +10,14 @@ import {
   DialogActions,
   DialogContent,
   DialogTitle,
+  Divider,
   FormControl,
   IconButton,
   InputLabel,
   MenuItem,
   Paper,
   Select,
+  Stack,
   Table,
   TableBody,
   TableCell,
@@ -30,6 +33,7 @@ import {
 import RefreshIcon from "@mui/icons-material/Refresh";
 import EditIcon from "@mui/icons-material/Edit";
 import DeleteIcon from "@mui/icons-material/Delete";
+import AddIcon from "@mui/icons-material/Add";
 import PictureAsPdfIcon from "@mui/icons-material/PictureAsPdf";
 import ArchiveIcon from "@mui/icons-material/Archive";
 import CheckCircleIcon from "@mui/icons-material/CheckCircle";
@@ -38,9 +42,14 @@ import useAuthStore from "../../store/useAuthStore";
 import ItemEditDialog from "../items/ItemEditDialog";
 import {
   deletePurchaseOrder,
+  fetchItems,
   fetchPurchaseOrderPdf,
   fetchPurchaseOrders,
   receivePurchaseOrder,
+  addPurchaseOrderLine,
+  updatePurchaseOrderLine,
+  deletePurchaseOrderLine,
+  type ItemDto,
   type PurchaseOrderDto,
   type PurchaseOrderStatus,
   updatePurchaseOrder,
@@ -106,6 +115,14 @@ const ActiveOrdersTab: React.FC = () => {
 
   const [deleteTarget, setDeleteTarget] = useState<PurchaseOrderDto | null>(null);
   const [itemDialogId, setItemDialogId] = useState<string | null>(null);
+
+  // Positions-Verwaltung im Edit-Dialog
+  const [lineQtyMap, setLineQtyMap] = useState<Record<string, number>>({});
+  const [lineActionLoading, setLineActionLoading] = useState(false);
+  const [addItemSearch, setAddItemSearch] = useState("");
+  const [addItemOptions, setAddItemOptions] = useState<ItemDto[]>([]);
+  const [addItem, setAddItem] = useState<ItemDto | null>(null);
+  const [addQty, setAddQty] = useState(1);
 
   const loadOrders = async (status?: PurchaseOrderStatus) => {
     setLoading(true);
@@ -178,7 +195,81 @@ const ActiveOrdersTab: React.FC = () => {
       orderNumber: order.orderNumber || "",
       note: order.note || "",
     });
+    const qtys: Record<string, number> = {};
+    order.lines.forEach((l) => { qtys[l.id] = l.quantity; });
+    setLineQtyMap(qtys);
+    setAddItem(null);
+    setAddQty(1);
+    setAddItemSearch("");
+    setAddItemOptions([]);
     setEditDialogOpen(true);
+  };
+
+  useEffect(() => {
+    if (!addItemSearch || addItemSearch.length < 2) {
+      setAddItemOptions([]);
+      return;
+    }
+    const timer = setTimeout(async () => {
+      try {
+        const result = await fetchItems({ search: addItemSearch, limit: 15 });
+        setAddItemOptions(result.items);
+      } catch { /* ignore */ }
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [addItemSearch]);
+
+  const handleUpdateLine = async (lineId: string) => {
+    if (!activeOrder || !canEdit) return;
+    const qty = lineQtyMap[lineId];
+    if (!qty || qty < 1) return;
+    const original = activeOrder.lines.find((l) => l.id === lineId)?.quantity;
+    if (qty === original) return;
+    setLineActionLoading(true);
+    try {
+      const updated = await updatePurchaseOrderLine(activeOrder.id, lineId, { quantity: qty });
+      setOrders((prev) => prev.map((o) => (o.id === updated.id ? updated : o)));
+      setActiveOrder(updated);
+    } catch (err: any) {
+      alert(`Fehler: ${err?.response?.data?.message || err?.message || "Unbekannt"}`);
+    } finally {
+      setLineActionLoading(false);
+    }
+  };
+
+  const handleRemoveLine = async (lineId: string) => {
+    if (!activeOrder || !canEdit) return;
+    setLineActionLoading(true);
+    try {
+      const updated = await deletePurchaseOrderLine(activeOrder.id, lineId);
+      setOrders((prev) => prev.map((o) => (o.id === updated.id ? updated : o)));
+      setActiveOrder(updated);
+      setLineQtyMap((prev) => { const next = { ...prev }; delete next[lineId]; return next; });
+    } catch (err: any) {
+      alert(`Fehler: ${err?.response?.data?.message || err?.message || "Unbekannt"}`);
+    } finally {
+      setLineActionLoading(false);
+    }
+  };
+
+  const handleAddLine = async () => {
+    if (!activeOrder || !addItem || addQty < 1 || !canEdit) return;
+    setLineActionLoading(true);
+    try {
+      const updated = await addPurchaseOrderLine(activeOrder.id, { itemId: addItem.id, quantity: addQty });
+      setOrders((prev) => prev.map((o) => (o.id === updated.id ? updated : o)));
+      setActiveOrder(updated);
+      const qtys: Record<string, number> = {};
+      updated.lines.forEach((l) => { qtys[l.id] = l.quantity; });
+      setLineQtyMap(qtys);
+      setAddItem(null);
+      setAddQty(1);
+      setAddItemSearch("");
+    } catch (err: any) {
+      alert(`Fehler: ${err?.response?.data?.message || err?.message || "Unbekannt"}`);
+    } finally {
+      setLineActionLoading(false);
+    }
   };
 
   const handleEditSave = async () => {
@@ -455,7 +546,7 @@ const ActiveOrdersTab: React.FC = () => {
         </TableContainer>
       )}
 
-      <Dialog open={editDialogOpen} onClose={() => setEditDialogOpen(false)} maxWidth="sm" fullWidth>
+      <Dialog open={editDialogOpen} onClose={() => setEditDialogOpen(false)} maxWidth="md" fullWidth>
         <DialogTitle>Bestellung bearbeiten</DialogTitle>
         <DialogContent>
           <Box sx={{ display: "flex", flexDirection: "column", gap: 2, mt: 1 }}>
@@ -483,9 +574,119 @@ const ActiveOrdersTab: React.FC = () => {
               value={orderForm.note}
               onChange={(event) => setOrderForm({ ...orderForm, note: event.target.value })}
               multiline
-              rows={3}
+              rows={2}
               fullWidth
             />
+
+            {/* Positionen – nur bei DRAFT bearbeitbar */}
+            {activeOrder && (
+              <>
+                <Divider />
+                <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>
+                  Positionen ({activeOrder.lines.length})
+                  {activeOrder.status !== "DRAFT" && (
+                    <Typography component="span" variant="caption" color="text.secondary" sx={{ ml: 1 }}>
+                      (nur bei Entwurf bearbeitbar)
+                    </Typography>
+                  )}
+                </Typography>
+                <Table size="small">
+                  <TableHead>
+                    <TableRow>
+                      <TableCell>Artikel</TableCell>
+                      <TableCell align="right">Menge</TableCell>
+                      {activeOrder.status === "DRAFT" && <TableCell />}
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {activeOrder.lines.map((line) => (
+                      <TableRow key={line.id}>
+                        <TableCell>
+                          <Typography variant="body2" sx={{ fontWeight: 600 }}>{line.item.code}</Typography>
+                          <Typography variant="caption" color="text.secondary">{line.item.description}</Typography>
+                        </TableCell>
+                        <TableCell align="right">
+                          {activeOrder.status === "DRAFT" ? (
+                            <TextField
+                              type="number"
+                              size="small"
+                              value={lineQtyMap[line.id] ?? line.quantity}
+                              onChange={(e) =>
+                                setLineQtyMap((prev) => ({ ...prev, [line.id]: Math.max(1, Number.parseInt(e.target.value, 10) || 1) }))
+                              }
+                              onBlur={() => void handleUpdateLine(line.id)}
+                              onFocus={(e) => e.target.select()}
+                              inputProps={{ min: 1 }}
+                              sx={{ width: 80 }}
+                              disabled={lineActionLoading}
+                            />
+                          ) : (
+                            line.quantity
+                          )}
+                        </TableCell>
+                        {activeOrder.status === "DRAFT" && (
+                          <TableCell>
+                            <Tooltip title="Position entfernen">
+                              <span>
+                                <IconButton
+                                  size="small"
+                                  color="error"
+                                  disabled={lineActionLoading || activeOrder.lines.length <= 1}
+                                  onClick={() => void handleRemoveLine(line.id)}
+                                >
+                                  <DeleteIcon fontSize="small" />
+                                </IconButton>
+                              </span>
+                            </Tooltip>
+                          </TableCell>
+                        )}
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+
+                {/* Artikel hinzufügen – nur bei DRAFT */}
+                {activeOrder.status === "DRAFT" && (
+                  <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap">
+                    <Autocomplete
+                      options={addItemOptions}
+                      value={addItem}
+                      onChange={(_, val) => setAddItem(val)}
+                      inputValue={addItemSearch}
+                      onInputChange={(_, val) => setAddItemSearch(val)}
+                      getOptionLabel={(o) => `${o.code} – ${o.description}`}
+                      isOptionEqualToValue={(a, b) => a.id === b.id}
+                      filterOptions={(x) => x}
+                      noOptionsText={addItemSearch.length < 2 ? "Mindestens 2 Zeichen eingeben" : "Kein Artikel gefunden"}
+                      renderInput={(params) => (
+                        <TextField {...params} label="Artikel hinzufügen" size="small" placeholder="Code oder Bezeichnung suchen…" />
+                      )}
+                      sx={{ flex: 1, minWidth: 220 }}
+                    />
+                    <TextField
+                      type="number"
+                      size="small"
+                      label="Menge"
+                      value={addQty}
+                      onChange={(e) => setAddQty(Math.max(1, Number.parseInt(e.target.value, 10) || 1))}
+                      onFocus={(e) => e.target.select()}
+                      inputProps={{ min: 1 }}
+                      sx={{ width: 90 }}
+                      disabled={lineActionLoading}
+                    />
+                    <Button
+                      variant="contained"
+                      size="small"
+                      disabled={!addItem || lineActionLoading}
+                      onClick={() => void handleAddLine()}
+                      startIcon={lineActionLoading ? <CircularProgress size={14} /> : <AddIcon />}
+                    >
+                      Hinzufügen
+                    </Button>
+                  </Stack>
+                )}
+              </>
+            )}
           </Box>
         </DialogContent>
         <DialogActions>

@@ -175,6 +175,7 @@ const ItemEditDialog: React.FC<ItemEditDialogProps> = ({ itemId, open, onClose, 
   const [imageKey, setImageKey] = useState(0); // bump to force img reload
   const [bookingLoading, setBookingLoading] = useState(false);
   const [bookingSuccess, setBookingSuccess] = useState<string | null>(null);
+  const [bookingQty, setBookingQty] = useState(1);
 
   // Daten laden wenn Dialog öffnet
   useEffect(() => {
@@ -205,6 +206,7 @@ const ItemEditDialog: React.FC<ItemEditDialogProps> = ({ itemId, open, onClose, 
       setError(null);
       setBookingLoading(false);
       setBookingSuccess(null);
+      setBookingQty(1);
     }
   }, [open]);
 
@@ -337,7 +339,7 @@ const ItemEditDialog: React.FC<ItemEditDialogProps> = ({ itemId, open, onClose, 
   // ─── Manuelle Buchung ─────────────────────────────────────────────────────
 
   const handleManualBooking = async (type: "CHECKIN" | "CHECKOUT") => {
-    if (!itemId || !originalItem?.storageLocation?.id) return;
+    if (!itemId || !originalItem?.storageLocation?.id || bookingQty < 1) return;
     setBookingLoading(true);
     setBookingSuccess(null);
     setError(null);
@@ -347,14 +349,14 @@ const ItemEditDialog: React.FC<ItemEditDialogProps> = ({ itemId, open, onClose, 
         locationId: originalItem.storageLocation.id,
         userId: user?.id ?? undefined,
         type,
-        quantity: 1,
+        quantity: bookingQty,
         occurredAt: new Date().toISOString(),
         source: "Manuelle Buchung",
       });
       const updated = await fetchItemById(itemId);
       setOriginalItem(updated);
       setForm((f) => ({ ...f, currentQuantity: updated.storageLocation ? (updated.currentQuantity ?? 0) : undefined }));
-      setBookingSuccess(type === "CHECKIN" ? "+1 eingebucht" : "-1 ausgebucht");
+      setBookingSuccess(type === "CHECKIN" ? `+${bookingQty} eingebucht` : `-${bookingQty} ausgebucht`);
       setTimeout(() => setBookingSuccess(null), 3000);
     } catch {
       setError("Buchung fehlgeschlagen.");
@@ -718,6 +720,17 @@ const ItemEditDialog: React.FC<ItemEditDialogProps> = ({ itemId, open, onClose, 
                       Manuelle Buchung
                     </Typography>
                     <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap">
+                      <TextField
+                        type="number"
+                        size="small"
+                        label="Menge"
+                        value={bookingQty}
+                        onChange={(e) => setBookingQty(Math.max(1, Number.parseInt(e.target.value, 10) || 1))}
+                        onFocus={(e) => e.target.select()}
+                        inputProps={{ min: 1 }}
+                        sx={{ width: 90 }}
+                        disabled={bookingLoading || loadingItem}
+                      />
                       <Button
                         variant="outlined"
                         color="success"
@@ -726,7 +739,7 @@ const ItemEditDialog: React.FC<ItemEditDialogProps> = ({ itemId, open, onClose, 
                         onClick={() => void handleManualBooking("CHECKIN")}
                         startIcon={bookingLoading ? <CircularProgress size={14} /> : <AddIcon />}
                       >
-                        +1 einbuchen
+                        Einbuchen
                       </Button>
                       <Button
                         variant="outlined"
@@ -736,7 +749,7 @@ const ItemEditDialog: React.FC<ItemEditDialogProps> = ({ itemId, open, onClose, 
                         onClick={() => void handleManualBooking("CHECKOUT")}
                         startIcon={<RemoveIcon />}
                       >
-                        -1 ausbuchen
+                        Ausbuchen
                       </Button>
                       {bookingSuccess && (
                         <Typography variant="body2" color="success.main" sx={{ fontWeight: 600 }}>

@@ -892,6 +892,31 @@ export const deletePurchaseOrder = async (id: string): Promise<void> => {
   await api.delete(`/purchase-orders/${id}`);
 };
 
+export const addPurchaseOrderLine = async (
+  orderId: string,
+  payload: { itemId: string; quantity: number },
+): Promise<PurchaseOrderDto> => {
+  const response = await api.post<PurchaseOrderDto>(`/purchase-orders/${orderId}/lines`, payload);
+  return response.data;
+};
+
+export const updatePurchaseOrderLine = async (
+  orderId: string,
+  lineId: string,
+  payload: { quantity: number },
+): Promise<PurchaseOrderDto> => {
+  const response = await api.patch<PurchaseOrderDto>(`/purchase-orders/${orderId}/lines/${lineId}`, payload);
+  return response.data;
+};
+
+export const deletePurchaseOrderLine = async (
+  orderId: string,
+  lineId: string,
+): Promise<PurchaseOrderDto> => {
+  const response = await api.delete<PurchaseOrderDto>(`/purchase-orders/${orderId}/lines/${lineId}`);
+  return response.data;
+};
+
 export const fetchPurchaseOrderPdf = async (id: string): Promise<Blob> => {
   const response = await api.get(`/purchase-orders/${id}/pdf`, {
     responseType: "blob",

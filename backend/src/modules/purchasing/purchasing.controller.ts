@@ -99,6 +99,24 @@ export class PurchasingController {
     return this.purchasingService.update(id, dto, req.user?.branchId);
   }
 
+  @Post(":id/lines")
+  @Permissions("orders.edit")
+  addLine(@Req() req: PurchasingRequest, @Param("id") id: string, @Body() body: { itemId: string; quantity: number }) {
+    return this.purchasingService.addLine(id, body, req.user?.branchId);
+  }
+
+  @Patch(":id/lines/:lineId")
+  @Permissions("orders.edit")
+  updateLine(@Req() req: PurchasingRequest, @Param("id") id: string, @Param("lineId") lineId: string, @Body() body: { quantity: number }) {
+    return this.purchasingService.updateLine(id, lineId, body, req.user?.branchId);
+  }
+
+  @Delete(":id/lines/:lineId")
+  @Permissions("orders.edit")
+  removeLine(@Req() req: PurchasingRequest, @Param("id") id: string, @Param("lineId") lineId: string) {
+    return this.purchasingService.removeLine(id, lineId, req.user?.branchId);
+  }
+
   @Delete(":id")
   @Permissions("orders.delete")
   remove(@Req() req: PurchasingRequest, @Param("id") id: string) {

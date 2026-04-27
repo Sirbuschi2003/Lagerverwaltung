@@ -270,6 +270,67 @@ export class PurchasingService {
     return saved;
   }
 
+  async addLine(
+    orderId: string,
+    payload: { itemId: string; quantity: number },
+    branchId?: string | null,
+  ): Promise<PurchaseOrder> {
+    const order = await this.findOne(orderId, branchId);
+    if (order.status !== "DRAFT") {
+      throw new BadRequestException("Artikel können nur zu Entwürfen hinzugefügt werden");
+    }
+    const item = await this.itemsService.findOne(payload.itemId);
+    if (!item) throw new NotFoundException("Artikel nicht gefunden");
+
+    const existing = order.lines?.find((l) => l.item?.id === payload.itemId);
+    if (existing) {
+      existing.quantity += Math.max(1, payload.quantity);
+      await this.linesRepository.save(existing);
+    } else {
+      const line = this.linesRepository.create({ order, item, quantity: Math.max(1, payload.quantity), receivedQuantity: 0 });
+      await this.linesRepository.save(line);
+    }
+    this.invalidateSuggestionsCache();
+    return this.findOne(orderId, branchId);
+  }
+
+  async updateLine(
+    orderId: string,
+    lineId: string,
+    payload: { quantity: number },
+    branchId?: string | null,
+  ): Promise<PurchaseOrder> {
+    const order = await this.findOne(orderId, branchId);
+    if (order.status !== "DRAFT") {
+      throw new BadRequestException("Positionen können nur bei Entwürfen bearbeitet werden");
+    }
+    const line = order.lines?.find((l) => l.id === lineId);
+    if (!line) throw new NotFoundException("Position nicht gefunden");
+    line.quantity = Math.max(1, payload.quantity);
+    await this.linesRepository.save(line);
+    this.invalidateSuggestionsCache();
+    return this.findOne(orderId, branchId);
+  }
+
+  async removeLine(
+    orderId: string,
+    lineId: string,
+    branchId?: string | null,
+  ): Promise<PurchaseOrder> {
+    const order = await this.findOne(orderId, branchId);
+    if (order.status !== "DRAFT") {
+      throw new BadRequestException("Positionen können nur bei Entwürfen entfernt werden");
+    }
+    if (!order.lines?.length || order.lines.length <= 1) {
+      throw new BadRequestException("Die Bestellung muss mindestens eine Position behalten");
+    }
+    const line = order.lines?.find((l) => l.id === lineId);
+    if (!line) throw new NotFoundException("Position nicht gefunden");
+    await this.linesRepository.delete(lineId);
+    this.invalidateSuggestionsCache();
+    return this.findOne(orderId, branchId);
+  }
+
   async receiveOrder(
     id: string,
     payload: { lines: Array<{ lineId: string; receivedQuantity?: number }>; deliveryNoteNumber?: string },
