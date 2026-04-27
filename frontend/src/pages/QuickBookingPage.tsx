@@ -18,6 +18,7 @@ import {
   Radio,
   RadioGroup,
   Stack,
+  Switch,
   Table,
   TableBody,
   TableCell,
@@ -81,6 +82,22 @@ const QuickBookingPage: React.FC = () => {
   const [cameraOpen, setCameraOpen] = useState(false);
   const [cameraScanFeedback, setCameraScanFeedback] = useState<CameraScanFeedback | null>(null);
   const [syncConnected, setSyncConnected] = useState(false);
+  const [vorgangsnummerFirst, setVorgangsnummerFirst] = useState<boolean>(() => {
+    try {
+      const stored = localStorage.getItem("lv-qb-workflow");
+      return stored === null ? true : stored === "true";
+    } catch {
+      return true;
+    }
+  });
+
+  const toggleWorkflow = () => {
+    setVorgangsnummerFirst((prev) => {
+      const next = !prev;
+      try { localStorage.setItem("lv-qb-workflow", String(next)); } catch { /* ignore */ }
+      return next;
+    });
+  };
 
   const barcodeWrapperRef = useRef<HTMLDivElement>(null);
   const referenceRef = useRef<HTMLInputElement>(null);
@@ -99,8 +116,12 @@ const QuickBookingPage: React.FC = () => {
   }, []);
 
   useEffect(() => {
-    setTimeout(() => referenceRef.current?.focus(), 100);
-  }, []);
+    if (vorgangsnummerFirst) {
+      setTimeout(() => referenceRef.current?.focus(), 100);
+    } else {
+      setTimeout(() => barcodeWrapperRef.current?.querySelector<HTMLInputElement>("input")?.focus(), 100);
+    }
+  }, []);  // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Socket.io Echtzeit-Sync ───────────────────────────────────────────────
   useEffect(() => {
@@ -357,9 +378,13 @@ const QuickBookingPage: React.FC = () => {
       setCurrentItem(null);
       setReference("");
       setTimeout(() => {
-        if (referenceRef.current) {
-          referenceRef.current.value = "";
-          referenceRef.current.focus();
+        if (vorgangsnummerFirst) {
+          if (referenceRef.current) {
+            referenceRef.current.value = "";
+            referenceRef.current.focus();
+          }
+        } else {
+          barcodeWrapperRef.current?.querySelector<HTMLInputElement>("input")?.focus();
         }
       }, 80);
     } else {
@@ -543,6 +568,17 @@ const QuickBookingPage: React.FC = () => {
               helperText=" "
             />
           </Box>
+        </Stack>
+
+        {/* Workflow-Einstellung */}
+        <Divider sx={{ mt: 1.5 }} />
+        <Stack direction="row" spacing={1} alignItems="center" sx={{ mt: 1 }}>
+          <Switch size="small" checked={vorgangsnummerFirst} onChange={toggleWorkflow} />
+          <Typography variant="caption" color="text.secondary">
+            {vorgangsnummerFirst
+              ? "Workflow: Vorgangsnummer → Artikel (z.B. Tonerlager)"
+              : "Workflow: Direkt Artikel (z.B. Teilelager)"}
+          </Typography>
         </Stack>
 
         {/* Kamera-Scanner-Button für Mobile (prominent) */}

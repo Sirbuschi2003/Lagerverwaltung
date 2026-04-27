@@ -1,5 +1,22 @@
 # Changelog
 
+## [3.6.2] – 2026-04-27
+
+### Feature: Schnellbuchung – konfigurierbarer Startfokus
+
+- Neuer Toggle „Workflow" direkt im Schnellbuchungs-Formular
+- **EIN (Vorgangsnummer → Artikel):** Fokus landet beim Öffnen und nach Übernehmen auf dem Vorgangsnummer-Feld (z.B. Tonerlager)
+- **AUS (Direkt Artikel):** Fokus landet beim Öffnen und nach Übernehmen direkt auf dem Barcode-Feld (z.B. Teilelager)
+- Einstellung wird pro Gerät in `localStorage` gespeichert und bleibt nach Browser-Neustart erhalten
+
+### Bugfix: Offene Anforderungen – Lager-Trennung (Teilelager vs. Tonerlager)
+
+- Lagermitarbeiter sahen bisher alle offenen Fehlbestandsmeldungen aller Lager ihrer Niederlassung
+- Jetzt werden nur noch Anforderungen angezeigt, deren Artikel im eigenen Lager gelagert sind (Lagerort-Hierarchie-Filter über `locationIds`)
+- Andere Niederlassungen waren bereits durch den `branchId`-Filter isoliert
+
+---
+
 ## [3.6.1] – 2026-04-27
 
 ### Feature: Schnellbuchung – UX-Verbesserungen (Fokus & Freitextsuche)
