@@ -1,4 +1,4 @@
-﻿import React, { useEffect, useState, useMemo } from "react";
+﻿import React, { useEffect, useRef, useState, useMemo } from "react";
 import {
   Alert,
   Autocomplete,
@@ -6,28 +6,33 @@ import {
   Button,
   Checkbox,
   Chip,
+  CircularProgress,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
+  Divider,
+  FormControlLabel,
+  IconButton,
+  List,
+  ListItem,
+  ListItemText,
   Paper,
+  Stack,
+  Step,
+  StepLabel,
+  Stepper,
+  Switch,
   Table,
   TableBody,
   TableCell,
   TableHead,
   TableRow,
   TextField,
-  Typography,
   Tooltip,
-  IconButton,
-  CircularProgress,
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
-  List,
-  ListItem,
-  ListItemText,
+  Typography,
   alpha,
   useTheme,
-  FormControlLabel,
-  Switch,
 } from "@mui/material";
 import RefreshIcon from "@mui/icons-material/Refresh";
 import ShoppingCartIcon from "@mui/icons-material/ShoppingCart";
@@ -35,6 +40,9 @@ import DownloadIcon from "@mui/icons-material/Download";
 import EmailIcon from "@mui/icons-material/Email";
 import DraftsIcon from "@mui/icons-material/Drafts";
 import StorefrontIcon from "@mui/icons-material/Storefront";
+import AddIcon from "@mui/icons-material/Add";
+import DeleteIcon from "@mui/icons-material/Delete";
+import ArrowForwardIcon from "@mui/icons-material/ArrowForward";
 import useAuthStore from "../../store/useAuthStore";
 import {
   fetchPurchaseSuggestions,
@@ -43,14 +51,30 @@ import {
   fetchPurchaseOrderPdf,
   fetchPublicCompanyConfig,
   fetchPurchaseOrderEmailTemplate,
+  fetchItems,
   type PurchaseOrderSuggestionDto,
   type PurchaseOrderDto,
   type LocationDto,
+  type ItemDto,
   fetchLocations,
   type CompanyConfigDto,
   type EmailTemplate,
 } from "../../utils/api";
 import ItemEditDialog from "../items/ItemEditDialog";
+
+interface WizardLine {
+  itemId: string;
+  code: string;
+  description: string;
+  descriptionSecondary?: string | null;
+  quantity: number;
+}
+
+interface WizardGroup {
+  supplierId: string;
+  supplierName: string;
+  lines: WizardLine[];
+}
 
 const OrderSuggestionsTab: React.FC = () => {
   const theme = useTheme();
@@ -79,8 +103,16 @@ const OrderSuggestionsTab: React.FC = () => {
 
   const [selectedSuggestions, setSelectedSuggestions] = useState<Record<string, boolean>>({});
   const [suggestionQuantities, setSuggestionQuantities] = useState<Record<string, number>>({});
-  const [creatingOrders, setCreatingOrders] = useState(false);
   
+  // Wizard
+  const [wizardOpen, setWizardOpen] = useState(false);
+  const [wizardGroups, setWizardGroups] = useState<WizardGroup[]>([]);
+  const [wizardCreating, setWizardCreating] = useState(false);
+  const [addSearches, setAddSearches] = useState<Record<string, string>>({});
+  const [addOptions, setAddOptions] = useState<Record<string, ItemDto[]>>({});
+  const [addItems, setAddItems] = useState<Record<string, ItemDto | null>>({});
+  const [addQtys, setAddQtys] = useState<Record<string, number>>({});
+
   // Dialog für Bestellaktionen
   const [actionDialogOpen, setActionDialogOpen] = useState(false);
   const [createdOrders, setCreatedOrders] = useState<PurchaseOrderDto[]>([]);
@@ -274,6 +306,27 @@ const OrderSuggestionsTab: React.FC = () => {
     });
   }, []);
 
+  useEffect(() => {
+    const timers: ReturnType<typeof setTimeout>[] = [];
+    wizardGroups.forEach((group) => {
+      const search = addSearches[group.supplierId] ?? "";
+      if (search.length < 2) {
+        setAddOptions((prev) => ({ ...prev, [group.supplierId]: [] }));
+        return;
+      }
+      const t = setTimeout(async () => {
+        try {
+          const result = await fetchItems({ search, limit: 15 });
+          setAddOptions((prev) => ({ ...prev, [group.supplierId]: result.items ?? [] }));
+        } catch {
+          // ignore
+        }
+      }, 300);
+      timers.push(t);
+    });
+    return () => timers.forEach(clearTimeout);
+  }, [addSearches, wizardGroups]);
+
   const supplierOptions = useMemo(() => {
     const seen = new Map<string, string>();
     suggestions.forEach((s) => {
@@ -369,77 +422,86 @@ const OrderSuggestionsTab: React.FC = () => {
     });
   };
 
-  const handleCreateOrders = async () => {
+  const handleCreateOrders = () => {
     const selectedItems = sortedSuggestions.filter((s) => selectedSuggestions[s.itemId]);
     if (selectedItems.length === 0) {
       alert("Bitte wählen Sie mindestens einen Artikel aus.");
       return;
     }
 
-    // Gruppiere nach Lieferant
-    const ordersBySupplier = new Map<string, typeof selectedItems>();
+    const groupMap = new Map<string, WizardGroup>();
+    let hasNoSupplier = false;
     selectedItems.forEach((item) => {
-      const key = item.supplierId || "NO_SUPPLIER";
-      if (!ordersBySupplier.has(key)) {
-        ordersBySupplier.set(key, []);
+      if (!item.supplierId) {
+        hasNoSupplier = true;
+        return;
       }
-      ordersBySupplier.get(key)!.push(item);
+      if (!groupMap.has(item.supplierId)) {
+        groupMap.set(item.supplierId, {
+          supplierId: item.supplierId,
+          supplierName: item.supplierName || "Kein Lieferant",
+          lines: [],
+        });
+      }
+      const qty = Number(suggestionQuantities[item.itemId] ?? 0);
+      const needed = Math.max(0, Number(item.neededQuantity ?? 0));
+      groupMap.get(item.supplierId)!.lines.push({
+        itemId: item.itemId,
+        code: item.code,
+        description: item.description,
+        descriptionSecondary: item.descriptionSecondary,
+        quantity: qty > 0 ? qty : needed,
+      });
     });
 
-    setCreatingOrders(true);
+    if (hasNoSupplier) {
+      alert("Einige Artikel haben keinen Lieferanten und werden übersprungen.");
+    }
+
+    if (groupMap.size === 0) {
+      alert("Keine bestellbaren Artikel ausgewählt (alle ohne Lieferant).");
+      return;
+    }
+
+    setWizardGroups(Array.from(groupMap.values()));
+    setAddSearches({});
+    setAddOptions({});
+    setAddItems({});
+    setAddQtys({});
+    setWizardOpen(true);
+  };
+
+  const handleWizardCreateOrders = async () => {
+    setWizardCreating(true);
     try {
       const ordersList: PurchaseOrderDto[] = [];
-      
-      for (const [supplierId, items] of ordersBySupplier.entries()) {
-        if (supplierId === "NO_SUPPLIER") {
-          alert(`Einige Artikel haben keinen Lieferanten. Diese werden übersprungen.`);
-          continue;
-        }
-
-        const lines = items
-          .map((item) => {
-            const enteredQuantity = Number(suggestionQuantities[item.itemId] ?? 0);
-            const neededQuantity = Math.max(0, Number(item.neededQuantity ?? 0));
-            return {
-              itemId: item.itemId,
-              quantity: enteredQuantity > 0 ? enteredQuantity : neededQuantity,
-            };
-          })
-          .filter((line) => line.quantity > 0);
-
-        console.log("Erstelle Bestellung für Lieferant:", supplierId, "mit", lines.length, "Artikeln");
+      for (const group of wizardGroups) {
+        const lines = group.lines
+          .filter((l) => l.quantity > 0)
+          .map((l) => ({ itemId: l.itemId, quantity: l.quantity }));
+        if (lines.length === 0) continue;
         const order = await createPurchaseOrder({
-          supplierId,
+          supplierId: group.supplierId,
           lines,
           note: "Automatisch erstellt aus Bestellvorschlägen",
         });
-        console.log("Bestellung erstellt:", order);
-        
         ordersList.push(order);
       }
 
-      console.log("Alle Bestellungen erstellt:", ordersList.length);
-      
       if (ordersList.length === 0) {
-        alert("Keine Bestellungen erstellt.");
+        alert("Keine Bestellungen erstellt (alle Positionen haben Menge 0).");
         return;
       }
 
-      // Dialog öffnen mit den erstellten Bestellungen
+      setWizardOpen(false);
       setCreatedOrders(ordersList);
       setActionDialogOpen(true);
-      console.log("Dialog sollte jetzt geöffnet sein");
-      
-      // Neu laden
       await loadData();
-      
-      // Auswahl zurücksetzen
       setSelectedSuggestions({});
     } catch (err: any) {
-      console.error("Fehler beim Erstellen der Bestellungen:", err);
       alert("Fehler beim Erstellen der Bestellungen: " + (err.response?.data?.message || err.message));
     } finally {
-      setCreatingOrders(false);
+      setWizardCreating(false);
     }
   };
   
@@ -662,12 +724,9 @@ const OrderSuggestionsTab: React.FC = () => {
               variant="contained"
               startIcon={<ShoppingCartIcon />}
               onClick={handleCreateOrders}
-              disabled={
-                creatingOrders ||
-                !Object.values(selectedSuggestions).some(Boolean)
-              }
+              disabled={!Object.values(selectedSuggestions).some(Boolean)}
             >
-              {creatingOrders ? "Erstelle..." : "Bestellungen erstellen"}
+              Bestellungen erstellen
             </Button>
           )}
         </Box>
@@ -923,19 +982,239 @@ const OrderSuggestionsTab: React.FC = () => {
         </Paper>
       )}
       
+      {/* Bestellungs-Wizard */}
+      <Dialog
+        open={wizardOpen}
+        onClose={() => { if (!wizardCreating) setWizardOpen(false); }}
+        maxWidth="md"
+        fullWidth
+        disableEscapeKeyDown={wizardCreating}
+      >
+        <DialogTitle>
+          <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+            <ShoppingCartIcon color="primary" />
+            <Typography variant="h6">Bestellung prüfen &amp; aufgeben</Typography>
+          </Box>
+          <Stepper activeStep={0} sx={{ mt: 1.5 }}>
+            <Step completed={false}>
+              <StepLabel>Positionen prüfen</StepLabel>
+            </Step>
+            <Step>
+              <StepLabel>Bestellung aufgeben</StepLabel>
+            </Step>
+          </Stepper>
+        </DialogTitle>
+        <DialogContent dividers>
+          {wizardGroups.map((group) => (
+            <Box key={group.supplierId} sx={{ mb: 3 }}>
+              <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 1 }}>
+                <StorefrontIcon fontSize="small" color="primary" />
+                <Typography variant="subtitle1" fontWeight={700} color="primary.main">
+                  {group.supplierName}
+                </Typography>
+                <Chip label={`${group.lines.length} Artikel`} size="small" />
+              </Box>
+              <Table size="small">
+                <TableHead>
+                  <TableRow>
+                    <TableCell>Artikelnummer</TableCell>
+                    <TableCell>Bezeichnung</TableCell>
+                    <TableCell align="right" sx={{ width: 100 }}>Menge</TableCell>
+                    <TableCell sx={{ width: 48 }} />
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {group.lines.map((line) => (
+                    <TableRow key={line.itemId}>
+                      <TableCell>
+                        <Typography variant="body2" fontWeight="medium">{line.code}</Typography>
+                      </TableCell>
+                      <TableCell>
+                        <Typography variant="body2" fontWeight={600}>{line.description}</Typography>
+                        {line.descriptionSecondary && (
+                          <Typography variant="caption" color="text.secondary">{line.descriptionSecondary}</Typography>
+                        )}
+                      </TableCell>
+                      <TableCell align="right">
+                        <TextField
+                          type="number"
+                          size="small"
+                          value={line.quantity}
+                          onChange={(e) => {
+                            const qty = Math.max(0, parseInt(e.target.value) || 0);
+                            setWizardGroups((prev) =>
+                              prev.map((g) =>
+                                g.supplierId === group.supplierId
+                                  ? { ...g, lines: g.lines.map((l) => l.itemId === line.itemId ? { ...l, quantity: qty } : l) }
+                                  : g,
+                              ),
+                            );
+                          }}
+                          onFocus={(e) => e.target.select()}
+                          inputProps={{ min: 0, style: { textAlign: "right" } }}
+                          sx={{ width: 80 }}
+                          disabled={wizardCreating}
+                        />
+                      </TableCell>
+                      <TableCell>
+                        <IconButton
+                          size="small"
+                          color="error"
+                          disabled={wizardCreating}
+                          onClick={() =>
+                            setWizardGroups((prev) =>
+                              prev
+                                .map((g) =>
+                                  g.supplierId === group.supplierId
+                                    ? { ...g, lines: g.lines.filter((l) => l.itemId !== line.itemId) }
+                                    : g,
+                                )
+                                .filter((g) => g.lines.length > 0),
+                            )
+                          }
+                        >
+                          <DeleteIcon fontSize="small" />
+                        </IconButton>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                  {/* Artikel hinzufügen */}
+                  <TableRow>
+                    <TableCell colSpan={2}>
+                      <Autocomplete
+                        freeSolo={false}
+                        size="small"
+                        options={addOptions[group.supplierId] ?? []}
+                        getOptionLabel={(o) => typeof o === "string" ? o : `${o.code} – ${o.description}`}
+                        isOptionEqualToValue={(opt, val) => opt.id === val.id}
+                        value={addItems[group.supplierId] ?? null}
+                        inputValue={addSearches[group.supplierId] ?? ""}
+                        onInputChange={(_, val) =>
+                          setAddSearches((prev) => ({ ...prev, [group.supplierId]: val }))
+                        }
+                        onChange={(_, val) => {
+                          setAddItems((prev) => ({ ...prev, [group.supplierId]: val as ItemDto | null }));
+                        }}
+                        renderInput={(params) => (
+                          <TextField
+                            {...params}
+                            placeholder="Artikel suchen und hinzufügen..."
+                            size="small"
+                          />
+                        )}
+                        noOptionsText={
+                          (addSearches[group.supplierId]?.length ?? 0) < 2
+                            ? "Mindestens 2 Zeichen eingeben"
+                            : "Kein Artikel gefunden"
+                        }
+                        disabled={wizardCreating}
+                      />
+                    </TableCell>
+                    <TableCell align="right">
+                      <TextField
+                        type="number"
+                        size="small"
+                        value={addQtys[group.supplierId] ?? 1}
+                        onChange={(e) =>
+                          setAddQtys((prev) => ({
+                            ...prev,
+                            [group.supplierId]: Math.max(1, parseInt(e.target.value) || 1),
+                          }))
+                        }
+                        onFocus={(e) => e.target.select()}
+                        inputProps={{ min: 1, style: { textAlign: "right" } }}
+                        sx={{ width: 80 }}
+                        disabled={wizardCreating}
+                      />
+                    </TableCell>
+                    <TableCell>
+                      <IconButton
+                        size="small"
+                        color="primary"
+                        disabled={wizardCreating || !addItems[group.supplierId]}
+                        onClick={() => {
+                          const item = addItems[group.supplierId];
+                          if (!item) return;
+                          const qty = addQtys[group.supplierId] ?? 1;
+                          setWizardGroups((prev) =>
+                            prev.map((g) => {
+                              if (g.supplierId !== group.supplierId) return g;
+                              const existing = g.lines.find((l) => l.itemId === item.id);
+                              if (existing) {
+                                return {
+                                  ...g,
+                                  lines: g.lines.map((l) =>
+                                    l.itemId === item.id ? { ...l, quantity: l.quantity + qty } : l,
+                                  ),
+                                };
+                              }
+                              return {
+                                ...g,
+                                lines: [
+                                  ...g.lines,
+                                  {
+                                    itemId: item.id,
+                                    code: item.code,
+                                    description: item.description,
+                                    descriptionSecondary: item.descriptionSecondary,
+                                    quantity: qty,
+                                  },
+                                ],
+                              };
+                            }),
+                          );
+                          setAddItems((prev) => ({ ...prev, [group.supplierId]: null }));
+                          setAddSearches((prev) => ({ ...prev, [group.supplierId]: "" }));
+                          setAddQtys((prev) => ({ ...prev, [group.supplierId]: 1 }));
+                        }}
+                      >
+                        <AddIcon fontSize="small" />
+                      </IconButton>
+                    </TableCell>
+                  </TableRow>
+                </TableBody>
+              </Table>
+              <Divider sx={{ mt: 2 }} />
+            </Box>
+          ))}
+          {wizardGroups.length === 0 && (
+            <Alert severity="warning">Alle Positionen wurden entfernt. Bitte fügen Sie Artikel hinzu oder schließen Sie den Wizard.</Alert>
+          )}
+        </DialogContent>
+        <DialogActions sx={{ p: 2, gap: 1 }}>
+          <Button onClick={() => setWizardOpen(false)} disabled={wizardCreating}>
+            Abbrechen
+          </Button>
+          <Button
+            variant="contained"
+            color="primary"
+            size="large"
+            endIcon={wizardCreating ? <CircularProgress size={18} color="inherit" /> : <ArrowForwardIcon />}
+            onClick={handleWizardCreateOrders}
+            disabled={
+              wizardCreating ||
+              wizardGroups.length === 0 ||
+              wizardGroups.every((g) => g.lines.every((l) => l.quantity === 0))
+            }
+          >
+            {wizardCreating ? "Erstelle Bestellungen..." : "Bestellung aufgeben"}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
       {/* Dialog für Bestellaktionen */}
-      <Dialog 
-        open={actionDialogOpen} 
+      <Dialog
+        open={actionDialogOpen}
         onClose={(_, reason) => {
           if (processingAction) return;
           if (reason === "backdropClick") return;
           setActionDialogOpen(false);
-        }} 
-        maxWidth="sm" 
+        }}
+        maxWidth="sm"
         fullWidth
         disableEscapeKeyDown={processingAction}
       >
-        <DialogTitle>Bestellungen erstellt - Was möchten Sie tun?</DialogTitle>
+        <DialogTitle>Bestellungen erstellt – Was möchten Sie tun?</DialogTitle>
         <DialogContent>
           {createdOrders.length > 0 && (
             <>
