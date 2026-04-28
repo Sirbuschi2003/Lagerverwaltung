@@ -160,7 +160,9 @@ export class ItemsService {
               item.code LIKE :q
               OR item.qrCodeValue LIKE :q
               OR code.code LIKE :q
+              OR item.description LIKE :q
               OR item.descriptionSecondary LIKE :q
+              OR item.manufacturer LIKE :q
               OR MATCH(item.description, item.manufacturer, item.productGroup) AGAINST(:ft IN BOOLEAN MODE)
             )`,
             { q: `%${term}%`, ft: ftTerm }

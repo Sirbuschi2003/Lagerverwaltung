@@ -1271,7 +1271,7 @@ const InventoryPage = () => {
                     InputProps={{ inputProps: { min: 0 } }}
                   />
                   <TextField
-                    label="Gezhlte Menge"
+                    label="Gezählte Menge"
                     type="number"
                     value={countedQuantity}
                     onChange={(e: any) => setCountedQuantity(e.target.value)}
@@ -1336,45 +1336,73 @@ const InventoryPage = () => {
                     Erfasste Positionen ({sortedLines.length})
                   </Typography>
                   {isMobileView ? (
-                    <Stack spacing={1.5}>
+                    <Stack spacing={1}>
                       {sortedLines.map((line: any) => {
                         const difference = line.countedQuantity - line.expectedQuantity;
+                        const diffColor = difference === 0 ? "success.main" : difference > 0 ? "warning.main" : "error.main";
                         return (
-                          <Paper key={line.id} variant="outlined" sx={{ p: 1.5 }}>
-                            <Stack spacing={1}>
-                              <Stack direction="row" justifyContent="space-between" alignItems="center">
-                                <Box>
-                                  <Typography variant="subtitle2" fontWeight={600}>
+                          <Paper
+                            key={line.id}
+                            variant="outlined"
+                            sx={{
+                              p: 1.5,
+                              borderLeft: "4px solid",
+                              borderLeftColor: diffColor,
+                            }}
+                          >
+                            <Stack spacing={0.75}>
+                              <Stack direction="row" justifyContent="space-between" alignItems="flex-start">
+                                <Box sx={{ flex: 1, mr: 1 }}>
+                                  <Typography variant="subtitle2" fontWeight={700} sx={{ lineHeight: 1.2 }}>
                                     {line.item?.code || "-"}
                                   </Typography>
-                                  <Typography variant="body2" color="text.secondary">
+                                  <Typography variant="caption" color="text.secondary" sx={{ display: "block" }}>
                                     {line.item?.description || "-"}
                                   </Typography>
                                 </Box>
                                 {renderDifferenceChip(difference)}
                               </Stack>
-                              <Stack spacing={0.5}>
-                                <Typography variant="body2">
-                                  <strong>Hersteller:</strong> {line.item?.manufacturer || "-"}
-                                </Typography>
-                                <Typography variant="body2">
-                                  <strong>Warengruppe:</strong> {line.item?.productGroup || "-"}
-                                </Typography>
-                                <Typography variant="body2">
-                                  <strong>Fahrzeug / Ort:</strong>{" "}
-                                  {line.vehicle?.licensePlate || activeSession.location || "-"}
-                                </Typography>
-                                <Typography variant="body2">
-                                  <strong>Gezählt:</strong> {line.countedQuantity} &nbsp;|&nbsp;{" "}
-                                  <strong>Erwartet:</strong> {line.expectedQuantity}
-                                </Typography>
-                                {line.note && (
-                                  <Typography variant="body2">
-                                    <strong>Notiz:</strong> {line.note}
+                              <Box
+                                sx={{
+                                  display: "grid",
+                                  gridTemplateColumns: "1fr 1fr 1fr",
+                                  gap: 0.5,
+                                  bgcolor: "action.hover",
+                                  borderRadius: 0.5,
+                                  p: 1,
+                                  textAlign: "center",
+                                }}
+                              >
+                                <Box>
+                                  <Typography variant="caption" color="text.secondary" display="block">Erwartet</Typography>
+                                  <Typography variant="h6" fontWeight={700} lineHeight={1}>{line.expectedQuantity}</Typography>
+                                </Box>
+                                <Box>
+                                  <Typography variant="caption" color="text.secondary" display="block">Gezählt</Typography>
+                                  <Typography variant="h6" fontWeight={700} lineHeight={1}>{line.countedQuantity}</Typography>
+                                </Box>
+                                <Box>
+                                  <Typography variant="caption" color="text.secondary" display="block">Differenz</Typography>
+                                  <Typography variant="h6" fontWeight={700} lineHeight={1} sx={{ color: diffColor }}>
+                                    {difference > 0 ? `+${difference}` : difference}
                                   </Typography>
-                                )}
-                              </Stack>
-                              <Stack direction="row" justifyContent="flex-end" spacing={1}>
+                                </Box>
+                              </Box>
+                              {(line.vehicle?.licensePlate || line.note) && (
+                                <Stack direction="row" spacing={1} flexWrap="wrap">
+                                  {line.vehicle?.licensePlate && (
+                                    <Typography variant="caption" color="text.secondary">
+                                      {line.vehicle.licensePlate}
+                                    </Typography>
+                                  )}
+                                  {line.note && (
+                                    <Typography variant="caption" color="text.secondary">
+                                      Notiz: {line.note}
+                                    </Typography>
+                                  )}
+                                </Stack>
+                              )}
+                              <Stack direction="row" justifyContent="flex-end" spacing={0.5}>
                                 {!currentVehicleSubmitted && activeSession.status === 'DRAFT' && (
                                   <IconButton
                                     size="small"
@@ -1411,7 +1439,7 @@ const InventoryPage = () => {
                             <TableCell>Hersteller</TableCell>
                             <TableCell>Warengruppe</TableCell>
                             <TableCell>Warenort / Fahrzeug</TableCell>
-                            <TableCell align="right">Gezhlte Menge</TableCell>
+                            <TableCell align="right">Gezählte Menge</TableCell>
                             <TableCell align="right">Erwartete Menge</TableCell>
                             <TableCell align="right">Differenz</TableCell>
                             <TableCell>Notiz</TableCell>
@@ -1691,14 +1719,40 @@ const InventoryPage = () => {
         <DialogContent>
           <Stack spacing={2} sx={{ pt: 1 }}>
             {pendingItem && (
-              <Typography variant="body2" color="text.secondary">
-                {pendingItem.code} - {pendingItem.description}
-              </Typography>
+              <Box>
+                <Typography variant="subtitle2" fontWeight={700}>
+                  {pendingItem.code}
+                </Typography>
+                <Typography variant="body2" color="text.secondary">
+                  {pendingItem.description}
+                </Typography>
+                {pendingItem.descriptionSecondary && (
+                  <Typography variant="caption" color="text.secondary">
+                    {pendingItem.descriptionSecondary}
+                  </Typography>
+                )}
+              </Box>
             )}
-            <Typography variant="body2" color="text.secondary">
-              Erwartete Menge:{" "}
-              {pendingExpected ?? (pendingItem ? resolveExpectedQuantity(pendingItem) : 0)}
-            </Typography>
+            <Box
+              sx={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                bgcolor: "action.hover",
+                borderRadius: 1,
+                px: 2,
+                py: 1.5,
+                border: "1px solid",
+                borderColor: "divider",
+              }}
+            >
+              <Typography variant="body2" color="text.secondary">
+                Erwartete Menge
+              </Typography>
+              <Typography variant="h4" fontWeight={800} color="primary.main">
+                {pendingExpected ?? (pendingItem ? resolveExpectedQuantity(pendingItem) : 0)}
+              </Typography>
+            </Box>
             <TextField
               autoFocus
               label="Gezählte Menge"
@@ -1711,6 +1765,7 @@ const InventoryPage = () => {
                 }
               }}
               inputProps={{ min: 0, inputMode: "numeric" }}
+              fullWidth
             />
             {quantityError && (
               <Alert severity="warning">{quantityError}</Alert>
