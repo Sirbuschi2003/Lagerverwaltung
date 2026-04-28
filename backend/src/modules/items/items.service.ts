@@ -347,7 +347,7 @@ export class ItemsService {
     }
   }
 
-  async findOneByAnyCode(code: string, branchId?: string | null): Promise<Item | null> {
+  async findOneByAnyCode(code: string, branchId?: string | null, locationIds?: string[]): Promise<Item | null> {
     try {
       const normalized = code.trim();
       if (!normalized) {
@@ -359,7 +359,7 @@ export class ItemsService {
       if (branchId) directWhere.branchId = branchId;
       const direct = await this.repository.findOne({
         where: directWhere,
-        relations: ['codes', 'storageLocation', 'supplier']
+        relations: ['codes', 'storageLocation', 'storageLocation.parent', 'storageLocation.parent.parent', 'supplier']
       });
       const found = direct ?? await (async () => {
         // Prüfe alternative Codes – direkt nach branchId filtern
@@ -368,10 +368,20 @@ export class ItemsService {
         else altWhere.branchId = IsNull();
         const alias = await this.codesRepository.findOne({
           where: altWhere,
-          relations: ["item", "item.codes", "item.storageLocation", "item.supplier"]
+          relations: ["item", "item.codes", "item.storageLocation", "item.storageLocation.parent", "item.storageLocation.parent.parent", "item.supplier"]
         });
         return alias?.item ?? null;
       })();
+
+      // Lager-Filter: Artikel muss im zugewiesenen Lager liegen (location-Hierarchie)
+      if (found && locationIds?.length) {
+        const ids = new Set(locationIds);
+        const locId = (found.storageLocation as any)?.id ?? null;
+        const parentId = (found.storageLocation as any)?.parent?.id ?? null;
+        const grandparentId = (found.storageLocation as any)?.parent?.parent?.id ?? null;
+        const inLocation = locId && (ids.has(locId) || (parentId && ids.has(parentId)) || (grandparentId && ids.has(grandparentId)));
+        if (!inLocation) return null;
+      }
 
       if (found) {
         const qb = this.stockLevelsRepository

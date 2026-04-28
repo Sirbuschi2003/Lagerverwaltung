@@ -217,7 +217,7 @@ export class ItemsController {
   async findByCode(@Req() req: ItemsRequest, @Param("code") code: string) {
     try {
       this.logger.debug(`Suche Artikel nach Code: ${code}`);
-      const item = await this.itemsService.findOneByAnyCode(code, req.user?.branchId);
+      const item = await this.itemsService.findOneByAnyCode(code, req.user?.branchId, req.user?.locationIds);
       if (!item) {
         throw new NotFoundException('Item not found');
       }
