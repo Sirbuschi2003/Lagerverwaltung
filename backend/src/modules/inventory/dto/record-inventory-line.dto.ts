@@ -13,6 +13,10 @@ export class RecordInventoryLineDto {
   @IsString()
   vehicleId?: string;
 
+  @IsOptional()
+  @IsString()
+  locationId?: string;
+
   @IsInt()
   @Min(0)
   countedQuantity!: number;

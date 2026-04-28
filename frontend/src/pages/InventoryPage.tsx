@@ -674,6 +674,8 @@ const InventoryPage = () => {
       sessionId: activeSession.id,
       itemId: params.item.id,
       vehicleId: vehicle?.id || null,
+      // Für Lager-Inventuren (kein Fahrzeug): Artikel-Lagerort mitschicken
+      locationId: vehicle ? null : (params.item.storageLocation?.id || null),
       countedQuantity: params.counted,
       expectedQuantity: params.expected,
       note: params.note || null,

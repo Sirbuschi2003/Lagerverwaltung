@@ -94,7 +94,7 @@ export class InventoryService {
     if (branchId) where.branchId = branchId;
     return this.sessionsRepository.findOne({
       where,
-      relations: ["lines", "lines.item", "lines.vehicle", "lines.location", "vehicleStatuses", "vehicleStatuses.vehicle"],
+      relations: ["lines", "lines.item", "lines.item.storageLocation", "lines.vehicle", "lines.location", "vehicleStatuses", "vehicleStatuses.vehicle"],
     });
   }
 
@@ -114,7 +114,8 @@ export class InventoryService {
           lineId: line.id,
           itemId: line.item?.id || "",
           vehicleId: line.vehicle?.id || null,
-          locationId: line.location?.id || null,
+          // Fallback: wenn keine explizite Location gesetzt, item.storageLocation verwenden
+          locationId: line.location?.id || (line.vehicle ? null : (line.item?.storageLocation?.id || null)),
           itemCode: line.item?.code || "",
           itemDescription: line.item?.description || "",
           manufacturer: line.item?.manufacturer || "",
@@ -199,6 +200,16 @@ export class InventoryService {
         }
       }
 
+      // Location für Lager-Inventuren: explizit übergeben oder Artikel-Lagerort als Fallback
+      let location: typeof item.storageLocation | null = null;
+      if (!vehicle) {
+        if (dto.locationId && item.storageLocation?.id === dto.locationId) {
+          location = item.storageLocation;
+        } else if (item.storageLocation) {
+          location = item.storageLocation;
+        }
+      }
+
       // Fahrzeugeintrag darf nicht bereits eingereicht sein
       await this.ensureVehicleEditable(dto.sessionId, dto.vehicleId || vehicle?.id || null);
 
@@ -207,6 +218,7 @@ export class InventoryService {
         session,
         item,
         vehicle: vehicle,
+        location: location,
         countedQuantity: dto.countedQuantity,
         expectedQuantity: dto.expectedQuantity,
         note: dto.note ?? undefined,

@@ -1034,6 +1034,7 @@ export interface RecordInventoryLineRequest {
   sessionId: string;
   itemId: string;
   vehicleId?: string | null;
+  locationId?: string | null;
   countedQuantity: number;
   expectedQuantity: number;
   note?: string | null;
