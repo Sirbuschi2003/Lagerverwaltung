@@ -341,13 +341,18 @@ export class ReportsService {
       .sort((a, b) => (b.checkoutCount + b.checkinCount) - (a.checkoutCount + a.checkinCount));
   }
 
-  async getVehicleStockLevels(vehicleId: string) {
-    return this.stockLevelsRepository.find({
-      where: { vehicle: { id: vehicleId } },
-      relations: { item: true, vehicle: true },
-      order: {
-        item: { productGroup: "ASC", manufacturer: "ASC", description: "ASC" },
-      },
-    });
+  async getVehicleStockLevels(vehicleId: string, branchId?: string | null) {
+    const qb = this.stockLevelsRepository
+      .createQueryBuilder("sl")
+      .leftJoinAndSelect("sl.item", "item")
+      .leftJoinAndSelect("sl.vehicle", "vehicle")
+      .where("vehicle.id = :vehicleId", { vehicleId });
+    if (branchId) {
+      qb.andWhere("vehicle.branchId = :branchId", { branchId });
+    }
+    qb.orderBy("item.productGroup", "ASC")
+      .addOrderBy("item.manufacturer", "ASC")
+      .addOrderBy("item.description", "ASC");
+    return qb.getMany();
   }
 }

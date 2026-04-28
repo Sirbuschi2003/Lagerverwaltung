@@ -88,15 +88,17 @@ export class InventoryService {
     });
   }
 
-  findSessionById(id: string) {
+  findSessionById(id: string, branchId?: string | null) {
+    const where: Record<string, unknown> = { id };
+    if (branchId) where.branchId = branchId;
     return this.sessionsRepository.findOne({
-      where: { id },
+      where,
       relations: ["lines", "lines.item", "lines.vehicle", "vehicleStatuses", "vehicleStatuses.vehicle"],
     });
   }
 
   async getSessionDifferences(sessionId: string, userContext?: any, vehicleIdFilter?: string) {
-    const session = await this.findSessionById(sessionId);
+    const session = await this.findSessionById(sessionId, userContext?.branchId);
     if (!session) {
       throw new NotFoundException("Inventur-Session nicht gefunden");
     }
@@ -245,8 +247,10 @@ export class InventoryService {
     return { success: true };
   }
 
-  async deleteSession(sessionId: string) {
-    const session = await this.sessionsRepository.findOne({ where: { id: sessionId } });
+  async deleteSession(sessionId: string, branchId?: string | null) {
+    const where: Record<string, unknown> = { id: sessionId };
+    if (branchId) where.branchId = branchId;
+    const session = await this.sessionsRepository.findOne({ where });
     if (!session) {
       throw new NotFoundException("Inventory session not found");
     }
@@ -338,8 +342,9 @@ export class InventoryService {
    * Keine Änderungen mehr für Techniker; Manager kann prüfen/reopen
    */
   async submitSession(sessionId: string, username: string, userContext?: any, dto?: SubmitInventoryDto) {
+    const branchWhere = userContext?.branchId ? { id: sessionId, branchId: userContext.branchId } : { id: sessionId };
     const session = await this.sessionsRepository.findOne({
-      where: { id: sessionId },
+      where: branchWhere,
       relations: ["lines"],
     });
 
@@ -556,8 +561,10 @@ export class InventoryService {
    * Manager: Setzt Session zurück auf DRAFT (für Korrekturen/Nacharbeiten)
    * Erlaubt Wiedereröffnung von SUBMITTED und FINALIZED Sessions
    */
-  async reopenSession(sessionId: string, username: string) {
-    const session = await this.sessionsRepository.findOne({ where: { id: sessionId } });
+  async reopenSession(sessionId: string, username: string, branchId?: string | null) {
+    const where: Record<string, unknown> = { id: sessionId };
+    if (branchId) where.branchId = branchId;
+    const session = await this.sessionsRepository.findOne({ where });
 
     if (!session) {
       throw new NotFoundException("Inventur-Session nicht gefunden");
@@ -619,9 +626,11 @@ export class InventoryService {
    * Manager: Gibt ein einzelnes Fahrzeug in einer Session wieder fürei (SUBMITTED → DRAFT)
    * Setzt nur das spezifische Fahrzeug auf DRAFT, nicht alle
    */
-  async reopenVehicle(sessionId: string, vehicleId: string, username: string) {
+  async reopenVehicle(sessionId: string, vehicleId: string, username: string, branchId?: string | null) {
+    const where: Record<string, unknown> = { id: sessionId };
+    if (branchId) where.branchId = branchId;
     const session = await this.sessionsRepository.findOne({
-      where: { id: sessionId },
+      where,
       relations: ["vehicleStatuses", "lines", "lines.vehicle", "lines.item"],
     });
 
@@ -697,9 +706,11 @@ export class InventoryService {
    * Manager: Finalisiert Session → FINALIZED (unveränderbar)
    * Validiert Checksum, setzt finalizedBy/At
    */
-  async finalizeSession(sessionId: string, username: string, dto?: FinalizeInventoryDto) {
+  async finalizeSession(sessionId: string, username: string, dto?: FinalizeInventoryDto, branchId?: string | null) {
+    const where: Record<string, unknown> = { id: sessionId };
+    if (branchId) where.branchId = branchId;
     const session = await this.sessionsRepository.findOne({
-      where: { id: sessionId },
+      where,
       relations: ["lines"],
     });
 
@@ -933,9 +944,11 @@ export class InventoryService {
   /**
    * Liefert eine Inventur-Session mit allen benötigten Relationen für Exporte/Reports
    */
-  async getSessionForExport(sessionId: string): Promise<InventorySession> {
+  async getSessionForExport(sessionId: string, branchId?: string | null): Promise<InventorySession> {
+    const where: Record<string, unknown> = { id: sessionId };
+    if (branchId) where.branchId = branchId;
     const session = await this.sessionsRepository.findOne({
-      where: { id: sessionId },
+      where,
       relations: [
         "lines",
         "lines.item",

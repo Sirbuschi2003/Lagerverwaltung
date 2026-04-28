@@ -181,7 +181,7 @@ export class ReportsController {
       throw new ForbiddenException("vehicleId erforderlich (außer Techniker)");
     }
 
-    const stock = await this.reportsService.getVehicleStockLevels(effectiveVehicleId);
+    const stock = await this.reportsService.getVehicleStockLevels(effectiveVehicleId, user?.branchId);
     const items = stock.map(s => s.item).filter(Boolean);
 
     const pdfBuffer = await this.exportService.renderHtmlToPdf(

@@ -640,11 +640,12 @@ export class PurchasingService {
         .createQueryBuilder("item")
         .leftJoinAndSelect("item.storageLocation", "storageLocation")
         .leftJoin("storageLocation.parent", "slParent")
+        .leftJoin("slParent.parent", "slGrandparent")
         .leftJoinAndSelect("item.supplier", "supplier")
         .where("item.targetStock > 0");
       if (branchId) qb.andWhere("item.branchId = :branchId", { branchId });
       qb.andWhere(
-        "(storageLocation.id IN (:...locationIds) OR slParent.id IN (:...locationIds))",
+        "(storageLocation.id IN (:...locationIds) OR slParent.id IN (:...locationIds) OR slGrandparent.id IN (:...locationIds))",
         { locationIds },
       );
       itemEntities = await qb.getMany();
@@ -662,12 +663,26 @@ export class PurchasingService {
     });
 
     const itemIds = itemEntities.map((item) => item.id);
-    const stockLevels = itemIds.length
-      ? await this.stockLevelsRepository.find({
-          where: { item: { id: In(itemIds) } },
-          relations: ["location"],
-        })
-      : [];
+    // Only warehouse stock (vehicleId IS NULL); vehicle stock must not inflate warehouse availability
+    const stockLevelsQb = itemIds.length
+      ? this.stockLevelsRepository
+          .createQueryBuilder("sl")
+          .leftJoinAndSelect("sl.location", "location")
+          .leftJoin("location.parent", "locParent")
+          .leftJoin("locParent.parent", "locGrandparent")
+          .where("sl.itemId IN (:...itemIds)", { itemIds })
+          .andWhere("sl.vehicleId IS NULL")
+      : null;
+    if (stockLevelsQb && branchId) {
+      stockLevelsQb.andWhere("location.branchId = :branchId", { branchId });
+    }
+    if (stockLevelsQb && locationIds?.length) {
+      stockLevelsQb.andWhere(
+        "(location.id IN (:...locationIds) OR locParent.id IN (:...locationIds) OR locGrandparent.id IN (:...locationIds))",
+        { locationIds },
+      );
+    }
+    const stockLevels = stockLevelsQb ? await stockLevelsQb.getMany() : [];
     const stockLevelsByItem = new Map<string, StockLevel[]>();
     stockLevels.forEach((level) => {
       const itemId = level.item?.id;

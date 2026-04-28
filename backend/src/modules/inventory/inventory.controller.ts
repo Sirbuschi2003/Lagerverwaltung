@@ -105,9 +105,9 @@ export class InventoryController {
 
   @Patch("sessions/:sessionId/reopen")
   @Roles("MANAGER")
-  reopenSession(@Param("sessionId") sessionId: string, @Req() req: Request) {
+  reopenSession(@Param("sessionId") sessionId: string, @Req() req: InventoryRequest) {
     const username = (req.user as any)?.username ?? "Unknown";
-    return this.inventoryService.reopenSession(sessionId, username);
+    return this.inventoryService.reopenSession(sessionId, username, req.user?.branchId);
   }
 
   @Patch("sessions/:sessionId/vehicle-reopen/:vehicleId")
@@ -115,10 +115,10 @@ export class InventoryController {
   reopenVehicle(
     @Param("sessionId") sessionId: string,
     @Param("vehicleId") vehicleId: string,
-    @Req() req: Request,
+    @Req() req: InventoryRequest,
   ) {
     const username = (req.user as any)?.username ?? "Unknown";
-    return this.inventoryService.reopenVehicle(sessionId, vehicleId, username);
+    return this.inventoryService.reopenVehicle(sessionId, vehicleId, username, req.user?.branchId);
   }
 
   @Patch("sessions/:sessionId/finalize")
@@ -126,22 +126,23 @@ export class InventoryController {
   finalizeSession(
     @Param("sessionId") sessionId: string,
     @Body() body: FinalizeInventoryDto,
-    @Req() req: Request,
+    @Req() req: InventoryRequest,
   ) {
     const username = (req.user as any)?.username ?? "Unknown";
-    return this.inventoryService.finalizeSession(sessionId, username, body);
+    return this.inventoryService.finalizeSession(sessionId, username, body, req.user?.branchId);
   }
 
   @Get(":sessionId/export")
   @Roles("MANAGER", "WAREHOUSE", "TECHNICIAN")
   async exportSession(
     @Param("sessionId") sessionId: string,
+    @Req() req: InventoryRequest,
     @Res() res: Response,
     @Query("format") format: 'csv' | 'pdf' | 'xlsx' = 'csv',
     @Query("vehicleId") vehicleId?: string,
     @Query("technicianId") technicianId?: string,
   ) {
-    const session = await this.inventoryService.findSessionById(sessionId);
+    const session = await this.inventoryService.findSessionById(sessionId, req.user?.branchId);
 
     if (!session) {
       res.status(404).send('Session not found');
@@ -183,10 +184,11 @@ export class InventoryController {
   @Roles("MANAGER", "WAREHOUSE", "TECHNICIAN")
   async exportInventoryProtocol(
     @Param("sessionId") sessionId: string,
+    @Req() req: InventoryRequest,
     @Query("format") format: "csv" | "pdf" | "xlsx" = "csv",
     @Res() res: Response,
   ) {
-    const session = await this.inventoryService.getSessionForExport(sessionId);
+    const session = await this.inventoryService.getSessionForExport(sessionId, req.user?.branchId);
     const movements = await this.stockService.findMovementsBySource(`inventory:${sessionId}`);
 
     if (format === "pdf") {
@@ -218,8 +220,8 @@ export class InventoryController {
 
   @Get("sessions/:sessionId/vehicle-statuses")
   @Roles("MANAGER", "WAREHOUSE", "TECHNICIAN")
-  async getVehicleStatuses(@Param("sessionId") sessionId: string): Promise<VehicleStatusDto[]> {
-    const session = await this.inventoryService.findSessionById(sessionId);
+  async getVehicleStatuses(@Param("sessionId") sessionId: string, @Req() req: InventoryRequest): Promise<VehicleStatusDto[]> {
+    const session = await this.inventoryService.findSessionById(sessionId, req.user?.branchId);
     if (!session) {
       throw new BadRequestException("Session not found");
     }
@@ -261,8 +263,8 @@ export class InventoryController {
 
   @Delete("session/:sessionId")
   @Roles("MANAGER")
-  deleteSession(@Param("sessionId") sessionId: string) {
-    return this.inventoryService.deleteSession(sessionId);
+  deleteSession(@Param("sessionId") sessionId: string, @Req() req: InventoryRequest) {
+    return this.inventoryService.deleteSession(sessionId, req.user?.branchId);
   }
 
   @Get("template/meta")
