@@ -333,9 +333,7 @@ const QuickBookingPage: React.FC = () => {
     (code: string) => {
       if (cameraScanTarget === "source") {
         setReference(code.trim());
-        setCameraOpen(false);
-        setCameraScanFeedback(null);
-        setTimeout(() => barcodeWrapperRef.current?.querySelector<HTMLInputElement>("input")?.focus(), 80);
+        setCameraScanFeedback({ type: "success", text: `Vorgangsnummer: ${code.trim()}` });
         return;
       }
       setCameraScanFeedback(null);
