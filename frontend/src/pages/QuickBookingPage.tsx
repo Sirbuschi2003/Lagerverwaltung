@@ -94,6 +94,11 @@ const QuickBookingPage: React.FC = () => {
   // Ref damit handleScan immer den aktuellen Inhalt der Liste sieht (stale-closure-safe)
   const bookingListRef = useRef<BookingEntry[]>([]);
   useEffect(() => { bookingListRef.current = bookingList; }, [bookingList]);
+  // Refs für Werte die im Scanner-Callback immer aktuell sein müssen (ohne Scanner-Neustart)
+  const cameraScanTargetRef = useRef<"barcode" | "source">("barcode");
+  useEffect(() => { cameraScanTargetRef.current = cameraScanTarget; }, [cameraScanTarget]);
+  const userIdRef = useRef<string | undefined>(user?.id);
+  useEffect(() => { userIdRef.current = user?.id; }, [user?.id]);
   // Verhindert gleichzeitige Scan-Verarbeitungen (z.B. schnelle Folge-Scans)
   const busyRef = useRef(false);
   // Socket-Ref für Echtzeit-Sync
@@ -351,17 +356,18 @@ const QuickBookingPage: React.FC = () => {
     await processFoundItem(item);
   };
 
-  // Kamera-Scanner: bleibt offen nach jedem Scan für den nächsten Code
+  // Kamera-Scanner: bleibt offen nach jedem Scan für den nächsten Code.
+  // cameraScanTarget + userId werden via Ref gelesen → Callback stabil, kein Scanner-Neustart.
   const handleCameraDetected = useCallback(
     (code: string) => {
-      if (cameraScanTarget === "source") {
+      if (cameraScanTargetRef.current === "source") {
         const trimmed = code.trim();
         setReference(trimmed);
         setCameraOpen(false);
         setCameraScanFeedback(null);
         // Vorgangsnummer an andere Geräte übertragen
-        if (socketRef.current?.connected && user?.id) {
-          socketRef.current.emit("quickbook:reference", { userId: user.id, reference: trimmed });
+        if (socketRef.current?.connected && userIdRef.current) {
+          socketRef.current.emit("quickbook:reference", { userId: userIdRef.current, reference: trimmed });
         }
         setTimeout(() => {
           barcodeWrapperRef.current?.querySelector<HTMLInputElement>("input")?.focus();
@@ -372,7 +378,7 @@ const QuickBookingPage: React.FC = () => {
       void handleScan(code);
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [cameraScanTarget, mode, quantity, reference, sofortBuchen, items],
+    [mode, quantity, reference, sofortBuchen, items],
   );
 
   const { videoRef, isSupported, error: scannerError } = useBarcodeScanner({
