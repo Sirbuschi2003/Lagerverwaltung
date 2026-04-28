@@ -133,6 +133,14 @@ const QuickBookingPage: React.FC = () => {
       setBookingList(data.list ?? []);
     });
 
+    // Anderes Gerät hat Vorgangsnummer gescannt
+    socket.on("quickbook:reference", (data: { reference: string }) => {
+      setReference(data.reference ?? "");
+      if (referenceRef.current) {
+        referenceRef.current.value = data.reference ?? "";
+      }
+    });
+
     // Anderes Gerät hat die Liste gelöscht
     socket.on("quickbook:cleared", () => {
       remoteUpdateRef.current = true;
@@ -347,8 +355,17 @@ const QuickBookingPage: React.FC = () => {
   const handleCameraDetected = useCallback(
     (code: string) => {
       if (cameraScanTarget === "source") {
-        setReference(code.trim());
-        setCameraScanFeedback({ type: "success", text: `Vorgangsnummer: ${code.trim()}` });
+        const trimmed = code.trim();
+        setReference(trimmed);
+        setCameraOpen(false);
+        setCameraScanFeedback(null);
+        // Vorgangsnummer an andere Geräte übertragen
+        if (socketRef.current?.connected && user?.id) {
+          socketRef.current.emit("quickbook:reference", { userId: user.id, reference: trimmed });
+        }
+        setTimeout(() => {
+          barcodeWrapperRef.current?.querySelector<HTMLInputElement>("input")?.focus();
+        }, 80);
         return;
       }
       setCameraScanFeedback(null);

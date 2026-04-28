@@ -104,7 +104,7 @@ export class StockGateway implements OnGatewayConnection, OnGatewayDisconnect {
     if (!data?.userId) return;
     this.quickbookState.delete(data.userId);
     const room = `quickbook:${data.userId}`;
-    client.to(room).emit('quickbook:cleared');
+    client.to(room).emit('quickbook:booked');
   }
 
   /** Manuelles Löschen der Liste auf allen Geräten. */
@@ -117,5 +117,16 @@ export class StockGateway implements OnGatewayConnection, OnGatewayDisconnect {
     this.quickbookState.delete(data.userId);
     const room = `quickbook:${data.userId}`;
     client.to(room).emit('quickbook:cleared');
+  }
+
+  /** Vorgangsnummer an alle anderen Geräte im Room übertragen. */
+  @SubscribeMessage('quickbook:reference')
+  handleQuickbookReference(
+    @ConnectedSocket() client: Socket,
+    @MessageBody() data: { userId?: string; reference: string },
+  ) {
+    if (!data?.userId) return;
+    const room = `quickbook:${data.userId}`;
+    client.to(room).emit('quickbook:reference', { reference: data.reference });
   }
 }
