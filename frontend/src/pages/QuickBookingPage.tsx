@@ -133,11 +133,26 @@ const QuickBookingPage: React.FC = () => {
       setBookingList(data.list ?? []);
     });
 
-    // Anderes Gerät hat gebucht oder Liste gelöscht
+    // Anderes Gerät hat die Liste gelöscht
     socket.on("quickbook:cleared", () => {
       remoteUpdateRef.current = true;
       setBookingList([]);
       setCurrentItem(null);
+    });
+
+    // Anderes Gerät hat gebucht → Liste leeren + Fokus zurücksetzen
+    socket.on("quickbook:booked", () => {
+      remoteUpdateRef.current = true;
+      setBookingList([]);
+      setCurrentItem(null);
+      setReference("");
+      setTimeout(() => {
+        const refInput = referenceRef.current;
+        if (refInput) {
+          refInput.value = "";
+          refInput.focus();
+        }
+      }, 80);
     });
 
     return () => {
@@ -247,7 +262,7 @@ const QuickBookingPage: React.FC = () => {
       locationName: found.storageLocation
         ? `${found.storageLocation.code}${found.storageLocation.name ? ` – ${found.storageLocation.name}` : ""}`
         : undefined,
-      reference: reference || undefined,
+      reference: reference || "",
       currentQuantity: found.currentQuantity ?? undefined,
     };
 
@@ -375,13 +390,9 @@ const QuickBookingPage: React.FC = () => {
       setCurrentItem(null);
       setReference("");
       setTimeout(() => {
-        if (vorgangsnummerFirst) {
-          if (referenceRef.current) {
-            referenceRef.current.value = "";
-            referenceRef.current.focus();
-          }
-        } else {
-          barcodeWrapperRef.current?.querySelector<HTMLInputElement>("input")?.focus();
+        if (referenceRef.current) {
+          referenceRef.current.value = "";
+          referenceRef.current.focus();
         }
       }, 80);
     } else {
