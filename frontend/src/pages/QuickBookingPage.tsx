@@ -82,6 +82,7 @@ const QuickBookingPage: React.FC = () => {
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [cameraOpen, setCameraOpen] = useState(false);
   const [cameraScanFeedback, setCameraScanFeedback] = useState<CameraScanFeedback | null>(null);
+  const [cameraScanTarget, setCameraScanTarget] = useState<"barcode" | "source">("barcode");
   const [syncConnected, setSyncConnected] = useState(false);
   const { settings: userSettings, loaded: settingsLoaded, loadSettings, updateQuickBookingWorkflow } = useUserSettingsStore();
   const vorgangsnummerFirst = userSettings.quickBookingWorkflow;
@@ -330,11 +331,18 @@ const QuickBookingPage: React.FC = () => {
   // Kamera-Scanner: bleibt offen nach jedem Scan für den nächsten Code
   const handleCameraDetected = useCallback(
     (code: string) => {
-      setCameraScanFeedback(null); // kurz zurücksetzen während Lookup läuft
+      if (cameraScanTarget === "source") {
+        setReference(code.trim());
+        setCameraOpen(false);
+        setCameraScanFeedback(null);
+        setTimeout(() => barcodeWrapperRef.current?.querySelector<HTMLInputElement>("input")?.focus(), 80);
+        return;
+      }
+      setCameraScanFeedback(null);
       void handleScan(code);
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [mode, quantity, reference, sofortBuchen, items],
+    [cameraScanTarget, mode, quantity, reference, sofortBuchen, items],
   );
 
   const { videoRef, isSupported, error: scannerError } = useBarcodeScanner({
@@ -507,7 +515,7 @@ const QuickBookingPage: React.FC = () => {
                         <Tooltip title="Kamera-Scanner öffnen">
                           <IconButton
                             size="small"
-                            onClick={() => { setCameraOpen(true); setCameraScanFeedback(null); }}
+                            onClick={() => { setCameraScanTarget("barcode"); setCameraOpen(true); setCameraScanFeedback(null); }}
                             edge="end"
                             color="primary"
                           >
@@ -543,6 +551,22 @@ const QuickBookingPage: React.FC = () => {
               size="small"
               fullWidth
               helperText=" "
+              InputProps={{
+                endAdornment: (
+                  <InputAdornment position="end">
+                    <Tooltip title="Vorgangsnummer scannen">
+                      <IconButton
+                        size="small"
+                        edge="end"
+                        color="primary"
+                        onClick={() => { setCameraScanTarget("source"); setCameraOpen(true); setCameraScanFeedback(null); }}
+                      >
+                        <QrCodeScannerIcon />
+                      </IconButton>
+                    </Tooltip>
+                  </InputAdornment>
+                ),
+              }}
             />
           </Box>
 
@@ -579,7 +603,7 @@ const QuickBookingPage: React.FC = () => {
             fullWidth
             size="large"
             startIcon={<QrCodeScannerIcon />}
-            onClick={() => { setCameraOpen(true); setCameraScanFeedback(null); }}
+            onClick={() => { setCameraScanTarget("barcode"); setCameraOpen(true); setCameraScanFeedback(null); }}
             disabled={busy}
           >
             QR-Code / Barcode scannen
@@ -939,7 +963,7 @@ const QuickBookingPage: React.FC = () => {
         <DialogTitle sx={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
           <Stack direction="row" spacing={1} alignItems="center">
             <QrCodeScannerIcon />
-            <span>QR-Code / Barcode scannen</span>
+            <span>{cameraScanTarget === "source" ? "Vorgangsnummer scannen" : "QR-Code / Barcode scannen"}</span>
           </Stack>
           <IconButton size="small" onClick={closeCameraDialog}>
             <CloseIcon />
