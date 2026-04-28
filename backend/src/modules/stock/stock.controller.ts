@@ -57,6 +57,12 @@ export class StockController {
     return this.stockService.findMovements(parsed, req.user?.branchId);
   }
 
+  @Get("location-stock")
+  getLocationStock(@Req() req: StockRequest) {
+    const locationIds = req.user?.locationIds ?? [];
+    return this.stockService.getLocationStock(locationIds);
+  }
+
   @Get("vehicle/:vehicleId")
   getVehicleStock(@Req() req: StockRequest, @Param("vehicleId") vehicleId: string) {
     const user = req.user;

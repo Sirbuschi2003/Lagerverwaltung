@@ -1,6 +1,6 @@
 ﻿import { BadRequestException, ForbiddenException, Injectable, Logger, NotFoundException } from "@nestjs/common";
 import { InjectRepository } from "@nestjs/typeorm";
-import { Not, Repository, LessThan } from "typeorm";
+import { In, Not, Repository, LessThan } from "typeorm";
 
 import { AccessControlService } from "../access-control/access-control.service";
 import { InventorySession, InventorySessionStatus } from "../inventory/entities/inventory-session.entity";
@@ -468,6 +468,16 @@ export class StockService {
 
     const levels = await this.stockLevelsRepository.find({
       where: { vehicle: { id: vehicleId } },
+      order: { item: { manufacturer: "ASC", productGroup: "ASC", description: "ASC" } },
+    });
+    return levels.filter((l) => l.item != null);
+  }
+
+  async getLocationStock(locationIds: string[]) {
+    if (!locationIds?.length) return [];
+    const levels = await this.stockLevelsRepository.find({
+      where: { location: { id: In(locationIds) } },
+      relations: ["item", "location"],
       order: { item: { manufacturer: "ASC", productGroup: "ASC", description: "ASC" } },
     });
     return levels.filter((l) => l.item != null);

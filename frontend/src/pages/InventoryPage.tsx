@@ -58,6 +58,7 @@ import {
   deleteInventoryLine,
   deleteInventorySession,
   fetchVehicleStock,
+  fetchLocationStock,
   submitInventorySession,
   reopenInventorySession,
   reopenInventoryVehicle,
@@ -83,6 +84,7 @@ const InventoryPage = () => {
   const [isLoading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [vehicleStock, setVehicleStock] = useState<any[]>([]);
+  const [locationStock, setLocationStock] = useState<any[]>([]);
   const [vehicleStatuses, setVehicleStatuses] = useState<any[]>([]);
   const [currentVehicleSubmitted, setCurrentVehicleSubmitted] = useState(false);
   
@@ -170,24 +172,24 @@ const InventoryPage = () => {
   }, [selectedVehicle, defaultVehicle]);
 
   const resolveExpectedQuantity = useCallback((item: any) => {
-    if (!item) {
-      return 0;
+    if (!item) return 0;
+
+    // Fahrzeug-Inventur: Bestand aus vehicleStock
+    const vehicleEntry = vehicleStock.find((s: StockLevelDto) => s.item.id === item.id);
+    if (vehicleEntry && Number.isFinite(vehicleEntry.quantity) && vehicleEntry.quantity >= 0) {
+      return vehicleEntry.quantity;
     }
-    
-    // Versuche zuerst die aktuelle Bestandsmenge aus vehicleStock zu finden
-    const stockEntry = vehicleStock.find((stock: StockLevelDto) => stock.item.id === item.id);
-    if (stockEntry && Number.isFinite(stockEntry.quantity) && stockEntry.quantity >= 0) {
-      return stockEntry.quantity;
+
+    // Lager-Inventur (kein Fahrzeug): Bestand aus locationStock (aggregiert über alle Lagerorte)
+    const locationTotal = locationStock
+      .filter((s: StockLevelDto) => s.item.id === item.id)
+      .reduce((sum: number, s: StockLevelDto) => sum + (s.quantity ?? 0), 0);
+    if (locationStock.some((s: StockLevelDto) => s.item.id === item.id)) {
+      return locationTotal;
     }
-    
-    // Fallback auf targetStock falls keine Bestandsdaten verfügbar
-    const raw = (item as any)?.targetStock;
-    const numeric = Number(raw);
-    if (!Number.isFinite(numeric) || numeric < 0) {
-      return 0;
-    }
-    return numeric;
-  }, [vehicleStock]);
+
+    return 0;
+  }, [vehicleStock, locationStock]);
 
   // Synchronisiere Offline-Inventur-Positionen
   const syncOfflineInventoryLines = async () => {
@@ -334,6 +336,16 @@ const InventoryPage = () => {
     }
   }, []);
 
+  const loadLocationStock = useCallback(async () => {
+    try {
+      const stock = await fetchLocationStock();
+      setLocationStock(stock);
+    } catch (err) {
+      console.error('Fehler beim Laden der Lagerbestände:', err);
+      setLocationStock([]);
+    }
+  }, []);
+
   useEffect(() => {
     void loadSessions();
     if (items.length < 1000) void forceLoadItems({ limit: 200000 });
@@ -344,8 +356,11 @@ const InventoryPage = () => {
   useEffect(() => {
     if (selectedVehicle?.id) {
       loadVehicleStock(selectedVehicle.id);
+    } else {
+      // Lager-Inventur ohne Fahrzeug: Lagerort-Bestände laden
+      void loadLocationStock();
     }
-  }, [selectedVehicle?.id, loadVehicleStock]);
+  }, [selectedVehicle?.id, loadVehicleStock, loadLocationStock]);
 
   useEffect(() => {
     if (activeSession?.id) {

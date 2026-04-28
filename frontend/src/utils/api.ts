@@ -691,6 +691,11 @@ export const fetchVehicleStock = async (
   return response.data;
 };
 
+export const fetchLocationStock = async (): Promise<StockLevelDto[]> => {
+  const response = await api.get<StockLevelDto[]>("/stock/location-stock");
+  return response.data;
+};
+
 export const updateVehicleTarget = async (
   vehicleId: string,
   payload: UpdateVehicleTargetRequest,
