@@ -27,6 +27,7 @@ export type InventoryDifference = {
   lineId: string;
   itemId: string;
   vehicleId: string | null;
+  locationId: string | null;
   itemCode: string;
   itemDescription: string;
   manufacturer: string;
@@ -93,7 +94,7 @@ export class InventoryService {
     if (branchId) where.branchId = branchId;
     return this.sessionsRepository.findOne({
       where,
-      relations: ["lines", "lines.item", "lines.vehicle", "vehicleStatuses", "vehicleStatuses.vehicle"],
+      relations: ["lines", "lines.item", "lines.vehicle", "lines.location", "vehicleStatuses", "vehicleStatuses.vehicle"],
     });
   }
 
@@ -113,6 +114,7 @@ export class InventoryService {
           lineId: line.id,
           itemId: line.item?.id || "",
           vehicleId: line.vehicle?.id || null,
+          locationId: line.location?.id || null,
           itemCode: line.item?.code || "",
           itemDescription: line.item?.description || "",
           manufacturer: line.item?.manufacturer || "",
@@ -345,7 +347,7 @@ export class InventoryService {
     const branchWhere = userContext?.branchId ? { id: sessionId, branchId: userContext.branchId } : { id: sessionId };
     const session = await this.sessionsRepository.findOne({
       where: branchWhere,
-      relations: ["lines"],
+      relations: ["lines", "lines.location"],
     });
 
     if (!session) {
@@ -502,10 +504,10 @@ export class InventoryService {
       const hasDifferences = differenceCount > 0;
 
       if (hasDifferences) {
-        const missingVehicle = differenceResult.differences.some((diff) => !diff.vehicleId);
-        if (missingVehicle) {
+        const unbuchbar = differenceResult.differences.some((diff) => !diff.vehicleId && !diff.locationId);
+        if (unbuchbar) {
           throw new BadRequestException(
-            "Differenzen ohne Fahrzeug können nicht automatisch gebucht werden. Bitte Fahrzeug zuweisen oder ohne Buchung einreichen.",
+            "Differenzen ohne Fahrzeug und ohne Lagerort können nicht automatisch gebucht werden.",
           );
         }
 
@@ -515,7 +517,8 @@ export class InventoryService {
 
           await this.stockService.recordMovement({
             itemId: diff.itemId,
-            vehicleId: diff.vehicleId!,
+            vehicleId: diff.vehicleId ?? undefined,
+            locationId: diff.locationId ?? undefined,
             type,
             quantity,
             occurredAt: new Date().toISOString(),
@@ -711,7 +714,7 @@ export class InventoryService {
     if (branchId) where.branchId = branchId;
     const session = await this.sessionsRepository.findOne({
       where,
-      relations: ["lines"],
+      relations: ["lines", "lines.location"],
     });
 
     if (!session) {
@@ -754,10 +757,10 @@ export class InventoryService {
     }
 
     if (applyAdjustments && hasDifferences) {
-      const missingVehicle = differenceResult.differences.some((diff) => !diff.vehicleId);
-      if (missingVehicle) {
+      const unbuchbar = differenceResult.differences.some((diff) => !diff.vehicleId && !diff.locationId);
+      if (unbuchbar) {
         throw new BadRequestException(
-          "Differenzen ohne Fahrzeug können nicht automatisch gebucht werden. Bitte Fahrzeug zuweisen oder ohne Buchung finalisieren.",
+          "Differenzen ohne Fahrzeug und ohne Lagerort können nicht automatisch gebucht werden.",
         );
       }
     }
@@ -799,7 +802,8 @@ export class InventoryService {
 
         await this.stockService.recordMovement({
           itemId: diff.itemId,
-          vehicleId: diff.vehicleId!,
+          vehicleId: diff.vehicleId ?? undefined,
+          locationId: diff.locationId ?? undefined,
           type,
           quantity,
           occurredAt: new Date().toISOString(),
