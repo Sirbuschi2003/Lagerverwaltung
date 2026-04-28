@@ -1,6 +1,6 @@
 ﻿import { BadRequestException, ForbiddenException, Injectable, Logger, NotFoundException } from "@nestjs/common";
 import { InjectRepository } from "@nestjs/typeorm";
-import { In, Not, Repository, LessThan } from "typeorm";
+import { Not, Repository, LessThan } from "typeorm";
 
 import { AccessControlService } from "../access-control/access-control.service";
 import { InventorySession, InventorySessionStatus } from "../inventory/entities/inventory-session.entity";
@@ -165,14 +165,15 @@ export class StockService {
         return itemBranch === user.branchId || vehicleBranch === user.branchId;
       });
     }
-    // Lager-Filter: nur Bestände des zugewiesenen Lagers (location oder location.parent in locationIds)
+    // Lager-Filter: nur Bestände des zugewiesenen Lagers (location, parent oder grandparent in locationIds)
     if (user?.locationIds?.length) {
       const ids = new Set(user.locationIds);
       filtered = filtered.filter((l) => {
         if (l.vehicle) return false; // Fahrzeugbestände nie nach Lager filtern
         const locId = (l.location as any)?.id ?? null;
         const parentId = (l.location as any)?.parent?.id ?? null;
-        return locId && (ids.has(locId) || (parentId && ids.has(parentId)));
+        const grandparentId = (l.location as any)?.parent?.parent?.id ?? null;
+        return locId && (ids.has(locId) || (parentId && ids.has(parentId)) || (grandparentId && ids.has(grandparentId)));
       });
     }
     if (!user?.role) return filtered;
@@ -189,7 +190,7 @@ export class StockService {
   async findDashboardSnapshot(user?: { role?: string; vehicleId?: string | null; branchId?: string | null; locationIds?: string[] }) {
     try {
       const [allStockLevels, totalItems, openInventorySessions] = await Promise.all([
-        this.stockLevelsRepository.find({ relations: ["item", "vehicle", "location", "location.parent"] }),
+        this.stockLevelsRepository.find({ relations: ["item", "vehicle", "location", "location.parent", "location.parent.parent"] }),
         this.itemsService.countItems(user?.branchId, user?.locationIds),
         this.inventorySessionRepository.count({
           where: [
@@ -218,7 +219,7 @@ export class StockService {
   async findBelowTargetItems(user?: { role?: string; vehicleId?: string | null; branchId?: string | null; locationIds?: string[] }) {
     try {
       const allStockLevels = await this.stockLevelsRepository.find({
-        relations: ["item", "vehicle", "location", "location.parent"],
+        relations: ["item", "vehicle", "location", "location.parent", "location.parent.parent"],
       });
 
       const stockLevels = this.filterStockLevelsByUser(allStockLevels, user);
@@ -473,13 +474,32 @@ export class StockService {
     return levels.filter((l) => l.item != null);
   }
 
-  async getLocationStock(locationIds: string[]) {
+  async getLocationStock(locationIds: string[], branchId?: string | null) {
     if (!locationIds?.length) return [];
-    const levels = await this.stockLevelsRepository.find({
-      where: { location: { id: In(locationIds) } },
-      relations: ["item", "location"],
-      order: { item: { manufacturer: "ASC", productGroup: "ASC", description: "ASC" } },
-    });
+
+    // QueryBuilder for proper DB-level isolation:
+    // 1. Only non-vehicle stock (vehicleId IS NULL)
+    // 2. Location hierarchy: direct match OR parent OR grandparent in user's assigned warehouses
+    // 3. Branch filter: item must belong to the same branch as the requesting user
+    const qb = this.stockLevelsRepository
+      .createQueryBuilder("sl")
+      .leftJoinAndSelect("sl.item", "item")
+      .leftJoinAndSelect("sl.location", "location")
+      .leftJoin("location.parent", "locParent")
+      .leftJoin("locParent.parent", "locGrandparent")
+      .where("sl.vehicleId IS NULL")
+      .andWhere(
+        "(location.id IN (:...locationIds) OR locParent.id IN (:...locationIds) OR locGrandparent.id IN (:...locationIds))",
+        { locationIds },
+      );
+
+    if (branchId) {
+      qb.andWhere("item.branchId = :branchId", { branchId });
+    }
+
+    qb.orderBy("item.manufacturer", "ASC").addOrderBy("item.productGroup", "ASC").addOrderBy("item.description", "ASC");
+
+    const levels = await qb.getMany();
     return levels.filter((l) => l.item != null);
   }
 
@@ -617,6 +637,7 @@ export class StockService {
       .leftJoinAndSelect("request.item", "item")
       .leftJoin("item.storageLocation", "itemStorageLocation")
       .leftJoin("itemStorageLocation.parent", "itemStorageLocationParent")
+      .leftJoin("itemStorageLocationParent.parent", "itemStorageLocationGrandparent")
       .leftJoinAndSelect("request.vehicle", "vehicle")
       .leftJoinAndSelect("request.stockLevel", "stockLevel")
       .leftJoinAndSelect("request.location", "location")
@@ -636,7 +657,7 @@ export class StockService {
     }
     if (locationIds?.length) {
       requestsQb.andWhere(
-        "(itemStorageLocation.id IN (:...locationIds) OR itemStorageLocationParent.id IN (:...locationIds))",
+        "(itemStorageLocation.id IN (:...locationIds) OR itemStorageLocationParent.id IN (:...locationIds) OR itemStorageLocationGrandparent.id IN (:...locationIds))",
         { locationIds },
       );
     }
@@ -840,9 +861,10 @@ export class StockService {
     }
 
     if (locationIds?.length) {
-      qb.leftJoin("location.parent", "locationParent");
+      qb.leftJoin("location.parent", "locationParent")
+        .leftJoin("locationParent.parent", "locationGrandparent");
       qb.andWhere(
-        "(location.id IN (:...locationIds) OR locationParent.id IN (:...locationIds))",
+        "(location.id IN (:...locationIds) OR locationParent.id IN (:...locationIds) OR locationGrandparent.id IN (:...locationIds))",
         { locationIds },
       );
     }

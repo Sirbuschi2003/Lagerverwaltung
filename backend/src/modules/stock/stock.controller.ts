@@ -60,7 +60,7 @@ export class StockController {
   @Get("location-stock")
   getLocationStock(@Req() req: StockRequest) {
     const locationIds = req.user?.locationIds ?? [];
-    return this.stockService.getLocationStock(locationIds);
+    return this.stockService.getLocationStock(locationIds, req.user?.branchId);
   }
 
   @Get("vehicle/:vehicleId")
