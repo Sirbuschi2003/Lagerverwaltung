@@ -263,8 +263,14 @@ export class InventoryController {
 
   @Delete("session/:sessionId")
   @Roles("MANAGER")
-  deleteSession(@Param("sessionId") sessionId: string, @Req() req: InventoryRequest) {
-    return this.inventoryService.deleteSession(sessionId, req.user?.branchId);
+  deleteSession(
+    @Param("sessionId") sessionId: string,
+    @Req() req: InventoryRequest,
+    @Query("force") force?: string,
+  ) {
+    const isSuperAdmin = req.user?.role === "MANAGER" && req.user?.branchId === null;
+    const forceDelete = force === "true" && isSuperAdmin;
+    return this.inventoryService.deleteSession(sessionId, req.user?.branchId, forceDelete);
   }
 
   @Get("template/meta")

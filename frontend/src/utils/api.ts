@@ -1152,8 +1152,8 @@ export const deleteInventoryLine = async (lineId: string): Promise<void> => {
   await api.delete(`/inventory/line/${lineId}`);
 };
 
-export const deleteInventorySession = async (sessionId: string): Promise<void> => {
-  await api.delete(`/inventory/session/${sessionId}`);
+export const deleteInventorySession = async (sessionId: string, force = false): Promise<void> => {
+  await api.delete(`/inventory/session/${sessionId}${force ? "?force=true" : ""}`);
 };
 
 export const submitInventorySession = async (

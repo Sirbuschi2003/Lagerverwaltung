@@ -261,14 +261,14 @@ export class InventoryService {
     return { success: true };
   }
 
-  async deleteSession(sessionId: string, branchId?: string | null) {
+  async deleteSession(sessionId: string, branchId?: string | null, force = false) {
     const where: Record<string, unknown> = { id: sessionId };
     if (branchId) where.branchId = branchId;
     const session = await this.sessionsRepository.findOne({ where });
     if (!session) {
       throw new NotFoundException("Inventory session not found");
     }
-    if (session.status === InventorySessionStatus.FINALIZED) {
+    if (session.status === InventorySessionStatus.FINALIZED && !force) {
       throw new ForbiddenException(
         "Abgeschlossene Inventuren unterliegen der gesetzlichen Aufbewahrungspflicht (§ 257 HGB, § 147 AO) " +
         "und können nicht manuell gelöscht werden. Die automatische Löschung erfolgt nach 10 Jahren.",

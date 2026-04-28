@@ -865,10 +865,13 @@ const InventoryPage = () => {
       setError("Der eingegebene Name stimmt nicht überein.");
       return;
     }
-    
+
+    const isSuperAdmin = user?.role === "MANAGER" && user?.branchId === null;
+    const forceDelete = isSuperAdmin && sessionToDelete.status === "FINALIZED";
+
     try {
       setLoading(true);
-      await deleteInventorySession(sessionToDelete.id);
+      await deleteInventorySession(sessionToDelete.id, forceDelete);
       await loadSessions();
       setDeleteDialogOpen(false);
       setSessionToDelete(null);
@@ -1659,12 +1662,12 @@ const InventoryPage = () => {
                         </Tooltip>
                       );
                     })()}
-                    {canManageInventoryNonTech && session.status !== 'FINALIZED' && (
+                    {canManageInventoryNonTech && (session.status !== 'FINALIZED' || (user?.role === "MANAGER" && user?.branchId === null)) && (
                       <IconButton
                         size="small"
                         color="error"
                         onClick={() => handleDeleteSessionClick(session)}
-                        title="Inventur löschen"
+                        title={session.status === 'FINALIZED' ? "Inventur erzwungen löschen (Super Admin)" : "Inventur löschen"}
                       >
                         <DeleteIcon />
                       </IconButton>
@@ -2000,6 +2003,11 @@ const InventoryPage = () => {
                 <Alert severity="error">
                   <strong>WARNUNG:</strong> Diese Aktion kann nicht rückgängig gemacht werden!
                 </Alert>
+                {sessionToDelete.status === "FINALIZED" && (
+                  <Alert severity="warning">
+                    <strong>Finalisierte Inventur:</strong> Diese Inventur wurde bereits abgeschlossen. Das Löschen umgeht die gesetzliche Aufbewahrungspflicht — nur im Testumfeld verwenden.
+                  </Alert>
+                )}
                 <Typography variant="body2">
                   Sie sind dabei, die Inventur <strong>"{sessionToDelete.name}"</strong> mit{" "}
                   <strong>{sessionToDelete.lines?.length || 0} erfassten Position(en)</strong> zu löschen.
