@@ -164,7 +164,8 @@ export class StockController {
     @Query("source") source?: string,
   ) {
     const parsedFrom = from ? new Date(from) : undefined;
-    const parsedTo = to ? new Date(to) : undefined;
+    // Date-only strings (YYYY-MM-DD) are parsed as midnight UTC; extend to end of day to include all movements on that date
+    const parsedTo = to ? (to.length === 10 ? new Date(new Date(to).getTime() + 86399999) : new Date(to)) : undefined;
     const parsedLimit = limit ? Number(limit) : undefined;
     const parsedOffset = offset ? Number(offset) : undefined;
     const data = await this.stockService.getMovements({

@@ -329,7 +329,20 @@ export class ItemsService {
         where,
         relations: ['codes', 'storageLocation', 'supplier']
       });
-      return item || null;
+      if (!item) return null;
+      if (item.storageLocation) {
+        const qb = this.stockLevelsRepository
+          .createQueryBuilder('sl')
+          .innerJoin('sl.location', 'loc')
+          .select('COALESCE(SUM(sl.quantity), 0)', 'total')
+          .where('sl.itemId = :itemId', { itemId: item.id })
+          .andWhere('sl.vehicleId IS NULL')
+          .andWhere('loc.type != :vehicleType', { vehicleType: 'VEHICLE' });
+        if (branchId) qb.andWhere('loc.branchId = :branchId', { branchId });
+        const row = await qb.getRawOne<{ total: string }>();
+        (item as any).currentQuantity = Number(row?.total ?? 0);
+      }
+      return item;
     } catch (error) {
       this.logger.error(`Fehler beim Abrufen des Artikels ${id}: ${error instanceof Error ? error.message : String(error)}`);
       throw error;

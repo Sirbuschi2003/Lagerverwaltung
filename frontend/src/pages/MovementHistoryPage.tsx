@@ -321,8 +321,12 @@ const MovementHistoryTab: React.FC = () => {
                 {data.map((m) => (
                   <TableRow key={m.id}>
                     <TableCell>{dayjs(m.occurredAt).format("DD.MM.YYYY HH:mm")}</TableCell>
-                    <TableCell>{m.type === "CHECKIN" ? "Einbuchung" : "Ausbuchung"}</TableCell>
-                    <TableCell align="right">{m.quantity}</TableCell>
+                    <TableCell sx={{ color: m.type === "CHECKIN" ? "success.main" : "error.main", fontWeight: 600 }}>
+                      {m.type === "CHECKIN" ? "Einbuchung" : "Ausbuchung"}
+                    </TableCell>
+                    <TableCell align="right" sx={{ color: m.type === "CHECKIN" ? "success.main" : "error.main", fontWeight: 700 }}>
+                      {m.type === "CHECKIN" ? "+" : "−"}{m.quantity}
+                    </TableCell>
                     <TableCell>{m.item?.code} - {m.item?.description}</TableCell>
                     <TableCell>{m.vehicle?.licensePlate || m.vehicle?.description || "-"}</TableCell>
                     <TableCell>{m.user?.displayName || "-"}</TableCell>
