@@ -667,6 +667,7 @@ export class PurchasingService {
     const stockLevelsQb = itemIds.length
       ? this.stockLevelsRepository
           .createQueryBuilder("sl")
+          .leftJoinAndSelect("sl.item", "item")
           .leftJoinAndSelect("sl.location", "location")
           .leftJoin("location.parent", "locParent")
           .leftJoin("locParent.parent", "locGrandparent")
