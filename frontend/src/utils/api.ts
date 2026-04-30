@@ -860,9 +860,12 @@ export const fetchPurchaseOrder = async (id: string): Promise<PurchaseOrderDto> 
   return response.data;
 };
 
-export const fetchPurchaseSuggestions = async (refresh = false): Promise<PurchaseOrderSuggestionDto[]> => {
+export const fetchPurchaseSuggestions = async (refresh = false, warehouseId?: string): Promise<PurchaseOrderSuggestionDto[]> => {
+  const params: Record<string, string> = {};
+  if (refresh) params.refresh = "true";
+  if (warehouseId) params.warehouseId = warehouseId;
   const response = await api.get<PurchaseOrderSuggestionDto[]>("/purchase-orders/suggestions", {
-    params: refresh ? { refresh: "true" } : undefined,
+    params: Object.keys(params).length ? params : undefined,
   });
   return response.data;
 };

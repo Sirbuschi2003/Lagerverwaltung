@@ -600,9 +600,11 @@ export class PurchasingService {
     }
   }
 
-  async getSuggestions(branchId: string | null | undefined, refresh = false, locationIds?: string[]) {
-    // Cache-Check pro Niederlassung (+ Lager wenn vorhanden)
-    const cacheKey = (branchId ?? "ALL") + (locationIds?.length ? `_${locationIds.sort().join(",")}` : "");
+  async getSuggestions(branchId: string | null | undefined, refresh = false, locationIds?: string[], warehouseId?: string) {
+    // warehouseId überschreibt locationIds — strikte Lager-Isolation
+    const effectiveLocationIds = warehouseId ? [warehouseId] : locationIds;
+    // Cache-Key inkludiert warehouseId für strikte Trennung
+    const cacheKey = (branchId ?? "ALL") + (warehouseId ? `_w:${warehouseId}` : effectiveLocationIds?.length ? `_${effectiveLocationIds.sort().join(",")}` : "");
     const now = Date.now();
     const cached = this.suggestionsCacheMap.get(cacheKey);
     if (!refresh && cached && (now - cached.timestamp) < this.SUGGESTIONS_CACHE_TTL) {
@@ -635,7 +637,7 @@ export class PurchasingService {
 
     // Nur Artikel dieser Niederlassung laden (+ Lager-Filter falls vorhanden)
     let itemEntities: Item[];
-    if (locationIds?.length) {
+    if (effectiveLocationIds?.length) {
       const qb = this.itemsRepository
         .createQueryBuilder("item")
         .leftJoinAndSelect("item.storageLocation", "storageLocation")
@@ -646,7 +648,7 @@ export class PurchasingService {
       if (branchId) qb.andWhere("item.branchId = :branchId", { branchId });
       qb.andWhere(
         "(storageLocation.id IN (:...locationIds) OR slParent.id IN (:...locationIds) OR slGrandparent.id IN (:...locationIds))",
-        { locationIds },
+        { locationIds: effectiveLocationIds },
       );
       itemEntities = await qb.getMany();
     } else {
@@ -677,10 +679,10 @@ export class PurchasingService {
     if (stockLevelsQb && branchId) {
       stockLevelsQb.andWhere("location.branchId = :branchId", { branchId });
     }
-    if (stockLevelsQb && locationIds?.length) {
+    if (stockLevelsQb && effectiveLocationIds?.length) {
       stockLevelsQb.andWhere(
         "(location.id IN (:...locationIds) OR locParent.id IN (:...locationIds) OR locGrandparent.id IN (:...locationIds))",
-        { locationIds },
+        { locationIds: effectiveLocationIds },
       );
     }
     const stockLevels = stockLevelsQb ? await stockLevelsQb.getMany() : [];

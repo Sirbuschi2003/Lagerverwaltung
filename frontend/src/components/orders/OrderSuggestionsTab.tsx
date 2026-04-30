@@ -57,6 +57,7 @@ import {
   type LocationDto,
   type ItemDto,
   fetchLocations,
+  fetchWarehouses,
   type CompanyConfigDto,
   type EmailTemplate,
 } from "../../utils/api";
@@ -83,6 +84,8 @@ const OrderSuggestionsTab: React.FC = () => {
   const canCreate = hasPermission("orders.create");
 
   const [locations, setLocations] = useState<LocationDto[]>([]);
+  const [warehouses, setWarehouses] = useState<LocationDto[]>([]);
+  const [selectedWarehouseId, setSelectedWarehouseId] = useState<string | null>(null);
   const [suggestions, setSuggestions] = useState<PurchaseOrderSuggestionDto[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -259,17 +262,17 @@ const OrderSuggestionsTab: React.FC = () => {
     document.body.removeChild(anchor);
   };
 
-  const loadData = async (refresh = false) => {
+  const loadData = async (refresh = false, warehouseId?: string | null) => {
     setLoading(true);
     setError(null);
     try {
       const [suggData, locData] = await Promise.all([
-        fetchPurchaseSuggestions(refresh),
+        fetchPurchaseSuggestions(refresh, warehouseId ?? undefined),
         fetchLocations({ includeVehicles: false }),
       ]);
       setSuggestions(suggData);
       setLocations(locData);
-      
+
       // Initialisiere Mengen und Auswahl
       const nextQuantities: Record<string, number> = {};
       const nextSelected: Record<string, boolean> = {};
@@ -288,7 +291,17 @@ const OrderSuggestionsTab: React.FC = () => {
   };
 
   useEffect(() => {
-    loadData();
+    const init = async () => {
+      const whs = await fetchWarehouses().catch(() => [] as LocationDto[]);
+      setWarehouses(whs);
+      // Vorauswahl: erstes Lager aus Benutzer-Zuweisung, sonst erstes Lager insgesamt
+      const userLocationIds: string[] = (user as any)?.locationIds ?? [];
+      const preselected = whs.find((w) => userLocationIds.includes(w.id)) ?? whs[0] ?? null;
+      const preselectedId = preselected?.id ?? null;
+      setSelectedWarehouseId(preselectedId);
+      await loadData(false, preselectedId);
+    };
+    init();
   }, []);
 
   useEffect(() => {
@@ -670,6 +683,26 @@ const OrderSuggestionsTab: React.FC = () => {
             Bestellvorschläge ({sortedSuggestions.length}
             {filterBelowMinimum || filterSupplier ? ` / ${suggestions.length}` : ""})
           </Typography>
+          {warehouses.length > 1 && (
+            <TextField
+              select
+              label="Lager"
+              size="small"
+              sx={{ minWidth: 180 }}
+              value={selectedWarehouseId ?? ""}
+              onChange={(e) => {
+                const id = e.target.value || null;
+                setSelectedWarehouseId(id);
+                loadData(false, id);
+              }}
+              SelectProps={{ native: true }}
+            >
+              <option value="">Alle Lager</option>
+              {warehouses.map((w) => (
+                <option key={w.id} value={w.id}>{w.name || w.code}</option>
+              ))}
+            </TextField>
+          )}
           <Autocomplete
             options={supplierOptions}
             getOptionLabel={(o) => o.name}
@@ -712,7 +745,7 @@ const OrderSuggestionsTab: React.FC = () => {
           <Button
             variant="outlined"
             startIcon={<RefreshIcon />}
-            onClick={() => loadData(true)}
+            onClick={() => loadData(true, selectedWarehouseId)}
             disabled={loading}
           >
             Aktualisieren
