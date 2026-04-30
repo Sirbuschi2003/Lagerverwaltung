@@ -379,7 +379,7 @@ export class PurchasingService {
         quantity: toReceive,
         occurredAt: new Date().toISOString(),
         note: `Wareneingang Bestellung ${order.orderNumber ?? order.id}`,
-        source: `purchase-order:${order.id}`,
+        source: order.orderNumber ?? `purchase-order:${order.id}`,
       });
     }
 
