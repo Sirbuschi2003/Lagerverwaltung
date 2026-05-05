@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useMemo } from "react";
 import {
   Container,
   Paper,
@@ -14,26 +14,32 @@ import {
   CardContent,
   Typography,
   TextField,
+  InputAdornment,
   Dialog,
   DialogTitle,
   DialogContent,
   DialogActions,
   CircularProgress,
-  Checkbox,
-  FormControlLabel,
   Alert,
   Grid,
   Chip,
+  Stack,
   Tooltip,
+  Checkbox,
+  List,
+  ListItem,
+  ListItemText,
+  Divider,
 } from "@mui/material";
 import DownloadIcon from "@mui/icons-material/Download";
-import DeleteIcon from "@mui/icons-material/Delete";
 import SaveIcon from "@mui/icons-material/Save";
 import RefreshIcon from "@mui/icons-material/Refresh";
 import FolderOpenIcon from "@mui/icons-material/FolderOpen";
 import StorageIcon from "@mui/icons-material/Storage";
 import DateRangeIcon from "@mui/icons-material/DateRange";
-import { fetchArchives, downloadArchive, downloadArchiveZip, getArchiveStats, updateArchiveRetention, forceArchiveNow } from "../utils/api";
+import SearchIcon from "@mui/icons-material/Search";
+import VisibilityIcon from "@mui/icons-material/Visibility";
+import { fetchArchives, downloadArchive, downloadArchiveZip, getArchiveStats, updateArchiveRetention, forceArchiveNow, getArchiveDayEntries, type LogEntry } from "../utils/api";
 import useAuthStore from "../store/useAuthStore";
 
 interface ArchiveData {
@@ -65,6 +71,48 @@ const ArchiveManagementPage: React.FC<{ isEmbedded?: boolean }> = ({ isEmbedded 
   const [openRetentionDialog, setOpenRetentionDialog] = useState(false);
   const [newRetentionDays, setNewRetentionDays] = useState(30);
   const [downloading, setDownloading] = useState(false);
+
+  // Viewer-State
+  const [viewerDate, setViewerDate] = useState<string | null>(null);
+  const [viewerEntries, setViewerEntries] = useState<LogEntry[]>([]);
+  const [viewerLoading, setViewerLoading] = useState(false);
+  const [viewerSearch, setViewerSearch] = useState("");
+  const [viewerCategory, setViewerCategory] = useState("");
+
+  const viewerFiltered = useMemo(() => {
+    let result = viewerEntries;
+    if (viewerCategory) result = result.filter(e => e.category === viewerCategory);
+    if (viewerSearch.trim()) {
+      const q = viewerSearch.toLowerCase();
+      result = result.filter(e =>
+        (e.action || "").toLowerCase().includes(q) ||
+        (e.username || "").toLowerCase().includes(q) ||
+        (e.details || "").toLowerCase().includes(q) ||
+        JSON.stringify(e.metadata || {}).toLowerCase().includes(q),
+      );
+    }
+    return result;
+  }, [viewerEntries, viewerSearch, viewerCategory]);
+
+  const viewerCategories = useMemo(
+    () => [...new Set(viewerEntries.map(e => e.category))].sort(),
+    [viewerEntries],
+  );
+
+  const openViewer = async (date: string) => {
+    setViewerDate(date);
+    setViewerSearch("");
+    setViewerCategory("");
+    setViewerLoading(true);
+    try {
+      const res = await getArchiveDayEntries(date);
+      setViewerEntries(res.entries);
+    } catch {
+      setViewerEntries([]);
+    } finally {
+      setViewerLoading(false);
+    }
+  };
 
   // Archiv-Daten laden
   useEffect(() => {
@@ -345,12 +393,8 @@ const ArchiveManagementPage: React.FC<{ isEmbedded?: boolean }> = ({ isEmbedded 
                 </TableCell>
                 <TableCell sx={{ fontWeight: "bold" }}>Datum</TableCell>
                 <TableCell sx={{ fontWeight: "bold" }}>Kategorien</TableCell>
-                <TableCell align="right" sx={{ fontWeight: "bold" }}>
-                  Größe
-                </TableCell>
-                <TableCell align="right" sx={{ fontWeight: "bold" }}>
-                  Aktionen
-                </TableCell>
+                <TableCell align="right" sx={{ fontWeight: "bold" }}>Größe</TableCell>
+                <TableCell align="right" sx={{ fontWeight: "bold" }}>Aktionen</TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
@@ -393,33 +437,30 @@ const ArchiveManagementPage: React.FC<{ isEmbedded?: boolean }> = ({ isEmbedded 
                     )}
                   </TableCell>
                   <TableCell align="right">
-                    <Tooltip title="Alle dieser Kategorien herunterladen">
-                      <Box sx={{ display: "flex", gap: 1, justifyContent: "flex-end" }}>
-                        {(archive.categories || []).map((cat) => (
-                          <Tooltip
-                            key={cat.category}
-                            title={`${cat.category}: ${cat.count} Logs`}
+                    <Box sx={{ display: "flex", gap: 1, justifyContent: "flex-end", flexWrap: "wrap" }}>
+                      <Button
+                        size="small"
+                        variant="contained"
+                        startIcon={<VisibilityIcon />}
+                        onClick={() => openViewer(archive.date)}
+                      >
+                        Ansehen
+                      </Button>
+                      {(archive.categories || []).map((cat) => (
+                        <Tooltip key={cat.category} title={`${cat.category}: ${cat.count} Logs herunterladen`}>
+                          <Button
+                            size="small"
+                            variant="text"
+                            startIcon={<DownloadIcon />}
+                            onClick={() => handleDownloadSingle(archive.date, cat.category)}
+                            disabled={downloading}
+                            sx={{ whiteSpace: "nowrap", minWidth: "auto", fontSize: "0.75rem" }}
                           >
-                            <Button
-                              size="small"
-                              variant="text"
-                              startIcon={<DownloadIcon />}
-                              onClick={() =>
-                                handleDownloadSingle(archive.date, cat.category)
-                              }
-                              disabled={downloading}
-                              sx={{
-                                whiteSpace: "nowrap",
-                                minWidth: "auto",
-                                fontSize: "0.75rem",
-                              }}
-                            >
-                              {cat.category}
-                            </Button>
-                          </Tooltip>
-                        ))}
-                      </Box>
-                    </Tooltip>
+                            {cat.category}
+                          </Button>
+                        </Tooltip>
+                      ))}
+                    </Box>
                   </TableCell>
                 </TableRow>
               ))}
@@ -427,6 +468,108 @@ const ArchiveManagementPage: React.FC<{ isEmbedded?: boolean }> = ({ isEmbedded 
           </Table>
         )}
       </TableContainer>
+
+      {/* Dialog: Archiv-Viewer */}
+      <Dialog
+        open={!!viewerDate}
+        onClose={() => setViewerDate(null)}
+        maxWidth="lg"
+        fullWidth
+        PaperProps={{ sx: { height: "85vh" } }}
+      >
+        <DialogTitle>
+          <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 2, flexWrap: "wrap" }}>
+            <Typography variant="h6">
+              Archiv {viewerDate ? new Date(viewerDate).toLocaleDateString("de-DE", { weekday: "long", year: "numeric", month: "long", day: "numeric" }) : ""}
+            </Typography>
+            <Typography variant="body2" color="text.secondary">
+              {viewerFiltered.length} / {viewerEntries.length} Einträge
+            </Typography>
+          </Box>
+        </DialogTitle>
+        <DialogContent dividers sx={{ display: "flex", flexDirection: "column", gap: 2, overflow: "hidden" }}>
+          {/* Filter-Leiste */}
+          <Box sx={{ display: "flex", gap: 1.5, flexWrap: "wrap", flexShrink: 0 }}>
+            <TextField
+              size="small"
+              placeholder="Suchen (Aktion, Benutzer, Details…)"
+              value={viewerSearch}
+              onChange={(e) => setViewerSearch(e.target.value)}
+              sx={{ flexGrow: 1, minWidth: 220 }}
+              InputProps={{ startAdornment: <InputAdornment position="start"><SearchIcon fontSize="small" /></InputAdornment> }}
+            />
+            <Stack direction="row" spacing={0.5} flexWrap="wrap" useFlexGap>
+              <Chip
+                label="Alle"
+                size="small"
+                onClick={() => setViewerCategory("")}
+                color={viewerCategory === "" ? "primary" : "default"}
+                variant={viewerCategory === "" ? "filled" : "outlined"}
+                sx={{ cursor: "pointer" }}
+              />
+              {viewerCategories.map((cat) => (
+                <Chip
+                  key={cat}
+                  label={cat}
+                  size="small"
+                  onClick={() => setViewerCategory(c => c === cat ? "" : cat)}
+                  color={viewerCategory === cat ? "primary" : "default"}
+                  variant={viewerCategory === cat ? "filled" : "outlined"}
+                  sx={{ cursor: "pointer" }}
+                />
+              ))}
+            </Stack>
+          </Box>
+
+          {/* Log-Liste */}
+          <Box sx={{ flexGrow: 1, overflow: "auto" }}>
+            {viewerLoading ? (
+              <Box sx={{ display: "flex", justifyContent: "center", p: 4 }}>
+                <CircularProgress />
+              </Box>
+            ) : viewerFiltered.length === 0 ? (
+              <Box sx={{ p: 4, textAlign: "center" }}>
+                <Typography color="text.secondary">Keine Einträge gefunden</Typography>
+              </Box>
+            ) : (
+              <List disablePadding>
+                {viewerFiltered.map((entry, idx) => (
+                  <React.Fragment key={entry.id ?? idx}>
+                    <ListItem alignItems="flex-start" sx={{ px: 2, py: 1 }}>
+                      <ListItemText
+                        primary={
+                          <Box sx={{ display: "flex", gap: 1, alignItems: "center", flexWrap: "wrap" }}>
+                            <Chip label={entry.category} size="small" variant="outlined" sx={{ fontSize: "0.7rem", height: 20 }} />
+                            {entry.level === "ERROR" && <Chip label="Fehler" size="small" color="error" sx={{ height: 20, fontSize: "0.7rem" }} />}
+                            {entry.level === "WARNING" && <Chip label="Warnung" size="small" color="warning" sx={{ height: 20, fontSize: "0.7rem" }} />}
+                            {entry.level === "SECURITY" && <Chip label="Sicherheit" size="small" color="secondary" sx={{ height: 20, fontSize: "0.7rem" }} />}
+                            <Typography variant="body2" fontWeight={500}>{entry.action}</Typography>
+                          </Box>
+                        }
+                        secondary={
+                          <Box sx={{ mt: 0.5 }}>
+                            {entry.details && (
+                              <Typography variant="caption" color="text.secondary" display="block">{entry.details}</Typography>
+                            )}
+                            <Typography variant="caption" color="text.disabled">
+                              {entry.timestamp ? new Date(entry.timestamp).toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit", second: "2-digit" }) : ""}
+                              {entry.username ? ` · ${entry.username}` : ""}
+                            </Typography>
+                          </Box>
+                        }
+                      />
+                    </ListItem>
+                    {idx < viewerFiltered.length - 1 && <Divider component="li" />}
+                  </React.Fragment>
+                ))}
+              </List>
+            )}
+          </Box>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setViewerDate(null)}>Schließen</Button>
+        </DialogActions>
+      </Dialog>
 
       {/* Dialog: Aufbewahrungsdauer ändern */}
       <Dialog open={openRetentionDialog} onClose={() => setOpenRetentionDialog(false)}>

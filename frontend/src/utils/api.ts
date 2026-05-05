@@ -1971,6 +1971,11 @@ export const forceArchiveNow = async (date?: string): Promise<any> => {
   return response.data;
 };
 
+export const getArchiveDayEntries = async (date: string): Promise<{ date: string; entries: LogEntry[]; total: number }> => {
+  const response = await api.get<{ date: string; entries: LogEntry[]; total: number }>(`/logs/archives/${date}/entries`);
+  return response.data;
+};
+
 // Nutzereinstellungen (Dashboard-Konfiguration, Schnellzugriff)
 export const fetchUserSettings = async (): Promise<Record<string, unknown>> => {
   const response = await api.get<Record<string, unknown>>("/users/me/settings");

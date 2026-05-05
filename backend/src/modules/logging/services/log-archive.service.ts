@@ -163,6 +163,28 @@ export class LogArchiveService {
     return Buffer.from(JSON.stringify(all, null, 2), 'utf-8');
   }
 
+  /** Read and merge all category files for a single date */
+  readArchiveDay(date: string): unknown[] {
+    this.safe(date, /^\d{4}-\d{2}-\d{2}$/);
+
+    const datePath = path.join(this.archiveDir, date);
+    if (!fs.existsSync(datePath)) throw new NotFoundException('Kein Archiv für dieses Datum');
+
+    const all: unknown[] = [];
+    for (const file of fs.readdirSync(datePath).filter(f => f.endsWith('.json'))) {
+      try {
+        const parsed = JSON.parse(fs.readFileSync(path.join(datePath, file), 'utf-8'));
+        if (Array.isArray(parsed)) all.push(...parsed);
+      } catch { /* skip corrupted file */ }
+    }
+
+    // Sort descending by timestamp
+    (all as any[]).sort((a, b) =>
+      new Date(b.timestamp ?? 0).getTime() - new Date(a.timestamp ?? 0).getTime(),
+    );
+    return all;
+  }
+
   /** Returns all distinct past dates (before today) that still have logs in the DB */
   async getPastDatesInDb(): Promise<string[]> {
     const rows: { date: string }[] = await this.logRepo.query(

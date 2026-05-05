@@ -643,6 +643,14 @@ export class LoggingController {
     return { success: true, date, byCategory: result.byCategory };
   }
 
+  @Get('archives/:date/entries')
+  @Roles('MANAGER')
+  async getArchiveDayEntries(@Param('date') date: string, @Req() req: Request) {
+    this.requireSuperAdmin(req);
+    const entries = this.archiveService.readArchiveDay(date);
+    return { date, entries, total: (entries as any[]).length };
+  }
+
   @Get('archives/:date/:category/download')
   @Roles('MANAGER')
   async downloadArchiveFile(
