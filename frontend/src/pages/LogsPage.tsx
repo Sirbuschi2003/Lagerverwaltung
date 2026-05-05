@@ -49,7 +49,11 @@ import {
   Warning as WarningIcon,
   Build as BuildIcon,
   MoreHoriz as MoreHorizIcon,
+  Search as SearchIcon,
+  FiberManualRecord as LiveDotIcon,
+  StopCircle as StopIcon,
 } from '@mui/icons-material';
+import { InputAdornment } from '@mui/material';
 import {
   getLogs,
   downloadLogsCSV,
@@ -390,6 +394,9 @@ const LogsPage: React.FC<{ isEmbedded?: boolean }> = ({ isEmbedded = false }) =>
   const [logFilters, setLogFilters] = useState<LogFilters>({ limit: 50, offset: 0 });
   const [totalLogs, setTotalLogs] = useState(0);
   const [selectedCategory, setSelectedCategory] = useState('');
+  const [searchText, setSearchText] = useState('');
+  const [liveMode, setLiveMode] = useState(false);
+  const liveIntervalRef = React.useRef<ReturnType<typeof setInterval> | null>(null);
   const [showDetails, setShowDetails] = useState<LogEntry | null>(null);
   const [retentionDays, setRetentionDaysState] = useState<number>(90);
   const [savingRetention, setSavingRetention] = useState(false);
@@ -432,9 +439,33 @@ const LogsPage: React.FC<{ isEmbedded?: boolean }> = ({ isEmbedded = false }) =>
     })();
   }, []);
 
+  // Live-Modus: alle 5s neu laden (nur erste Seite, kein append)
+  const toggleLive = () => {
+    if (liveMode) {
+      if (liveIntervalRef.current) clearInterval(liveIntervalRef.current);
+      liveIntervalRef.current = null;
+      setLiveMode(false);
+    } else {
+      setLiveMode(true);
+      liveIntervalRef.current = setInterval(() => {
+        setLogFilters(f => ({ ...f, offset: 0 }));
+      }, 5000);
+    }
+  };
+
+  React.useEffect(() => {
+    return () => { if (liveIntervalRef.current) clearInterval(liveIntervalRef.current); };
+  }, []);
+
   const handleCategoryChange = (cat: string) => {
     setSelectedCategory(cat);
+    setSearchText('');
     setLogFilters({ limit: 50, offset: 0, category: cat || undefined });
+  };
+
+  const handleSearch = (text: string) => {
+    setSearchText(text);
+    setLogFilters({ limit: 50, offset: 0, category: selectedCategory || undefined, action: text || undefined });
   };
 
   const handleLoadMore = () => {
@@ -505,9 +536,39 @@ const LogsPage: React.FC<{ isEmbedded?: boolean }> = ({ isEmbedded = false }) =>
         </Stack>
       )}
 
-      {/* Kategoriefilter + Aktionen */}
+      {/* Kategoriefilter + Suche + Aktionen */}
       <Paper sx={{ p: 2, mb: 2 }}>
-        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 1.5 }}>
+        <Stack spacing={1.5}>
+          <Box sx={{ display: 'flex', gap: 1.5, flexWrap: 'wrap', alignItems: 'center' }}>
+            <TextField
+              size="small"
+              placeholder="Suchen (Aktion, Benutzer…)"
+              value={searchText}
+              onChange={(e) => handleSearch(e.target.value)}
+              sx={{ flexGrow: 1, minWidth: 200 }}
+              InputProps={{
+                startAdornment: <InputAdornment position="start"><SearchIcon fontSize="small" /></InputAdornment>,
+              }}
+            />
+            <Tooltip title={liveMode ? 'Live-Modus stoppen' : 'Live-Modus starten (aktualisiert alle 5s)'}>
+              <Button
+                size="small"
+                variant={liveMode ? 'contained' : 'outlined'}
+                color={liveMode ? 'error' : 'primary'}
+                startIcon={liveMode ? <StopIcon /> : <LiveDotIcon sx={{ color: liveMode ? undefined : 'error.main' }} />}
+                onClick={toggleLive}
+              >
+                {liveMode ? 'Live stoppen' : 'Live'}
+              </Button>
+            </Tooltip>
+            <Tooltip title="Aktualisieren">
+              <IconButton size="small" onClick={handleRefresh} disabled={loading}>
+                <RefreshIcon />
+              </IconButton>
+            </Tooltip>
+            <Button size="small" startIcon={<DownloadIcon />} onClick={() => handleDownload('csv')}>CSV</Button>
+            <Button size="small" startIcon={<DownloadIcon />} onClick={() => handleDownload('json')}>JSON</Button>
+          </Box>
           <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
             {CATEGORY_FILTERS.map((f) => (
               <Chip
@@ -521,21 +582,7 @@ const LogsPage: React.FC<{ isEmbedded?: boolean }> = ({ isEmbedded = false }) =>
               />
             ))}
           </Stack>
-
-          <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', flexShrink: 0 }}>
-            <Tooltip title="Aktualisieren">
-              <IconButton size="small" onClick={handleRefresh} disabled={loading}>
-                <RefreshIcon />
-              </IconButton>
-            </Tooltip>
-            <Button size="small" startIcon={<DownloadIcon />} onClick={() => handleDownload('csv')}>
-              CSV
-            </Button>
-            <Button size="small" startIcon={<DownloadIcon />} onClick={() => handleDownload('json')}>
-              JSON
-            </Button>
-          </Box>
-        </Box>
+        </Stack>
       </Paper>
 
       {/* Activity Feed */}

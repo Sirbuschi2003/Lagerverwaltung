@@ -1976,6 +1976,11 @@ export const getArchiveDayEntries = async (date: string): Promise<{ date: string
   return response.data;
 };
 
+export const deleteArchiveDay = async (date: string): Promise<{ success: boolean }> => {
+  const response = await api.delete<{ success: boolean }>(`/logs/archives/${date}`);
+  return response.data;
+};
+
 // Nutzereinstellungen (Dashboard-Konfiguration, Schnellzugriff)
 export const fetchUserSettings = async (): Promise<Record<string, unknown>> => {
   const response = await api.get<Record<string, unknown>>("/users/me/settings");

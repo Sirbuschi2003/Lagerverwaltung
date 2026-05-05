@@ -32,6 +32,7 @@ import {
   Divider,
 } from "@mui/material";
 import DownloadIcon from "@mui/icons-material/Download";
+import DeleteIcon from "@mui/icons-material/Delete";
 import SaveIcon from "@mui/icons-material/Save";
 import RefreshIcon from "@mui/icons-material/Refresh";
 import FolderOpenIcon from "@mui/icons-material/FolderOpen";
@@ -39,7 +40,7 @@ import StorageIcon from "@mui/icons-material/Storage";
 import DateRangeIcon from "@mui/icons-material/DateRange";
 import SearchIcon from "@mui/icons-material/Search";
 import VisibilityIcon from "@mui/icons-material/Visibility";
-import { fetchArchives, downloadArchive, downloadArchiveZip, getArchiveStats, updateArchiveRetention, forceArchiveNow, getArchiveDayEntries, type LogEntry } from "../utils/api";
+import { fetchArchives, downloadArchive, downloadArchiveZip, getArchiveStats, updateArchiveRetention, forceArchiveNow, getArchiveDayEntries, deleteArchiveDay, type LogEntry } from "../utils/api";
 import useAuthStore from "../store/useAuthStore";
 
 interface ArchiveData {
@@ -437,7 +438,7 @@ const ArchiveManagementPage: React.FC<{ isEmbedded?: boolean }> = ({ isEmbedded 
                     )}
                   </TableCell>
                   <TableCell align="right">
-                    <Box sx={{ display: "flex", gap: 1, justifyContent: "flex-end", flexWrap: "wrap" }}>
+                    <Box sx={{ display: "flex", gap: 1, justifyContent: "flex-end", flexWrap: "wrap", alignItems: "center" }}>
                       <Button
                         size="small"
                         variant="contained"
@@ -460,6 +461,25 @@ const ArchiveManagementPage: React.FC<{ isEmbedded?: boolean }> = ({ isEmbedded 
                           </Button>
                         </Tooltip>
                       ))}
+                      <Tooltip title="Archiv dieses Tages löschen">
+                        <Button
+                          size="small"
+                          variant="outlined"
+                          color="error"
+                          startIcon={<DeleteIcon />}
+                          onClick={async () => {
+                            if (!window.confirm(`Archiv vom ${archive.date} wirklich löschen? Dieser Vorgang kann nicht rückgängig gemacht werden.`)) return;
+                            try {
+                              await deleteArchiveDay(archive.date);
+                              loadArchives();
+                            } catch {
+                              alert("Löschen fehlgeschlagen");
+                            }
+                          }}
+                        >
+                          Löschen
+                        </Button>
+                      </Tooltip>
                     </Box>
                   </TableCell>
                 </TableRow>

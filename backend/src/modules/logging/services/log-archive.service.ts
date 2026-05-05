@@ -185,6 +185,14 @@ export class LogArchiveService {
     return all;
   }
 
+  /** Delete the archive directory for a given date */
+  deleteArchiveDay(date: string): void {
+    this.safe(date, /^\d{4}-\d{2}-\d{2}$/);
+    const datePath = path.join(this.archiveDir, date);
+    if (!fs.existsSync(datePath)) throw new NotFoundException('Kein Archiv für dieses Datum');
+    fs.rmSync(datePath, { recursive: true, force: true });
+  }
+
   /** Returns all distinct past dates (before today) that still have logs in the DB */
   async getPastDatesInDb(): Promise<string[]> {
     const rows: { date: string }[] = await this.logRepo.query(

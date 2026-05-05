@@ -3,6 +3,7 @@ import {
   Get,
   Post,
   Put,
+  Delete,
   Param,
   Query,
   Body,
@@ -641,6 +642,14 @@ export class LoggingController {
     const date = body.date || new Date().toISOString().slice(0, 10);
     const result = await this.archiveService.archiveLogs(date);
     return { success: true, date, byCategory: result.byCategory };
+  }
+
+  @Delete('archives/:date')
+  @Roles('MANAGER')
+  async deleteArchiveDay(@Param('date') date: string, @Req() req: Request) {
+    this.requireSuperAdmin(req);
+    this.archiveService.deleteArchiveDay(date);
+    return { success: true, date };
   }
 
   @Get('archives/:date/entries')
