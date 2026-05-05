@@ -84,6 +84,20 @@ export class PurchasingController {
     });
   }
 
+  @Get("purge-preview")
+  @Permissions("orders.delete")
+  purgePreview(@Req() req: PurchasingRequest, @Query("years") years?: string) {
+    const y = years ? Number.parseInt(years, 10) : 10;
+    return this.purchasingService.previewPurgeOldOrders(Number.isFinite(y) && y > 0 ? y : 10, req.user?.branchId);
+  }
+
+  @Delete("purge")
+  @Permissions("orders.delete")
+  purge(@Req() req: PurchasingRequest, @Query("years") years?: string) {
+    const y = years ? Number.parseInt(years, 10) : 10;
+    return this.purchasingService.purgeOldOrders(Number.isFinite(y) && y > 0 ? y : 10, req.user?.branchId);
+  }
+
   @Get(":id")
   @Permissions("orders.view")
   findOne(@Req() req: PurchasingRequest, @Param("id") id: string) {
@@ -126,20 +140,6 @@ export class PurchasingController {
   @Permissions("orders.delete")
   remove(@Req() req: PurchasingRequest, @Param("id") id: string) {
     return this.purchasingService.remove(id, req.user?.branchId);
-  }
-
-  @Get("purge-preview")
-  @Permissions("orders.delete")
-  purgePreview(@Req() req: PurchasingRequest, @Query("years") years?: string) {
-    const y = years ? Number.parseInt(years, 10) : 10;
-    return this.purchasingService.previewPurgeOldOrders(Number.isFinite(y) && y > 0 ? y : 10, req.user?.branchId);
-  }
-
-  @Delete("purge")
-  @Permissions("orders.delete")
-  purge(@Req() req: PurchasingRequest, @Query("years") years?: string) {
-    const y = years ? Number.parseInt(years, 10) : 10;
-    return this.purchasingService.purgeOldOrders(Number.isFinite(y) && y > 0 ? y : 10, req.user?.branchId);
   }
 
   @Post(":id/receive")
