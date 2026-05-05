@@ -1941,7 +1941,7 @@ export const downloadArchiveZip = async (dates: string[]): Promise<void> => {
   const link = document.createElement('a');
   link.href = url;
   const timestamp = new Date().toISOString().slice(0, 10);
-  link.setAttribute('download', `logs-archives-${timestamp}.zip`);
+  link.setAttribute('download', `logs-archives-${timestamp}.json`);
   document.body.appendChild(link);
   link.click();
   link.parentNode?.removeChild(link);

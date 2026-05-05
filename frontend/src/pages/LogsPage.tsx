@@ -469,9 +469,7 @@ const LogsPage: React.FC<{ isEmbedded?: boolean }> = ({ isEmbedded = false }) =>
   };
 
   const handleLoadMore = () => {
-    const nextFilters = { ...logFilters, offset: (logFilters.offset || 0) + 50 };
-    setLogFilters(nextFilters);
-    loadLogs(nextFilters, true);
+    loadLogs({ ...logFilters, offset: (logFilters.offset || 0) + 50 }, true);
   };
 
   const handleRefresh = () => {

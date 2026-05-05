@@ -623,6 +623,14 @@ export class LoggingController {
     return this.archiveService.getStats();
   }
 
+  @Get('archives/config/retention')
+  @Roles('MANAGER')
+  async getArchiveRetention(@Req() req: Request) {
+    this.requireSuperAdmin(req);
+    const days = await this.loggingService.getLogRetentionDays();
+    return { retentionDays: days };
+  }
+
   @Put('archives/config/retention')
   @Roles('MANAGER')
   async setArchiveRetention(@Body() body: { retentionDays: number }, @Req() req: Request) {
@@ -633,6 +641,16 @@ export class LoggingController {
     }
     await this.archiveService.setRetention(days);
     return { success: true, retentionDays: days };
+  }
+
+  @Post('archives/cleanup')
+  @Roles('MANAGER')
+  async cleanupArchives(@Body() body: { daysToKeep?: number }, @Req() req: Request) {
+    this.requireSuperAdmin(req);
+    const days = body.daysToKeep ?? (await this.loggingService.getLogRetentionDays());
+    if (days < 1 || days > 3650) throw new BadRequestException('daysToKeep muss zwischen 1 und 3650 liegen');
+    const removed = this.archiveService.cleanupOldArchives(days);
+    return { success: true, removedCount: removed };
   }
 
   @Post('archives/force-archive')
