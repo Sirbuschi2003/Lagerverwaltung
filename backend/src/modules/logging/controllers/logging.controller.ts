@@ -125,7 +125,6 @@ export class LoggingController {
     @Query('limit') limit = '1000',
     @Query('offset') offset = '0',
   ) {
-    this.requireSuperAdmin(req);
     const filters: LogFilters = {};
 
     // Datum-Filter
@@ -211,7 +210,6 @@ export class LoggingController {
     @Req() req?: any,
     @Res() res?: Response,
   ) {
-    this.requireSuperAdmin(req);
     const filters: LogFilters = {};
 
     if (startDate) {
@@ -313,7 +311,6 @@ export class LoggingController {
     @Req() req?: any,
     @Res() res?: Response,
   ) {
-    this.requireSuperAdmin(req);
     const filters: LogFilters = {};
 
     if (startDate) {
@@ -390,15 +387,15 @@ export class LoggingController {
   @Get('stats')
   @Roles('MANAGER')
   async getLogStats(@Req() req?: any) {
-    this.requireSuperAdmin(req);
-    // Grundlegende Statistiken für die letzten 30 Tage
     const thirtyDaysAgo = new Date();
     thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
 
     const filters: LogFilters = {
       startDate: thirtyDaysAgo,
-      endDate: new Date()
+      endDate: new Date(),
     };
+
+    if (req?.user?.branchId) filters.branchId = req.user.branchId;
 
     const { logs, total } = await this.loggingService.getLogs(filters, 10000, 0);
 

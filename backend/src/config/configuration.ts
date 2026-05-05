@@ -11,6 +11,7 @@ export default () => ({
     name: process.env.DB_NAME ?? "lagerverwaltung",
     synchronize: (process.env.DB_SYNCHRONIZE ?? "false").toLowerCase() === "true",
     migrationsRun: (process.env.DB_MIGRATIONS_RUN ?? "true").toLowerCase() === "true",
+    poolSize: parseInt(process.env.DB_POOL_SIZE ?? "30", 10),
   },
   auth: {
     jwtSecret: process.env.JWT_SECRET ?? "change-me",

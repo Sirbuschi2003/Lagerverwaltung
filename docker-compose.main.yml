@@ -8,6 +8,15 @@ services:
       - --character-set-server=utf8mb4
       - --collation-server=utf8mb4_unicode_ci
       - --authentication-policy=caching_sha2_password
+      # Performance-Tuning für 200K+ Artikel / 200 gleichzeitige User
+      - --innodb-buffer-pool-size=${MYSQL_INNODB_BUFFER_POOL_SIZE:-512M}
+      - --innodb-log-file-size=256M
+      - --innodb-flush-log-at-trx-commit=2
+      - --innodb-io-capacity=1000
+      - --max-connections=${MYSQL_MAX_CONNECTIONS:-200}
+      - --max-allowed-packet=64M
+      - --tmp-table-size=64M
+      - --max-heap-table-size=64M
     environment:
       MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
       MYSQL_DATABASE: ${MYSQL_DATABASE}
