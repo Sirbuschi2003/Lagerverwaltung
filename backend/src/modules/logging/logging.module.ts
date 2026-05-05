@@ -7,10 +7,11 @@ import { SystemLog } from './entities/system-log.entity';
 import { BranchConfig } from './entities/branch-config.entity';
 import { LoggingService } from './services/logging.service';
 import { LoggingCleanupService } from './services/logging-cleanup.service';
+import { LogArchiveService } from './services/log-archive.service';
 
 @Module({
   imports: [TypeOrmModule.forFeature([SystemLog, SystemConfig, BranchConfig])],
-  providers: [LoggingService, LoggingCleanupService],
+  providers: [LoggingService, LoggingCleanupService, LogArchiveService],
   controllers: [LoggingController],
   exports: [LoggingService],
 })

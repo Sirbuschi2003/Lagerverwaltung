@@ -63,6 +63,7 @@ import {
   type LogEntry,
   type LogStats,
 } from '../utils/api';
+import useAuthStore from '../store/useAuthStore';
 
 // ─── Activity formatting ──────────────────────────────────────────────────────
 
@@ -379,6 +380,8 @@ const CATEGORY_FILTERS = [
 
 const LogsPage: React.FC<{ isEmbedded?: boolean }> = ({ isEmbedded = false }) => {
   const theme = useTheme();
+  const user = useAuthStore((s) => s.user);
+  const isSuperAdmin = !user?.branchId;
 
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const [logStats, setLogStats] = useState<LogStats | null>(null);
@@ -658,8 +661,8 @@ const LogsPage: React.FC<{ isEmbedded?: boolean }> = ({ isEmbedded = false }) =>
         )}
       </Paper>
 
-      {/* Verwaltung (einklappbar) */}
-      <Accordion>
+      {/* Log-Verwaltung: nur Super-Admin */}
+      {isSuperAdmin && <Accordion>
         <AccordionSummary expandIcon={<ExpandMoreIcon />}>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
             <SettingsIcon fontSize="small" color="action" />
@@ -736,7 +739,7 @@ const LogsPage: React.FC<{ isEmbedded?: boolean }> = ({ isEmbedded = false }) =>
             </Button>
           </Stack>
         </AccordionDetails>
-      </Accordion>
+      </Accordion>}
 
       {/* Detail-Dialog */}
       <Dialog open={!!showDetails} onClose={() => setShowDetails(null)} maxWidth="md" fullWidth>

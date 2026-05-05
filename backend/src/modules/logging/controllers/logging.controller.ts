@@ -3,6 +3,7 @@ import {
   Get,
   Post,
   Put,
+  Param,
   Query,
   Body,
   UseGuards,
@@ -19,11 +20,15 @@ import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../../auth/guards/roles.guard';
 import { LogLevel, LogCategory } from '../entities/system-log.entity';
 import { LoggingService, LogFilters } from '../services/logging.service';
+import { LogArchiveService } from '../services/log-archive.service';
 
 @Controller('logs')
 @UseGuards(JwtAuthGuard, RolesGuard)
 export class LoggingController {
-  constructor(private readonly loggingService: LoggingService) {}
+  constructor(
+    private readonly loggingService: LoggingService,
+    private readonly archiveService: LogArchiveService,
+  ) {}
 
   /** Wirft 403 wenn der eingeloggte Benutzer kein Super-Admin ist (branchId = null) */
   private requireSuperAdmin(req: Request): void {
@@ -599,5 +604,77 @@ export class LoggingController {
     }
 
     return { success: true, retentionDays: days };
+  }
+
+  // ─── Protokoll-Archiv (nur Super-Admin) ──────────────────────────────────────
+
+  @Get('archives')
+  @Roles('MANAGER')
+  async listArchives(@Req() req: Request) {
+    this.requireSuperAdmin(req);
+    return { archives: this.archiveService.listArchives() };
+  }
+
+  @Get('archives/stats')
+  @Roles('MANAGER')
+  async getArchiveStats(@Req() req: Request) {
+    this.requireSuperAdmin(req);
+    return this.archiveService.getStats();
+  }
+
+  @Put('archives/config/retention')
+  @Roles('MANAGER')
+  async setArchiveRetention(@Body() body: { retentionDays: number }, @Req() req: Request) {
+    this.requireSuperAdmin(req);
+    const days = body.retentionDays;
+    if (!days || isNaN(days) || days < 1 || days > 3650) {
+      throw new BadRequestException('Aufbewahrungsdauer muss zwischen 1 und 3650 Tagen liegen');
+    }
+    await this.archiveService.setRetention(days);
+    return { success: true, retentionDays: days };
+  }
+
+  @Post('archives/force-archive')
+  @Roles('MANAGER')
+  async forceArchive(@Body() body: { date?: string }, @Req() req: Request) {
+    this.requireSuperAdmin(req);
+    const date = body.date || new Date().toISOString().slice(0, 10);
+    const result = await this.archiveService.archiveLogs(date);
+    return { success: true, date, byCategory: result.byCategory };
+  }
+
+  @Get('archives/:date/:category/download')
+  @Roles('MANAGER')
+  async downloadArchiveFile(
+    @Param('date') date: string,
+    @Param('category') category: string,
+    @Req() req: Request,
+    @Res() res: Response,
+  ) {
+    this.requireSuperAdmin(req);
+    const content = this.archiveService.readArchiveFile(date, category);
+    res.setHeader('Content-Type', 'application/json; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="logs-${date}-${category}.json"`);
+    res.setHeader('Content-Length', content.length);
+    res.status(HttpStatus.OK).end(content);
+  }
+
+  @Post('archives/download/zip')
+  @Roles('MANAGER')
+  async downloadArchiveBundle(
+    @Body() body: { dates: string[] },
+    @Req() req: Request,
+    @Res() res: Response,
+  ) {
+    this.requireSuperAdmin(req);
+    if (!Array.isArray(body.dates) || body.dates.length === 0) {
+      throw new BadRequestException('Mindestens ein Datum erforderlich');
+    }
+    const content = this.archiveService.buildBundle(body.dates);
+    const filename = `logs-archive-${new Date().toISOString().slice(0, 10)}.json`;
+    res.setHeader('Content-Type', 'application/json; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.setHeader('Content-Length', content.length);
+    res.status(HttpStatus.OK).end(content);
   }
 }

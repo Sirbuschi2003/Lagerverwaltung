@@ -65,10 +65,12 @@ services:
       # Wird normalerweise automatisch via "com.docker.compose.project.working_dir" Label erkannt.
       HOST_PROJECT_PATH: ${HOST_PROJECT_PATH:-}
       ITEM_IMAGE_PATH: /app/item-images
+      LOG_ARCHIVE_PATH: /app/log-archives
     volumes:
       - ${BACKUP_STORAGE_HOST_PATH:-backups_data}:/app/backups
       - ${PURCHASE_ORDER_STORAGE_HOST_PATH:-purchase_orders_data}:/app/purchase-orders
       - ${ITEM_IMAGE_STORAGE_HOST_PATH:-item_images_data}:/app/item-images
+      - ${LOG_ARCHIVE_STORAGE_HOST_PATH:-log_archives_data}:/app/log-archives
       # Docker-Socket fuer automatisches Update (In-App Update-Funktion)
       - /var/run/docker.sock:/var/run/docker.sock
       # Compose-Datei fuer Update-Skript einbinden
@@ -135,5 +137,6 @@ volumes:
   backups_data:
   purchase_orders_data:
   item_images_data:
+  log_archives_data:
   caddy_data:
   caddy_config:

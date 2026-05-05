@@ -4,6 +4,7 @@ import DatasetIcon from "@mui/icons-material/Dataset";
 import StorageIcon from "@mui/icons-material/Storage";
 import LogsPage from "./LogsPage";
 import ArchiveManagementPage from "./ArchiveManagementPage";
+import useAuthStore from "../store/useAuthStore";
 
 interface TabPanelProps {
   children?: React.ReactNode;
@@ -21,17 +22,21 @@ const TabPanel: React.FC<TabPanelProps> = ({ children, value, index }) => {
 
 const LogsManagementPage: React.FC = () => {
   const [tabValue, setTabValue] = useState(0);
+  const user = useAuthStore((s) => s.user);
+  const isSuperAdmin = !user?.branchId;
 
   return (
     <Box>
       <Typography variant="h5" sx={{ mb: 3 }}>
-        📋 Protokolle
+        Protokolle
       </Typography>
 
       <Box sx={{ borderBottom: 1, borderColor: "divider", mb: 2 }}>
         <Tabs value={tabValue} onChange={(_, v) => setTabValue(v)}>
           <Tab icon={<DatasetIcon />} iconPosition="start" label="Systemprotokolle" />
-          <Tab icon={<StorageIcon />} iconPosition="start" label="Protokoll-Archiv" />
+          {isSuperAdmin && (
+            <Tab icon={<StorageIcon />} iconPosition="start" label="Protokoll-Archiv" />
+          )}
         </Tabs>
       </Box>
 
@@ -41,11 +46,13 @@ const LogsManagementPage: React.FC = () => {
         </Box>
       </TabPanel>
 
-      <TabPanel value={tabValue} index={1}>
-        <Box sx={{ px: 0 }}>
-          <ArchiveManagementPage isEmbedded />
-        </Box>
-      </TabPanel>
+      {isSuperAdmin && (
+        <TabPanel value={tabValue} index={1}>
+          <Box sx={{ px: 0 }}>
+            <ArchiveManagementPage isEmbedded />
+          </Box>
+        </TabPanel>
+      )}
     </Box>
   );
 };
