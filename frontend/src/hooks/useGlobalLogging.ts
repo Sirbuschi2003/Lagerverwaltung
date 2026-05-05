@@ -2,72 +2,20 @@ import { useEffect } from 'react';
 import useFrontendLogStore from '../store/useFrontendLogStore';
 
 /**
- * Hook zum automatischen Logging aller User-Interaktionen
- * - Klicks auf interaktive Elemente (Buttons, Links, etc.)
- * - Navigation zwischen Seiten
- * - Fehler (JavaScript Errors)
- * - Automatisches Sync zum Backend alle 60 Sekunden
- * 
- * Sollte in App.tsx eingebunden werden
+ * Hook für globales Fehler- und Navigations-Logging.
+ * Loggt: JS-Fehler, unhandled Promise Rejections, Seitenwechsel.
+ * Kein Click-Tracking – das erzeugt nur Rauschen ohne Mehrwert.
  */
 export const useGlobalLogging = () => {
   const addLog = useFrontendLogStore((state) => state.addLog);
   const syncToBackend = useFrontendLogStore((state) => state.syncToBackend);
 
   useEffect(() => {
-    console.log('[GlobalLogging] Initialisiere globales Logging...');
-
-    // Auto-Sync alle 60 Sekunden
     const syncInterval = setInterval(() => {
-      syncToBackend().catch(err => {
-        console.warn('[GlobalLogging] Auto-Sync fehlgeschlagen:', err);
-      });
-    }, 60000); // 60 Sekunden
+      syncToBackend().catch(() => {});
+    }, 60000);
 
-    // 1. Klick-Listener für alle interaktiven Elemente
-    const handleClick = (event: MouseEvent) => {
-      const target = event.target as HTMLElement;
-      
-      // Bestimme Element-Typ und relevante Infos
-      let elementType = target.tagName.toLowerCase();
-      let elementInfo: any = {
-        tag: elementType,
-        className: target.className,
-        id: target.id,
-      };
-      
-      // Spezielle Behandlung für verschiedene Element-Typen
-      if (elementType === 'button') {
-        elementInfo.text = target.textContent?.trim().substring(0, 50);
-        elementInfo.type = (target as HTMLButtonElement).type;
-      } else if (elementType === 'a') {
-        elementInfo.href = (target as HTMLAnchorElement).href;
-        elementInfo.text = target.textContent?.trim().substring(0, 50);
-      } else if (elementType === 'input') {
-        const inputElement = target as HTMLInputElement;
-        elementInfo.type = inputElement.type;
-        elementInfo.name = inputElement.name;
-        // DSGVO: Keine Eingabewerte loggen (könnten personenbezogene Daten enthalten)
-      } else if (target.closest('button, a, [role="button"]')) {
-        // Klick auf Kind-Element eines interaktiven Elements
-        const parent = target.closest('button, a, [role="button"]') as HTMLElement;
-        elementType = parent.tagName.toLowerCase();
-        elementInfo = {
-          tag: elementType,
-          className: parent.className,
-          id: parent.id,
-          text: parent.textContent?.trim().substring(0, 50),
-        };
-      }
-      
-      // Log nur für relevante interaktive Elemente
-      if (['button', 'a', 'input'].includes(elementType) || target.getAttribute('role') === 'button') {
-        addLog('info', 'click', `Klick auf ${elementType}`, elementInfo);
-      }
-    };
-    
-    // 2. Navigation-Listener (URL-Änderungen)
-    // DSGVO: Nur Pfad loggen, keine Query-Parameter (könnten Artikel-IDs, Suchbegriffe enthalten)
+    // Navigation (Seitenwechsel im SPA)
     let lastPathname = window.location.pathname;
     const handleNavigation = () => {
       const currentPathname = window.location.pathname;
@@ -79,8 +27,8 @@ export const useGlobalLogging = () => {
         lastPathname = currentPathname;
       }
     };
-    
-    // 3. Error-Listener für JavaScript-Fehler
+
+    // JavaScript-Fehler
     const handleError = (event: ErrorEvent) => {
       addLog('error', 'error', `JavaScript-Fehler: ${event.message}`, {
         message: event.message,
@@ -90,16 +38,15 @@ export const useGlobalLogging = () => {
         error: event.error?.stack || event.error?.toString(),
       });
     };
-    
-    // 4. Unhandled Promise Rejections
+
+    // Unhandled Promise Rejections
     const handleUnhandledRejection = (event: PromiseRejectionEvent) => {
       addLog('error', 'error', `Unhandled Promise Rejection: ${event.reason}`, {
         reason: event.reason?.toString(),
         stack: event.reason?.stack,
       });
     };
-    
-    // history.pushState / replaceState patchen für SPA-Navigation (React Router)
+
     const origPushState = window.history.pushState.bind(window.history);
     const origReplaceState = window.history.replaceState.bind(window.history);
     window.history.pushState = function (...args) {
@@ -111,30 +58,19 @@ export const useGlobalLogging = () => {
       window.dispatchEvent(new Event('locationchange'));
     };
 
-    // Event-Listener registrieren
-    document.addEventListener('click', handleClick, true); // Capture-Phase für alle Klicks
     window.addEventListener('popstate', handleNavigation);
     window.addEventListener('locationchange', handleNavigation);
     window.addEventListener('error', handleError);
     window.addEventListener('unhandledrejection', handleUnhandledRejection);
 
-    // Initial navigation log (DSGVO: kein href mit Query-Parametern)
-    addLog('info', 'navigation', `App gestartet auf ${window.location.pathname}`, {
-      pathname: window.location.pathname,
-    });
-
-    // Cleanup
     return () => {
-      document.removeEventListener('click', handleClick, true);
       window.removeEventListener('popstate', handleNavigation);
       window.removeEventListener('locationchange', handleNavigation);
       window.removeEventListener('error', handleError);
       window.removeEventListener('unhandledrejection', handleUnhandledRejection);
-      // pushState/replaceState zurücksetzen
       window.history.pushState = origPushState;
       window.history.replaceState = origReplaceState;
       clearInterval(syncInterval);
-      console.log('[GlobalLogging] Globales Logging deaktiviert');
     };
   }, [addLog, syncToBackend]);
 };
