@@ -163,6 +163,33 @@ export class LogArchiveService {
     return Buffer.from(JSON.stringify(all, null, 2), 'utf-8');
   }
 
+  /** Returns all distinct past dates (before today) that still have logs in the DB */
+  async getPastDatesInDb(): Promise<string[]> {
+    const rows: { date: string }[] = await this.logRepo.query(
+      `SELECT DISTINCT DATE(createdAt) AS \`date\` FROM system_logs WHERE DATE(createdAt) < CURDATE() ORDER BY \`date\``,
+    );
+    return rows.map(r => r.date);
+  }
+
+  /** Delete archive directories older than retentionDays. Returns count of removed dirs. */
+  cleanupOldArchives(retentionDays: number): number {
+    if (!fs.existsSync(this.archiveDir)) return 0;
+
+    const cutoff = new Date();
+    cutoff.setDate(cutoff.getDate() - retentionDays);
+    const cutoffStr = cutoff.toISOString().slice(0, 10);
+
+    let removed = 0;
+    const dateDirs = fs.readdirSync(this.archiveDir).filter(d => /^\d{4}-\d{2}-\d{2}$/.test(d));
+    for (const dir of dateDirs) {
+      if (dir < cutoffStr) {
+        fs.rmSync(path.join(this.archiveDir, dir), { recursive: true, force: true });
+        removed++;
+      }
+    }
+    return removed;
+  }
+
   async setRetention(days: number): Promise<void> {
     await this.loggingService.setLogRetentionDays(days);
   }
