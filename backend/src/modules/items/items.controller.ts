@@ -148,6 +148,20 @@ export class ItemsController {
     }
   }
 
+  @Get("warehouse-reset-preview")
+  @Permissions("items.delete")
+  async warehouseResetPreview(@Query("warehouseId") warehouseId: string) {
+    if (!warehouseId) throw new BadRequestException("warehouseId erforderlich");
+    return this.itemsService.previewWarehouseReset(warehouseId);
+  }
+
+  @Delete("warehouse-reset")
+  @Permissions("items.delete")
+  async warehouseReset(@Query("warehouseId") warehouseId: string) {
+    if (!warehouseId) throw new BadRequestException("warehouseId erforderlich");
+    return this.itemsService.removeWarehouse(warehouseId);
+  }
+
   @Get("reset-preview")
   @Permissions("items.delete")
   async resetPreview(@Req() req: ItemsRequest, @Query("branchId") branchIdParam?: string) {

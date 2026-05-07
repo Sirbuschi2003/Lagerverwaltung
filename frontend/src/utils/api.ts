@@ -406,6 +406,27 @@ export const resetBranchData = async (includeLocations: boolean, branchId?: stri
   return response.data;
 };
 
+export interface WarehouseResetPreview {
+  items: number;
+  stockLevels: number;
+  stockMovements: number;
+  suppliers: number;
+  subLocations: number;
+}
+
+export const fetchWarehouseResetPreview = async (warehouseId: string): Promise<WarehouseResetPreview> => {
+  const response = await api.get<WarehouseResetPreview>("/items/warehouse-reset-preview", { params: { warehouseId } });
+  return response.data;
+};
+
+export const resetWarehouseData = async (warehouseId: string): Promise<{ items: number; suppliers: number; locations: number }> => {
+  const response = await api.delete<{ items: number; suppliers: number; locations: number }>("/items/warehouse-reset", {
+    params: { warehouseId },
+    timeout: 120000,
+  });
+  return response.data;
+};
+
 export const fetchItemById = async (id: string): Promise<ItemDto> => {
   const response = await api.get<ItemDto>(`/items/${id}`);
   return response.data;

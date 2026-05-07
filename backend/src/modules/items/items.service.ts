@@ -1048,6 +1048,120 @@ export class ItemsService {
     }
   }
 
+  // ─── Lager-Reset ──────────────────────────────────────────────────────────
+
+  async previewWarehouseReset(warehouseId: string): Promise<{
+    items: number;
+    stockLevels: number;
+    stockMovements: number;
+    suppliers: number;
+    subLocations: number;
+  }> {
+    const allLocationIds = await this.resolveWarehouseDescendants(warehouseId);
+
+    const items = await this.repository
+      .createQueryBuilder("item")
+      .innerJoin("item.storageLocation", "loc")
+      .where("loc.id IN (:...ids)", { ids: allLocationIds })
+      .getCount();
+
+    const stockLevels = items > 0
+      ? await this.stockLevelsRepository
+          .createQueryBuilder("sl")
+          .innerJoin("sl.item", "item")
+          .innerJoin("item.storageLocation", "loc")
+          .where("loc.id IN (:...ids)", { ids: allLocationIds })
+          .getCount()
+      : 0;
+
+    const stockMovements = items > 0
+      ? await this.stockMovementsRepository
+          .createQueryBuilder("sm")
+          .innerJoin("sm.item", "item")
+          .innerJoin("item.storageLocation", "loc")
+          .where("loc.id IN (:...ids)", { ids: allLocationIds })
+          .getCount()
+      : 0;
+
+    const suppliers = await this.suppliersRepository.count({ where: { locationId: warehouseId } });
+    const subLocations = allLocationIds.length; // inkl. warehouseId selbst
+
+    return { items, stockLevels, stockMovements, suppliers, subLocations };
+  }
+
+  async removeWarehouse(warehouseId: string): Promise<{
+    items: number;
+    suppliers: number;
+    locations: number;
+  }> {
+    const allLocationIds = await this.resolveWarehouseDescendants(warehouseId);
+    this.logger.log(`Lager-Reset für warehouseId=${warehouseId}, ${allLocationIds.length} Lagerorte betroffen`);
+
+    // Artikel-IDs aller Artikel in diesem Lager ermitteln
+    const itemRows: { id: string }[] = await this.dataSource.query(
+      `SELECT i.id FROM items i INNER JOIN locations l ON i.storageLocationId = l.id WHERE l.id IN (${allLocationIds.map(() => "?").join(",")})`,
+      allLocationIds,
+    );
+    const itemIds = itemRows.map((r) => r.id);
+
+    let deletedItems = 0;
+    if (itemIds.length > 0) {
+      const chunkSize = 500;
+      for (let i = 0; i < itemIds.length; i += chunkSize) {
+        const chunk = itemIds.slice(i, i + chunkSize);
+        const ph = chunk.map(() => "?").join(",");
+        await this.dataSource.query(`DELETE FROM purchase_order_lines WHERE itemId IN (${ph})`, chunk);
+      }
+      for (let i = 0; i < itemIds.length; i += chunkSize) {
+        const chunk = itemIds.slice(i, i + chunkSize);
+        const ph = chunk.map(() => "?").join(",");
+        await this.dataSource.query(`DELETE FROM item_codes WHERE itemId IN (${ph})`, chunk);
+      }
+      const result = await this.dataSource.query(
+        `DELETE FROM items WHERE id IN (${itemIds.map(() => "?").join(",")})`,
+        itemIds,
+      );
+      deletedItems = result?.affectedRows ?? 0;
+    }
+
+    // Lieferanten dieses Lagers löschen
+    const suppResult = await this.dataSource.query(
+      `DELETE FROM suppliers WHERE locationId = ?`, [warehouseId],
+    );
+    const deletedSuppliers = suppResult?.affectedRows ?? 0;
+
+    // Lagerorte löschen (Kinder zuerst, max 3 Pässe für Tiefe)
+    let deletedLocations = 0;
+    for (let pass = 0; pass < 3; pass++) {
+      const r = await this.dataSource.query(
+        `DELETE FROM locations WHERE id IN (${allLocationIds.map(() => "?").join(",")})`,
+        allLocationIds,
+      );
+      const affected: number = r?.affectedRows ?? 0;
+      deletedLocations += affected;
+      if (!affected) break;
+    }
+
+    this.logger.log(`Lager-Reset abgeschlossen: ${deletedItems} Artikel, ${deletedSuppliers} Lieferanten, ${deletedLocations} Lagerorte`);
+    return { items: deletedItems, suppliers: deletedSuppliers, locations: deletedLocations };
+  }
+
+  private async resolveWarehouseDescendants(warehouseId: string): Promise<string[]> {
+    const ids = new Set<string>([warehouseId]);
+    // Kinder und Kindeskinder laden (bis zu 2 Ebenen: WAREHOUSE → SHELF → BIN)
+    const children: { id: string }[] = await this.dataSource.query(
+      `SELECT id FROM locations WHERE parentId = ?`, [warehouseId],
+    );
+    for (const child of children) {
+      ids.add(child.id);
+      const grandChildren: { id: string }[] = await this.dataSource.query(
+        `SELECT id FROM locations WHERE parentId = ?`, [child.id],
+      );
+      for (const gc of grandChildren) ids.add(gc.id);
+    }
+    return [...ids];
+  }
+
   // ─── Artikelbild ──────────────────────────────────────────────────────────
 
   private get imageDir(): string {

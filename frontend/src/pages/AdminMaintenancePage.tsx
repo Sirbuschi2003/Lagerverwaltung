@@ -50,11 +50,16 @@ import {
   fetchBranchResetPreview,
   resetBranchData,
   fetchBranches,
+  fetchWarehouses,
+  fetchWarehouseResetPreview,
+  resetWarehouseData,
   type MaintenanceIssue,
   type UpdateStatus,
   type UpdatePhase,
   type BranchResetPreview,
   type BranchDto,
+  type LocationDto,
+  type WarehouseResetPreview,
 } from '../utils/api';
 import useAuthStore from '../store/useAuthStore';
 
@@ -118,9 +123,21 @@ const AdminMaintenancePage = () => {
   const [branches, setBranches] = useState<BranchDto[]>([]);
   const [selectedBranchId, setSelectedBranchId] = useState<string>('');
 
+  // Einzelnes Lager zurücksetzen
+  const [warehouses, setWarehouses] = useState<LocationDto[]>([]);
+  const [selectedWarehouseId, setSelectedWarehouseId] = useState<string>('');
+  const [warehouseResetPreview, setWarehouseResetPreview] = useState<WarehouseResetPreview | null>(null);
+  const [warehouseResetPreviewLoading, setWarehouseResetPreviewLoading] = useState(false);
+  const [warehouseResetLoading, setWarehouseResetLoading] = useState(false);
+  const [warehouseResetConfirmText, setWarehouseResetConfirmText] = useState('');
+  const [warehouseResetConfirmCheck, setWarehouseResetConfirmCheck] = useState(false);
+  const [warehouseResetResult, setWarehouseResetResult] = useState<string | null>(null);
+  const [warehouseResetError, setWarehouseResetError] = useState<string | null>(null);
+
   useEffect(() => {
     if (isSuperAdmin) {
       fetchBranches().then(setBranches).catch(() => {});
+      fetchWarehouses().then(setWarehouses).catch(() => {});
     }
   }, [isSuperAdmin]);
 
@@ -394,6 +411,44 @@ const AdminMaintenancePage = () => {
       alert('Fehler beim Löschen: ' + (error.response?.data?.message || error.message));
     } finally {
       setPurgeLoading(false);
+    }
+  };
+
+  const handleWarehouseResetPreview = async () => {
+    if (!selectedWarehouseId) return;
+    setWarehouseResetPreviewLoading(true);
+    setWarehouseResetPreview(null);
+    setWarehouseResetResult(null);
+    setWarehouseResetError(null);
+    try {
+      const data = await fetchWarehouseResetPreview(selectedWarehouseId);
+      setWarehouseResetPreview(data);
+    } catch {
+      setWarehouseResetError('Vorschau konnte nicht geladen werden.');
+    } finally {
+      setWarehouseResetPreviewLoading(false);
+    }
+  };
+
+  const handleWarehouseResetExecute = async () => {
+    if (!selectedWarehouseId || warehouseResetConfirmText !== 'LÖSCHEN' || !warehouseResetConfirmCheck) return;
+    setWarehouseResetLoading(true);
+    setWarehouseResetError(null);
+    try {
+      const result = await resetWarehouseData(selectedWarehouseId);
+      const wh = warehouses.find((w) => w.id === selectedWarehouseId);
+      setWarehouseResetResult(
+        `Lager "${wh?.name ?? selectedWarehouseId}" zurückgesetzt: ${result.items} Artikel, ${result.suppliers} Lieferanten, ${result.locations} Lagerorte gelöscht.`
+      );
+      setWarehouseResetPreview(null);
+      setSelectedWarehouseId('');
+      setWarehouseResetConfirmText('');
+      setWarehouseResetConfirmCheck(false);
+      fetchWarehouses().then(setWarehouses).catch(() => {});
+    } catch (error: any) {
+      setWarehouseResetError('Fehler beim Zurücksetzen: ' + (error.response?.data?.message || error.message));
+    } finally {
+      setWarehouseResetLoading(false);
     }
   };
 
@@ -881,6 +936,106 @@ const AdminMaintenancePage = () => {
         {resetResult && <Alert severity="success">{resetResult}</Alert>}
         {resetError && <Alert severity="error">{resetError}</Alert>}
       </Paper>
+
+      {/* Einzelnes Lager zurücksetzen – nur Super-Admin */}
+      {isSuperAdmin && (
+        <Paper sx={{ p: 3, mt: 3, border: '2px solid', borderColor: 'error.main' }}>
+          <Typography variant="h6" color="error" gutterBottom>
+            Einzelnes Lager zurücksetzen
+          </Typography>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+            Löscht alle Artikel, Lieferanten und Lagerorte eines einzelnen Lagers unwiderruflich.
+          </Typography>
+
+          <FormControl size="small" sx={{ minWidth: 300, mb: 2 }}>
+            <InputLabel>Lager auswählen</InputLabel>
+            <Select
+              value={selectedWarehouseId}
+              label="Lager auswählen"
+              onChange={(e) => {
+                setSelectedWarehouseId(e.target.value);
+                setWarehouseResetPreview(null);
+                setWarehouseResetResult(null);
+                setWarehouseResetError(null);
+                setWarehouseResetConfirmText('');
+                setWarehouseResetConfirmCheck(false);
+              }}
+            >
+              <MenuItem value="">Bitte wählen…</MenuItem>
+              {warehouses.map((w) => (
+                <MenuItem key={w.id} value={w.id}>
+                  {w.name}
+                  {w.branch?.name && (
+                    <Typography component="span" variant="caption" color="text.secondary" sx={{ ml: 0.5 }}>
+                      ({w.branch.name})
+                    </Typography>
+                  )}
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+
+          <Box>
+            <Button
+              variant="outlined"
+              color="warning"
+              onClick={handleWarehouseResetPreview}
+              disabled={!selectedWarehouseId || warehouseResetPreviewLoading}
+              startIcon={warehouseResetPreviewLoading ? <CircularProgress size={18} /> : <SearchIcon />}
+              sx={{ mr: 1 }}
+            >
+              Vorschau laden
+            </Button>
+          </Box>
+
+          {warehouseResetPreview && (
+            <Box sx={{ mt: 2 }}>
+              <Table size="small" sx={{ mb: 2, maxWidth: 400 }}>
+                <TableHead>
+                  <TableRow>
+                    <TableCell>Datensatz</TableCell>
+                    <TableCell align="right">Anzahl</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  <TableRow><TableCell>Artikel</TableCell><TableCell align="right"><strong>{warehouseResetPreview.items.toLocaleString('de-DE')}</strong></TableCell></TableRow>
+                  <TableRow><TableCell>Buchungen</TableCell><TableCell align="right"><strong>{warehouseResetPreview.stockMovements.toLocaleString('de-DE')}</strong></TableCell></TableRow>
+                  <TableRow><TableCell>Lieferanten</TableCell><TableCell align="right"><strong>{warehouseResetPreview.suppliers.toLocaleString('de-DE')}</strong></TableCell></TableRow>
+                  <TableRow><TableCell>Lagerorte</TableCell><TableCell align="right"><strong>{warehouseResetPreview.subLocations.toLocaleString('de-DE')}</strong></TableCell></TableRow>
+                </TableBody>
+              </Table>
+
+              <Typography variant="body2" sx={{ mb: 1 }}>
+                Geben Sie <strong>LÖSCHEN</strong> ein und bestätigen Sie:
+              </Typography>
+              <TextField
+                size="small"
+                value={warehouseResetConfirmText}
+                onChange={(e) => setWarehouseResetConfirmText(e.target.value)}
+                placeholder="LÖSCHEN"
+                sx={{ mr: 1, mb: 1 }}
+              />
+              <FormControlLabel
+                control={<Checkbox checked={warehouseResetConfirmCheck} onChange={(e) => setWarehouseResetConfirmCheck(e.target.checked)} color="error" />}
+                label="Ich verstehe, dass diese Aktion nicht rückgängig gemacht werden kann"
+                sx={{ display: 'block', mb: 1 }}
+              />
+              <Button
+                variant="contained"
+                color="error"
+                onClick={handleWarehouseResetExecute}
+                disabled={warehouseResetConfirmText !== 'LÖSCHEN' || !warehouseResetConfirmCheck || warehouseResetLoading}
+                startIcon={warehouseResetLoading ? <CircularProgress size={20} /> : <DeleteSweepIcon />}
+              >
+                Lager jetzt löschen
+              </Button>
+            </Box>
+          )}
+
+          {warehouseResetResult && <Alert severity="success" sx={{ mt: 2 }}>{warehouseResetResult}</Alert>}
+          {warehouseResetError && <Alert severity="error" sx={{ mt: 2 }}>{warehouseResetError}</Alert>}
+        </Paper>
+      )}
     </Box>
   );
 };
