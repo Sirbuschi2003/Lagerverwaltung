@@ -70,6 +70,7 @@ export class SuppliersService {
     if (data.customerNumber !== undefined) entity.customerNumber = data.customerNumber?.trim() || null;
     if (data.phone !== undefined) entity.phone = data.phone?.trim() || null;
     if (data.notes !== undefined) entity.notes = data.notes?.trim() || null;
+    if (data.locationId !== undefined) entity.locationId = data.locationId ?? null;
 
     return this.repository.save(entity);
   }

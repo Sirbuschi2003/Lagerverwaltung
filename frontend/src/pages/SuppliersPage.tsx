@@ -4,14 +4,19 @@ import {
   Autocomplete,
   Box,
   Button,
+  Chip,
   CircularProgress,
   Dialog,
   DialogActions,
   DialogContent,
   DialogTitle,
+  FormControl,
   Grid,
   IconButton,
+  InputLabel,
+  MenuItem,
   Paper,
+  Select,
   Table,
   TableBody,
   TableCell,
@@ -27,15 +32,18 @@ import useAuthStore from "../store/useAuthStore";
 import {
   createSupplier,
   deleteSupplier,
+  fetchLocations,
   fetchSuppliers,
   updateSupplier,
+  type LocationDto,
   type SupplierDto,
 } from "../utils/api";
 
-type SupplierFormState = Omit<SupplierDto, "id">;
+type SupplierFormState = Omit<SupplierDto, "id" | "branchId">;
 
 const initialFormState: SupplierFormState = {
   name: "",
+  locationId: null,
   addressLine1: "",
   addressLine2: "",
   postalCode: "",
@@ -106,11 +114,14 @@ const resolveStreet = (entry: NominatimSearchResult) => {
 
 const SuppliersPage = () => {
   const hasPermission = useAuthStore((state: any) => state.hasPermission);
+  const user = useAuthStore((state: any) => state.user);
+  const isManager = user?.role === "MANAGER" || (user?.branchId === null || user?.branchId === undefined);
   const canCreate = hasPermission("suppliers.create");
   const canEdit = hasPermission("suppliers.edit");
   const canDelete = hasPermission("suppliers.delete");
 
   const [suppliers, setSuppliers] = useState<SupplierDto[]>([]);
+  const [locations, setLocations] = useState<LocationDto[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [open, setOpen] = useState(false);
@@ -127,8 +138,12 @@ const SuppliersPage = () => {
     setLoading(true);
     setError(null);
     try {
-      const data = await fetchSuppliers();
+      const [data, locs] = await Promise.all([
+        fetchSuppliers(),
+        fetchLocations({ includeVehicles: false }),
+      ]);
       setSuppliers(data);
+      setLocations(locs.filter((l: LocationDto) => l.type === "WAREHOUSE"));
     } catch (err) {
       console.error(err);
       setError("Lieferanten konnten nicht geladen werden.");
@@ -162,6 +177,7 @@ const SuppliersPage = () => {
   const handleOpenEdit = (supplier: SupplierDto) => {
     setForm({
       name: supplier.name ?? "",
+      locationId: supplier.locationId ?? null,
       addressLine1: supplier.addressLine1 ?? "",
       addressLine2: supplier.addressLine2 ?? "",
       postalCode: supplier.postalCode ?? "",
@@ -309,8 +325,9 @@ const SuppliersPage = () => {
     return null;
   };
 
-  const buildPayload = (): Omit<SupplierDto, "id"> => ({
+  const buildPayload = (): Omit<SupplierDto, "id" | "branchId"> => ({
     name: form.name.trim(),
+    locationId: form.locationId ?? null,
     addressLine1: cleanValue(form.addressLine1),
     addressLine2: cleanValue(form.addressLine2),
     postalCode: cleanValue(form.postalCode),
@@ -396,6 +413,7 @@ const SuppliersPage = () => {
           <TableHead>
             <TableRow>
               <TableCell>Name</TableCell>
+              <TableCell>Lager</TableCell>
               <TableCell>Kontakt</TableCell>
               <TableCell>Telefon</TableCell>
               <TableCell>E-Mail</TableCell>
@@ -408,6 +426,12 @@ const SuppliersPage = () => {
             {sortedSuppliers.map((supplier) => (
               <TableRow key={supplier.id} hover>
                 <TableCell>{supplier.name}</TableCell>
+                <TableCell>
+                  {supplier.locationId
+                    ? <Chip label={locations.find(l => l.id === supplier.locationId)?.name ?? "–"} size="small" variant="outlined" />
+                    : <Typography variant="caption" color="text.secondary">Kein Lager</Typography>
+                  }
+                </TableCell>
                 <TableCell>{supplier.contactName || "-"}</TableCell>
                 <TableCell>{supplier.phone || "-"}</TableCell>
                 <TableCell>{supplier.email || "-"}</TableCell>
@@ -442,14 +466,14 @@ const SuppliersPage = () => {
             ))}
             {!loading && sortedSuppliers.length === 0 && (
               <TableRow>
-                <TableCell colSpan={7} align="center">
+                <TableCell colSpan={8} align="center">
                   Keine Lieferanten vorhanden.
                 </TableCell>
               </TableRow>
             )}
             {loading && (
               <TableRow>
-                <TableCell colSpan={7} align="center">
+                <TableCell colSpan={8} align="center">
                   Lade Lieferanten...
                 </TableCell>
               </TableRow>
@@ -475,6 +499,23 @@ const SuppliersPage = () => {
                   required
                 />
               </Grid>
+              {isManager && (
+                <Grid item xs={12}>
+                  <FormControl fullWidth size="small">
+                    <InputLabel>Lager-Zuweisung</InputLabel>
+                    <Select
+                      value={form.locationId ?? ""}
+                      label="Lager-Zuweisung"
+                      onChange={(e) => setForm((prev) => ({ ...prev, locationId: e.target.value || null }))}
+                    >
+                      <MenuItem value="">Kein Lager (nicht zugewiesen)</MenuItem>
+                      {locations.map((loc) => (
+                        <MenuItem key={loc.id} value={loc.id}>{loc.name}</MenuItem>
+                      ))}
+                    </Select>
+                  </FormControl>
+                </Grid>
+              )}
               <Grid item xs={12} sm={6}>
                 <TextField
                   label="Kontaktperson"

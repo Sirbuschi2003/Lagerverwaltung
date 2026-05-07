@@ -166,6 +166,8 @@ export interface LocationDto {
 export interface SupplierDto {
   id: string;
   name: string;
+  locationId?: string | null;
+  branchId?: string | null;
   addressLine1?: string | null;
   addressLine2?: string | null;
   postalCode?: string | null;
