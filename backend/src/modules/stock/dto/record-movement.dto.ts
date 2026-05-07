@@ -5,6 +5,7 @@
   IsNotEmpty,
   IsOptional,
   IsString,
+  IsUUID,
   MaxLength,
   Min,
   ValidateIf,
@@ -26,15 +27,15 @@ export class RecordMovementDto {
   itemCode?: string;
 
   @IsOptional()
-  @IsString()
+  @IsUUID("4")
   vehicleId?: string;
 
   @IsOptional()
-  @IsString()
+  @IsUUID("4")
   locationId?: string;
 
   @IsOptional()
-  @IsString()
+  @IsUUID("4")
   userId?: string;
 
   @IsIn(MOVEMENT_TYPES, {

@@ -295,7 +295,7 @@ export class InventoryController {
 
   @Post("template")
   @Roles("MANAGER")
-  @UseInterceptors(FileInterceptor("file"))
+  @UseInterceptors(FileInterceptor("file", { limits: { fileSize: 10 * 1024 * 1024 } }))
   uploadTemplate(@UploadedFile() file: InventoryTemplateUpload, @Req() req: Request) {
     const uploadedBy = (req.user as any)?.username ?? "Unbekannt";
     return this.templateService.saveTemplate(file, uploadedBy);

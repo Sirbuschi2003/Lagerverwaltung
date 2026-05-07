@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, Logger } from "@nestjs/common";
+import { BadRequestException, Injectable, NotFoundException, Logger } from "@nestjs/common";
 import { InjectRepository } from "@nestjs/typeorm";
 import { DataSource, In, IsNull, Repository } from "typeorm";
 import * as fs from "fs/promises";
@@ -120,9 +120,9 @@ export class ItemsService {
   async findAll(params?: { page?: number; limit?: number; search?: string; manufacturer?: string; productGroup?: string; branchId?: string | null; locationIds?: string[] }) {
     try {
       const page = Math.max(1, Number(params?.page) || 1);
-      // Höheres Limit zulassen, damit Offline-Sync den kompletten Artikelstamm holen kann.
-      // API-Maximum: 50.000 – verhindert DoS durch einzelne Requests, deckt aber auch große Bestände ab.
-      // Interne Aufrufe (z.B. exportItemsCsv) übergeben limit direkt und umgehen diese Grenze nicht.
+      // Offline-Sync übergibt limit=50000 explizit (PWA SyncPage), reguläre UI-Abfragen liegen ≤1000.
+      // Maximum 50.000 bleibt erhalten damit der Sync-Pfad funktioniert; alle anderen Aufrufe
+      // sollten limit<=1000 übergeben.
       const limit = Math.min(Math.max(1, Number(params?.limit) || 50), 50000);
 
       this.logger.debug(`findAll called with page=${page}, limit=${limit}, search=${params?.search}`);
@@ -152,9 +152,8 @@ export class ItemsService {
       if (params?.search) {
         const term = params.search.trim();
         if (term.length >= 3) {
-          // Fulltext-Suche für Textfelder (nutzt idx_items_fulltext), Prefix-Wildcard für Teilwort-Suche
-          // Boolean-Mode-Operatoren aus Suchbegriff entfernen um Syntax-Fehler zu vermeiden
-          const ftTerm = term.replace(/[+\-><()~*"@]+/g, " ").trim() + "*";
+          // Fulltext-Suche: alle BOOLEAN-MODE-Sonderzeichen entfernen (Whitelist: nur Wörter + Leerzeichen)
+          const ftTerm = term.replace(/[^a-zA-Z0-9äöüÄÖÜß\s\-]/g, " ").replace(/\s+/g, " ").trim() + "*";
           qb.andWhere(
             `(
               item.code LIKE :q
@@ -1086,6 +1085,15 @@ export class ItemsService {
   }
 
   getImageFilePath(imagePath: string): string {
-    return path.join(this.imageDir, imagePath);
+    // Nur UUIDs + erlaubte Bildendungen akzeptieren – verhindert Path-Traversal
+    if (!/^[0-9a-f-]{36}\.(jpg|jpeg|png|webp|gif)$/i.test(imagePath)) {
+      throw new BadRequestException("Ungültiger Bildpfad");
+    }
+    const resolved = path.resolve(path.join(this.imageDir, imagePath));
+    const base = path.resolve(this.imageDir);
+    if (!resolved.startsWith(base + path.sep) && resolved !== base) {
+      throw new BadRequestException("Ungültiger Bildpfad");
+    }
+    return resolved;
   }
 }

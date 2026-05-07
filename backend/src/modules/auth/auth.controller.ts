@@ -27,7 +27,7 @@ const REFRESH_COOKIE_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000; // 30 Tage
 function setRefreshCookie(res: Response, token: string): void {
   res.cookie(REFRESH_COOKIE_NAME, token, {
     httpOnly: true,        // Kein JavaScript-Zugriff (XSS-Schutz)
-    secure: process.env.NODE_ENV !== "development", // HTTPS-only außerhalb Dev
+    secure: process.env.NODE_ENV === "production", // HTTPS-only in Production
     sameSite: "strict",    // CSRF-Schutz
     maxAge: REFRESH_COOKIE_MAX_AGE_MS,
     path: "/api/auth",     // Nur für Auth-Endpunkte

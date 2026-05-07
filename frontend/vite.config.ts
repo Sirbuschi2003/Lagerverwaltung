@@ -66,14 +66,8 @@ export default defineConfig({
           // Workbox
           'workbox-vendor': ['workbox-background-sync', 'workbox-window'],
         },
-        // Kleinere Chunks für besseres Caching
-        chunkFileNames: (chunkInfo) => {
-          const facadeModuleId = chunkInfo.facadeModuleId;
-          const name = facadeModuleId
-            ? facadeModuleId.split('/').pop()?.replace('.tsx', '').replace('.ts', '') || 'chunk'
-            : 'chunk';
-          return `assets/${name}-[hash].js`;
-        },
+        // Nur Hash verwenden – keine Modulnamen in Production-Artefakten
+        chunkFileNames: 'assets/[hash].js',
       },
     },
     // Größere Chunks erlauben für bessere Compression
