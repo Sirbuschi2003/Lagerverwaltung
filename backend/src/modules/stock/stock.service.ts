@@ -152,45 +152,64 @@ export class StockService {
     private readonly loggingService: LoggingService,
   ) {}
 
-  private filterStockLevelsByUser(
-    levels: StockLevel[],
+  /**
+   * Builds a QueryBuilder for stock_levels filtered to the user's scope.
+   * Includes SELECT for item, vehicle and location so results are fully
+   * hydrated. For COUNT-only queries TypeORM wraps this in a subquery,
+   * so the extra selects have no performance cost there.
+   */
+  private buildScopedStockLevelQuery(
     user?: { role?: string; vehicleId?: string | null; branchId?: string | null; locationIds?: string[] },
-  ): StockLevel[] {
-    let filtered = levels;
-    // Branch-Filter: Nur Bestände der eigenen Niederlassung (via item.branchId oder vehicle.branchId)
+  ) {
+    const qb = this.stockLevelsRepository
+      .createQueryBuilder("sl")
+      .innerJoinAndSelect("sl.item", "item")
+      .leftJoinAndSelect("sl.vehicle", "vehicle")
+      .leftJoinAndSelect("sl.location", "location")
+      .leftJoin("location.parent", "locParent")
+      .leftJoin("locParent.parent", "locGrand");
+
     if (user?.branchId) {
-      filtered = filtered.filter((l) => {
-        const itemBranch = (l.item as any)?.branchId ?? null;
-        const vehicleBranch = (l.vehicle as any)?.branchId ?? null;
-        return itemBranch === user.branchId || vehicleBranch === user.branchId;
+      qb.andWhere("(item.branchId = :branchId OR vehicle.branchId = :branchId)", {
+        branchId: user.branchId,
       });
     }
-    // Lager-Filter: nur Bestände des zugewiesenen Lagers (location, parent oder grandparent in locationIds)
+
     if (user?.locationIds?.length) {
-      const ids = new Set(user.locationIds);
-      filtered = filtered.filter((l) => {
-        if (l.vehicle) return false; // Fahrzeugbestände nie nach Lager filtern
-        const locId = (l.location as any)?.id ?? null;
-        const parentId = (l.location as any)?.parent?.id ?? null;
-        const grandparentId = (l.location as any)?.parent?.parent?.id ?? null;
-        return locId && (ids.has(locId) || (parentId && ids.has(parentId)) || (grandparentId && ids.has(grandparentId)));
-      });
+      // Vehicle stock is never scoped to a warehouse location
+      qb.andWhere("sl.vehicleId IS NULL");
+      qb.andWhere(
+        "(location.id IN (:...locationIds) OR locParent.id IN (:...locationIds) OR locGrand.id IN (:...locationIds))",
+        { locationIds: user.locationIds },
+      );
     }
-    if (!user?.role) return filtered;
-    if (user.role === "TECHNICIAN") {
-      if (!user.vehicleId) return [];
-      return filtered.filter((l) => l.vehicle?.id === user.vehicleId);
+
+    if (user?.role === "TECHNICIAN") {
+      if (!user.vehicleId) {
+        // No vehicle assigned → no results
+        qb.andWhere("1 = 0");
+      } else {
+        qb.andWhere("sl.vehicleId = :techVehicleId", { techVehicleId: user.vehicleId });
+      }
     }
-    if (user.role === "WAREHOUSE") {
-      return filtered.filter((l) => l.vehicle === null);
+
+    if (user?.role === "WAREHOUSE") {
+      qb.andWhere("sl.vehicleId IS NULL");
     }
-    return filtered;
+
+    return qb;
   }
+
+  private static readonly BELOW_TARGET_CONDITION =
+    "(sl.targetQuantity > 0 AND sl.quantity < sl.targetQuantity) OR " +
+    "(sl.vehicleId IS NULL AND item.minimumStock > 0 AND sl.quantity < item.minimumStock)";
 
   async findDashboardSnapshot(user?: { role?: string; vehicleId?: string | null; branchId?: string | null; locationIds?: string[] }) {
     try {
-      const [allStockLevels, totalItems, openInventorySessions] = await Promise.all([
-        this.stockLevelsRepository.find({ relations: ["item", "vehicle", "location", "location.parent", "location.parent.parent"] }),
+      const [belowTarget, totalItems, openInventorySessions] = await Promise.all([
+        this.buildScopedStockLevelQuery(user)
+          .andWhere(StockService.BELOW_TARGET_CONDITION)
+          .getCount(),
         this.itemsService.countItems(user?.branchId, user?.locationIds),
         this.inventorySessionRepository.count({
           where: [
@@ -199,15 +218,6 @@ export class StockService {
           ],
         }),
       ]);
-
-      const stockLevels = this.filterStockLevelsByUser(allStockLevels, user);
-
-      const belowTarget = stockLevels.filter((level) => {
-        if (level.targetQuantity > 0 && level.quantity < level.targetQuantity) return true;
-        // Mindestbestand (globaler Artikelwert) nur für Lager-Bestände, nicht für Fahrzeuge
-        if (!level.vehicle && level.item?.minimumStock != null && level.item.minimumStock > 0 && level.quantity < level.item.minimumStock) return true;
-        return false;
-      }).length;
 
       return { totalItems, belowTarget, openInventorySessions };
     } catch (error) {
@@ -218,18 +228,9 @@ export class StockService {
 
   async findBelowTargetItems(user?: { role?: string; vehicleId?: string | null; branchId?: string | null; locationIds?: string[] }) {
     try {
-      const allStockLevels = await this.stockLevelsRepository.find({
-        relations: ["item", "vehicle", "location", "location.parent", "location.parent.parent"],
-      });
-
-      const stockLevels = this.filterStockLevelsByUser(allStockLevels, user);
-
-      const belowLevels = stockLevels.filter((level) => {
-        if (level.targetQuantity > 0 && level.quantity < level.targetQuantity) return true;
-        // Mindestbestand (globaler Artikelwert) nur für Lager-Bestände, nicht für Fahrzeuge
-        if (!level.vehicle && level.item?.minimumStock != null && level.item.minimumStock > 0 && level.quantity < level.item.minimumStock) return true;
-        return false;
-      });
+      const belowLevels = await this.buildScopedStockLevelQuery(user)
+        .andWhere(StockService.BELOW_TARGET_CONDITION)
+        .getMany();
 
       return belowLevels.map((level) => {
         const isWarehouse = !level.vehicle;
@@ -262,6 +263,8 @@ export class StockService {
       throw error;
     }
   }
+
+
 
   async findMovements(limit = 100, branchId?: string | null) {
     try {
