@@ -150,6 +150,41 @@ export class PurchasingService {
     return order;
   }
 
+  async getLastOrderForItem(itemId: string, branchId?: string | null) {
+    const qb = this.ordersRepository
+      .createQueryBuilder("order")
+      .innerJoin("order.lines", "line", "line.itemId = :itemId", { itemId })
+      .leftJoinAndSelect("order.supplier", "supplier")
+      .addSelect("line.quantity", "line_quantity")
+      .addSelect("line.packSize", "line_packSize")
+      .where("order.status IN (:...statuses)", { statuses: ["ORDERED", "ARCHIVED"] })
+      .orderBy("order.orderedAt", "DESC")
+      .addOrderBy("order.createdAt", "DESC")
+      .limit(1);
+
+    if (branchId) {
+      qb.andWhere("order.branchId = :branchId", { branchId });
+    }
+
+    const order = await qb.getOne();
+    if (!order) return null;
+
+    const line = await this.linesRepository
+      .createQueryBuilder("line")
+      .where("line.orderId = :orderId", { orderId: order.id })
+      .andWhere("line.itemId = :itemId", { itemId })
+      .getOne();
+
+    return {
+      orderId: order.id,
+      orderNumber: order.orderNumber,
+      orderedAt: order.orderedAt,
+      supplierName: order.supplier?.name ?? null,
+      quantity: line?.quantity ?? null,
+      packSize: line?.packSize ?? null,
+    };
+  }
+
   async create(payload: {
     supplierId: string;
     orderNumber?: string;

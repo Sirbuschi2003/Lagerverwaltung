@@ -98,6 +98,12 @@ export class PurchasingController {
     return this.purchasingService.purgeOldOrders(Number.isFinite(y) && y > 0 ? y : 10, req.user?.branchId);
   }
 
+  @Get("items/:itemId/last-order")
+  @Permissions("orders.view")
+  lastOrderForItem(@Req() req: PurchasingRequest, @Param("itemId") itemId: string) {
+    return this.purchasingService.getLastOrderForItem(itemId, req.user?.branchId);
+  }
+
   @Get(":id")
   @Permissions("orders.view")
   findOne(@Req() req: PurchasingRequest, @Param("id") id: string) {

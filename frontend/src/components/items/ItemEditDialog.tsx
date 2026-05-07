@@ -20,6 +20,7 @@ import {
 import QrCodeScannerIcon from "@mui/icons-material/QrCodeScanner";
 import AddPhotoAlternateIcon from "@mui/icons-material/AddPhotoAlternate";
 import DeleteIcon from "@mui/icons-material/Delete";
+import ShoppingCartIcon from "@mui/icons-material/ShoppingCart";
 import {
   fetchItemById,
   updateItem,
@@ -29,9 +30,11 @@ import {
   uploadItemImage,
   deleteItemImage,
   getItemImageUrl,
+  fetchLastOrderForItem,
   type CreateItemRequest,
   type ItemDto,
   type LocationDto,
+  type LastOrderForItemDto,
 } from "../../utils/api";
 import useAuthStore from "../../store/useAuthStore";
 import useBarcodeScanner from "../../hooks/useBarcodeScanner";
@@ -171,23 +174,27 @@ const ItemEditDialog: React.FC<ItemEditDialogProps> = ({ itemId, open, onClose, 
   const [altCodeScanOpen, setAltCodeScanOpen] = useState(false);
   const [imageUploading, setImageUploading] = useState(false);
   const [imageKey, setImageKey] = useState(0); // bump to force img reload
+  const [lastOrder, setLastOrder] = useState<LastOrderForItemDto | null | undefined>(undefined);
 
   // Daten laden wenn Dialog öffnet
   useEffect(() => {
     if (!open || !itemId) return;
     setError(null);
     setLoadingItem(true);
+    setLastOrder(undefined);
 
     Promise.all([
       fetchItemById(itemId),
       fetchSuppliers(),
       fetchLocations({ includeVehicles: false }),
+      fetchLastOrderForItem(itemId).catch(() => null),
     ])
-      .then(([item, supplierList, locationList]) => {
+      .then(([item, supplierList, locationList, lastOrderData]) => {
         setOriginalItem(item);
         setForm(itemToForm(item));
         setSuppliers(supplierList);
         setLocations(locationList);
+        setLastOrder(lastOrderData);
       })
       .catch(() => setError("Artikel konnte nicht geladen werden."))
       .finally(() => setLoadingItem(false));
@@ -199,6 +206,7 @@ const ItemEditDialog: React.FC<ItemEditDialogProps> = ({ itemId, open, onClose, 
       setForm(emptyForm());
       setOriginalItem(null);
       setError(null);
+      setLastOrder(undefined);
     }
   }, [open]);
 
@@ -684,6 +692,37 @@ const ItemEditDialog: React.FC<ItemEditDialogProps> = ({ itemId, open, onClose, 
                 )}
               </Grid>
             )}
+            <Divider sx={{ mt: 2 }} />
+            <Box sx={{ mt: 2, display: "flex", alignItems: "flex-start", gap: 1 }}>
+              <ShoppingCartIcon fontSize="small" color="action" sx={{ mt: 0.3 }} />
+              <Box>
+                <Typography variant="subtitle2" color="text.secondary" gutterBottom>
+                  Letzte Bestellung
+                </Typography>
+                {lastOrder === undefined && (
+                  <Typography variant="body2" color="text.secondary">Wird geladen…</Typography>
+                )}
+                {lastOrder === null && (
+                  <Typography variant="body2" color="text.secondary">Noch nie bestellt</Typography>
+                )}
+                {lastOrder && (
+                  <Typography variant="body2">
+                    {lastOrder.orderedAt
+                      ? new Date(lastOrder.orderedAt).toLocaleDateString("de-DE")
+                      : "Datum unbekannt"}
+                    {lastOrder.orderNumber && (
+                      <> · <strong>{lastOrder.orderNumber}</strong></>
+                    )}
+                    {lastOrder.quantity != null && (
+                      <> · {lastOrder.quantity}{lastOrder.packSize && lastOrder.packSize > 1 ? ` (VE ${lastOrder.packSize})` : ""} Stk.</>
+                    )}
+                    {lastOrder.supplierName && (
+                      <> · {lastOrder.supplierName}</>
+                    )}
+                  </Typography>
+                )}
+              </Box>
+            </Box>
           </DialogContent>
           <DialogActions>
             <Button onClick={onClose} disabled={isSubmitting}>

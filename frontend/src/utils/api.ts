@@ -925,6 +925,20 @@ export const deletePurchaseOrderLine = async (
   return response.data;
 };
 
+export interface LastOrderForItemDto {
+  orderId: string;
+  orderNumber: string | null;
+  orderedAt: string | null;
+  supplierName: string | null;
+  quantity: number | null;
+  packSize: number | null;
+}
+
+export const fetchLastOrderForItem = async (itemId: string): Promise<LastOrderForItemDto | null> => {
+  const response = await api.get<LastOrderForItemDto | null>(`/purchase-orders/items/${itemId}/last-order`);
+  return response.data;
+};
+
 export const fetchPurchaseOrderPdf = async (id: string): Promise<Blob> => {
   const response = await api.get(`/purchase-orders/${id}/pdf`, {
     responseType: "blob",
