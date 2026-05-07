@@ -306,9 +306,10 @@ const OrderSuggestionsTab: React.FC = () => {
 
   useEffect(() => {
     const loadMailConfiguration = async () => {
+      const canReadEmailTemplate = hasPermission("settings.company");
       const [company, template] = await Promise.all([
         fetchPublicCompanyConfig().catch(() => null),
-        fetchPurchaseOrderEmailTemplate().catch(() => null),
+        canReadEmailTemplate ? fetchPurchaseOrderEmailTemplate().catch(() => null) : Promise.resolve(null),
       ]);
       setCompanyConfig(company);
       setEmailTemplate(template);
@@ -318,7 +319,7 @@ const OrderSuggestionsTab: React.FC = () => {
       setCompanyConfig(null);
       setEmailTemplate(null);
     });
-  }, []);
+  }, [hasPermission]);
 
   useEffect(() => {
     let cancelled = false;

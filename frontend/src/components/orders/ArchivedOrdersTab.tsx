@@ -27,6 +27,7 @@ import {
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import RefreshIcon from "@mui/icons-material/Refresh";
 import PictureAsPdfIcon from "@mui/icons-material/PictureAsPdf";
+import OpenInNewIcon from "@mui/icons-material/OpenInNew";
 import UnarchiveIcon from "@mui/icons-material/Unarchive";
 import DeleteIcon from "@mui/icons-material/Delete";
 
@@ -193,6 +194,19 @@ const ArchivedOrdersTab: React.FC = () => {
     }
   };
 
+  const handleViewPdf = async (order: PurchaseOrderDto) => {
+    try {
+      const blob = await fetchPurchaseOrderPdf(order.id);
+      const url = window.URL.createObjectURL(blob);
+      const tab = window.open(url, "_blank");
+      // Blob-URL freigeben sobald der neue Tab geladen ist
+      if (tab) tab.addEventListener("load", () => window.URL.revokeObjectURL(url), { once: true });
+      else window.URL.revokeObjectURL(url);
+    } catch (err: any) {
+      alert(`PDF konnte nicht geöffnet werden: ${err?.response?.data?.message || err?.message || "Unbekannt"}`);
+    }
+  };
+
   if (loading) {
     return (
       <Box sx={{ display: "flex", justifyContent: "center", p: 5 }}>
@@ -332,6 +346,11 @@ const ArchivedOrdersTab: React.FC = () => {
                           <TableCell>{formatDate(order.receivedAt)}</TableCell>
                           <TableCell align="right">
                             <Box sx={{ display: "flex", gap: 0.5, justifyContent: "flex-end" }}>
+                              <Tooltip title="PDF im Browser anzeigen">
+                                <IconButton size="small" onClick={() => handleViewPdf(order)}>
+                                  <OpenInNewIcon fontSize="small" />
+                                </IconButton>
+                              </Tooltip>
                               <Tooltip title="PDF herunterladen">
                                 <IconButton size="small" onClick={() => handleDownloadPdf(order)}>
                                   <PictureAsPdfIcon fontSize="small" />
