@@ -1,9 +1,13 @@
-import { IsEmail, IsOptional, IsString, MaxLength } from "class-validator";
+import { IsEmail, IsOptional, IsString, IsUUID, MaxLength } from "class-validator";
 
 export class CreateSupplierDto {
   @IsString()
   @MaxLength(255)
   name!: string;
+
+  @IsOptional()
+  @IsUUID("4")
+  locationId?: string | null;
 
   @IsOptional()
   @IsString()
