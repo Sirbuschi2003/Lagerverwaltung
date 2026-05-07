@@ -22,7 +22,7 @@ export class Item {
 
   @OneToMany(() => ItemCode, (itemCode) => itemCode.item, {
     cascade: true,
-    eager: true,
+    eager: false,
     orphanedRowAction: "delete",
   })
   codes!: ItemCode[];

@@ -22,7 +22,7 @@ export class PurchaseOrder {
   @PrimaryGeneratedColumn("uuid")
   id!: string;
 
-  @ManyToOne(() => Supplier, { eager: true, onDelete: "RESTRICT" })
+  @ManyToOne(() => Supplier, { eager: false, onDelete: "RESTRICT" })
   supplier!: Supplier;
 
   @Column({ type: "enum", enum: PURCHASE_ORDER_STATUSES, default: "DRAFT" })
@@ -43,7 +43,7 @@ export class PurchaseOrder {
   @Column({ type: "varchar", length: 128, nullable: true })
   deliveryNoteNumber!: string | null;
 
-  @OneToMany(() => PurchaseOrderLine, (line) => line.order, { cascade: true, eager: true })
+  @OneToMany(() => PurchaseOrderLine, (line) => line.order, { cascade: true, eager: false })
   lines!: PurchaseOrderLine[];
 
   @Column({ type: "char", length: 36, nullable: true })

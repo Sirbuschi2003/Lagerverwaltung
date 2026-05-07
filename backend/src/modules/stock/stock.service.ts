@@ -272,11 +272,14 @@ export class StockService {
         return this.movementsRepository.find({
           order: { occurredAt: "DESC" },
           take: limit,
+          relations: ["item", "vehicle", "user"],
         });
       }
       return this.movementsRepository
         .createQueryBuilder("movement")
-        .leftJoin("movement.item", "item")
+        .leftJoinAndSelect("movement.item", "item")
+        .leftJoinAndSelect("movement.vehicle", "vehicle")
+        .leftJoinAndSelect("movement.user", "user")
         .where("item.branchId = :branchId", { branchId })
         .orderBy("movement.occurredAt", "DESC")
         .take(limit)
@@ -473,6 +476,7 @@ export class StockService {
     const levels = await this.stockLevelsRepository.find({
       where: { vehicle: { id: vehicleId } },
       order: { item: { manufacturer: "ASC", productGroup: "ASC", description: "ASC" } },
+      relations: ["item", "vehicle", "location"],
     });
     return levels.filter((l) => l.item != null);
   }
@@ -1022,7 +1026,8 @@ export class StockService {
     // WICHTIG: Finde ALLE RestockRequests fÃ¼r diesen StockLevel (nicht nur den ersten!)
     const allRequests = await this.restockRepository.find({
       where: { stockLevel: { id: stockLevel.id } },
-      order: { createdAt: 'ASC' } // Ã„ltester zuerst
+      order: { createdAt: 'ASC' },
+      relations: ["location"],
     });
 
     // Wenn mehrere Requests existieren, bereinigen wir Duplikate

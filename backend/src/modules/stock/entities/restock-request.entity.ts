@@ -24,17 +24,17 @@ export class RestockRequest {
   id!: string;
 
 
-  @ManyToOne(() => StockLevel, { eager: true, onDelete: "CASCADE" })
+  @ManyToOne(() => StockLevel, { eager: false, onDelete: "CASCADE" })
   @JoinColumn({ name: "stockLevelId" })
   stockLevel!: StockLevel;
 
   @Column({ type: "char", length: 36 })
   stockLevelId!: string;
 
-  @ManyToOne(() => Item, { eager: true, onDelete: "CASCADE" })
+  @ManyToOne(() => Item, { eager: false, onDelete: "CASCADE" })
   item!: Item;
 
-  @ManyToOne(() => Vehicle, { eager: true, onDelete: "CASCADE" })
+  @ManyToOne(() => Vehicle, { eager: false, onDelete: "CASCADE" })
   vehicle!: Vehicle;
 
   @ManyToOne(() => Location, { eager: false, nullable: true, onDelete: "SET NULL" })
@@ -53,7 +53,7 @@ export class RestockRequest {
   @Column({ type: "varchar", length: 255, nullable: true })
   note!: string | null;
 
-  @ManyToOne(() => User, { eager: true, nullable: true, onDelete: "SET NULL" })
+  @ManyToOne(() => User, { eager: false, nullable: true, onDelete: "SET NULL" })
   preparedBy!: User | null;
 
   @Column({ type: "timestamp", nullable: true })

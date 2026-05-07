@@ -50,7 +50,7 @@ export class User {
    * Lager-Zuweisung: welche WAREHOUSE-Lagerorte dieser Benutzer sehen darf.
    * Leer = Manager sieht alle Lager der Niederlassung.
    */
-  @ManyToMany(() => Location, { eager: true, onDelete: "CASCADE" })
+  @ManyToMany(() => Location, { eager: false, onDelete: "CASCADE" })
   @JoinTable({
     name: "user_locations",
     joinColumn: { name: "userId", referencedColumnName: "id" },

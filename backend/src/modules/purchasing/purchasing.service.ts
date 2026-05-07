@@ -140,7 +140,10 @@ export class PurchasingService {
   async findOne(id: string, branchId?: string | null) {
     const where: Record<string, unknown> = { id };
     if (branchId) where.branchId = branchId;
-    const order = await this.ordersRepository.findOne({ where });
+    const order = await this.ordersRepository.findOne({
+      where,
+      relations: ["supplier", "lines", "lines.item"],
+    });
     if (!order) {
       throw new NotFoundException("Purchase order not found");
     }
@@ -922,7 +925,7 @@ export class PurchasingService {
     try {
       // Lookup-Map: relPath → Supplier-Info (neue, mittlere und alte Pfade)
       const fileToSupplier = new Map<string, { supplierId: string | null; supplierName: string | null }>();
-      const allOrders = await this.ordersRepository.find({ where: branchId ? { branchId } : undefined });
+      const allOrders = await this.ordersRepository.find({ where: branchId ? { branchId } : undefined, relations: ["supplier"] });
       for (const order of allOrders) {
         const filename = this.buildStoredOrderFilename(order);
         const refDate = new Date(order.orderedAt ?? order.createdAt ?? new Date());

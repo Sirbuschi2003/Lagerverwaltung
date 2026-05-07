@@ -18,10 +18,10 @@ export class StockLevel {
   @PrimaryGeneratedColumn("uuid")
   id!: string;
 
-  @ManyToOne(() => Item, { eager: true, onDelete: "CASCADE" })
+  @ManyToOne(() => Item, { eager: false, onDelete: "CASCADE" })
   item!: Item;
 
-  @ManyToOne(() => Vehicle, { eager: true, nullable: true, onDelete: "CASCADE" })
+  @ManyToOne(() => Vehicle, { eager: false, nullable: true, onDelete: "CASCADE" })
   vehicle!: Vehicle | null;
 
   @ManyToOne(() => Location, { nullable: true, onDelete: "SET NULL" })

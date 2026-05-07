@@ -19,16 +19,16 @@ export class StockMovement {
   @PrimaryGeneratedColumn("uuid")
   id!: string;
 
-  @ManyToOne(() => Item, { eager: true, onDelete: "CASCADE" })
+  @ManyToOne(() => Item, { eager: false, onDelete: "CASCADE" })
   item!: Item;
 
-  @ManyToOne(() => Vehicle, { eager: true, onDelete: "SET NULL" })
+  @ManyToOne(() => Vehicle, { eager: false, onDelete: "SET NULL" })
   vehicle!: Vehicle | null;
 
   @ManyToOne(() => Location, { eager: false, nullable: true, onDelete: "SET NULL" })
   location!: Location | null;
 
-  @ManyToOne(() => User, { eager: true, onDelete: "SET NULL" })
+  @ManyToOne(() => User, { eager: false, onDelete: "SET NULL" })
   user!: User | null;
 
   @Column({ type: "enum", enum: STOCK_MOVEMENT_TYPES })

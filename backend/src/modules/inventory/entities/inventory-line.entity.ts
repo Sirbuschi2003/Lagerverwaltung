@@ -21,10 +21,10 @@ export class InventoryLine {
   })
   session!: InventorySession;
 
-  @ManyToOne(() => Item, { eager: true, onDelete: "CASCADE" })
+  @ManyToOne(() => Item, { eager: false, onDelete: "CASCADE" })
   item!: Item;
 
-  @ManyToOne(() => Vehicle, { eager: true, nullable: true, onDelete: "SET NULL" })
+  @ManyToOne(() => Vehicle, { eager: false, nullable: true, onDelete: "SET NULL" })
   vehicle!: Vehicle | null;
 
   @ManyToOne(() => Location, { nullable: true, onDelete: "SET NULL" })

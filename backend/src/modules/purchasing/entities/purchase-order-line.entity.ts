@@ -16,7 +16,7 @@ export class PurchaseOrderLine {
   @ManyToOne(() => PurchaseOrder, (order) => order.lines, { onDelete: "CASCADE" })
   order!: PurchaseOrder;
 
-  @ManyToOne(() => Item, { eager: true, onDelete: "RESTRICT" })
+  @ManyToOne(() => Item, { eager: false, onDelete: "RESTRICT" })
   item!: Item;
 
   @Column({ type: "int" })
