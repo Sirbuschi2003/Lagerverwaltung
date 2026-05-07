@@ -19,10 +19,8 @@ export class SuppliersService {
     }
 
     if (locationIds?.length) {
-      qb.andWhere(
-        "(supplier.locationId IN (:...locationIds) OR supplier.locationId IS NULL)",
-        { locationIds },
-      );
+      // Strict: WAREHOUSE users only see suppliers explicitly assigned to their location(s)
+      qb.andWhere("supplier.locationId IN (:...locationIds)", { locationIds });
     }
 
     return qb.getMany();
