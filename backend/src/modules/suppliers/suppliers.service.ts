@@ -2,6 +2,7 @@ import { Injectable, NotFoundException } from "@nestjs/common";
 import { InjectRepository } from "@nestjs/typeorm";
 import { Repository } from "typeorm";
 
+import { Location } from "../locations/entities/location.entity";
 import { Supplier } from "./entities/supplier.entity";
 
 @Injectable()
@@ -9,9 +10,27 @@ export class SuppliersService {
   constructor(
     @InjectRepository(Supplier)
     private readonly repository: Repository<Supplier>,
+    @InjectRepository(Location)
+    private readonly locationRepository: Repository<Location>,
   ) {}
 
-  findAll(branchId?: string | null, locationIds?: string[]): Promise<Supplier[]> {
+  // Gibt für eine Liste von locationIds alle Ancestor-IDs zurück (parent + grandparent).
+  // Nötig weil User auf Regal/Fach-Ebene zugeordnet sein können,
+  // Lieferanten aber auf WAREHOUSE-Ebene gespeichert werden.
+  private async resolveWarehouseIds(locationIds: string[]): Promise<string[]> {
+    const all = new Set<string>(locationIds);
+    const locs = await this.locationRepository.find({
+      where: locationIds.map((id) => ({ id })),
+      relations: ["parent", "parent.parent"],
+    });
+    for (const loc of locs) {
+      if (loc.parent?.id) all.add(loc.parent.id);
+      if (loc.parent?.parent?.id) all.add(loc.parent.parent.id);
+    }
+    return [...all];
+  }
+
+  async findAll(branchId?: string | null, locationIds?: string[]): Promise<Supplier[]> {
     const qb = this.repository.createQueryBuilder("supplier").orderBy("supplier.name", "ASC");
 
     if (branchId) {
@@ -19,8 +38,10 @@ export class SuppliersService {
     }
 
     if (locationIds?.length) {
-      // Strict: WAREHOUSE users only see suppliers explicitly assigned to their location(s)
-      qb.andWhere("supplier.locationId IN (:...locationIds)", { locationIds });
+      // Hierarchie-aware: User kann auf Regal/Fach-Ebene zugeordnet sein,
+      // Lieferant ist auf WAREHOUSE-Ebene gespeichert → Ancestors einschließen
+      const warehouseIds = await this.resolveWarehouseIds(locationIds);
+      qb.andWhere("supplier.locationId IN (:...warehouseIds)", { warehouseIds });
     }
 
     return qb.getMany();
@@ -70,7 +91,14 @@ export class SuppliersService {
     if (data.customerNumber !== undefined) entity.customerNumber = data.customerNumber?.trim() || null;
     if (data.phone !== undefined) entity.phone = data.phone?.trim() || null;
     if (data.notes !== undefined) entity.notes = data.notes?.trim() || null;
-    if (data.locationId !== undefined) entity.locationId = data.locationId ?? null;
+    if (data.locationId !== undefined) {
+      entity.locationId = data.locationId ?? null;
+      // branchId automatisch aus der Location ableiten wenn noch nicht gesetzt
+      if (data.locationId && !entity.branchId) {
+        const loc = await this.locationRepository.findOne({ where: { id: data.locationId } });
+        if (loc?.branchId) entity.branchId = loc.branchId;
+      }
+    }
 
     return this.repository.save(entity);
   }
