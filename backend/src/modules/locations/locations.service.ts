@@ -21,7 +21,8 @@ export class LocationsService {
   async findAll(params?: { type?: string; parentId?: string | null; includeVehicles?: boolean; branchId?: string | null; locationIds?: string[] }) {
     const qb = this.repository.createQueryBuilder("location")
       .leftJoinAndSelect("location.parent", "parent")
-      .leftJoinAndSelect("location.vehicle", "vehicle");
+      .leftJoinAndSelect("location.vehicle", "vehicle")
+      .leftJoinAndSelect("location.branch", "branch");
 
     if (params?.branchId) {
       qb.andWhere("location.branchId = :branchId", { branchId: params.branchId });

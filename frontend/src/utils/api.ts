@@ -161,6 +161,8 @@ export interface LocationDto {
   name?: string | null;
   parent?: LocationDto | null;
   vehicle?: VehicleDto | null;
+  branchId?: string | null;
+  branch?: { id: string; name: string; externalCode?: string | null } | null;
 }
 
 export interface SupplierDto {

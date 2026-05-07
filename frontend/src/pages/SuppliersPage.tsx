@@ -427,10 +427,16 @@ const SuppliersPage = () => {
               <TableRow key={supplier.id} hover>
                 <TableCell>{supplier.name}</TableCell>
                 <TableCell>
-                  {supplier.locationId
-                    ? <Chip label={locations.find(l => l.id === supplier.locationId)?.name ?? "–"} size="small" variant="outlined" />
-                    : <Typography variant="caption" color="text.secondary">Kein Lager</Typography>
-                  }
+                  {supplier.locationId ? (() => {
+                    const loc = locations.find(l => l.id === supplier.locationId);
+                    return (
+                      <Chip
+                        label={loc ? `${loc.name}${loc.branch?.name ? ` (${loc.branch.name})` : ""}` : "–"}
+                        size="small"
+                        variant="outlined"
+                      />
+                    );
+                  })() : <Typography variant="caption" color="text.secondary">Kein Lager</Typography>}
                 </TableCell>
                 <TableCell>{supplier.contactName || "-"}</TableCell>
                 <TableCell>{supplier.phone || "-"}</TableCell>
@@ -510,7 +516,14 @@ const SuppliersPage = () => {
                     >
                       <MenuItem value="">Kein Lager (nicht zugewiesen)</MenuItem>
                       {locations.map((loc) => (
-                        <MenuItem key={loc.id} value={loc.id}>{loc.name}</MenuItem>
+                        <MenuItem key={loc.id} value={loc.id}>
+                          {loc.name}
+                          {loc.branch?.name && (
+                            <Typography component="span" variant="caption" color="text.secondary" sx={{ ml: 0.5 }}>
+                              ({loc.branch.name})
+                            </Typography>
+                          )}
+                        </MenuItem>
                       ))}
                     </Select>
                   </FormControl>
