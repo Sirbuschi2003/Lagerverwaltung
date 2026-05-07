@@ -32,6 +32,8 @@ import EditIcon from "@mui/icons-material/Edit";
 import DeleteIcon from "@mui/icons-material/Delete";
 import QrCodeScannerIcon from "@mui/icons-material/QrCodeScanner";
 import AddPhotoAlternateIcon from "@mui/icons-material/AddPhotoAlternate";
+import ShoppingCartIcon from "@mui/icons-material/ShoppingCart";
+import Divider from "@mui/material/Divider";
 import useItemsStore from "../store/useItemsStore";
 import useAuthStore from "../store/useAuthStore";
 import { useNetworkStatus } from "../hooks/useNetworkStatus";
@@ -56,6 +58,8 @@ import {
   getItemImageUrl,
   uploadItemImage,
   deleteItemImage,
+  fetchLastOrderForItem,
+  type LastOrderForItemDto,
 } from "../utils/api";
 import useBarcodeScanner from "../hooks/useBarcodeScanner";
 
@@ -1707,6 +1711,7 @@ Import erfolgreich! Die Artikel sind jetzt verfügbar.`;
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
   const [imageUploading, setImageUploading] = useState(false);
   const [imageKey, setImageKey] = useState(0);
+  const [lastOrder, setLastOrder] = useState<LastOrderForItemDto | null | undefined>(undefined);
 
   const {
     items,
@@ -1954,7 +1959,9 @@ Import erfolgreich! Die Artikel sind jetzt verfügbar.`;
     });
     setError(null);
     setEditingId(id);
+    setLastOrder(undefined);
     setOpen(true);
+    fetchLastOrderForItem(id).then(setLastOrder).catch(() => setLastOrder(null));
   };
 
   const handleCloseDialog = () => {
@@ -1962,6 +1969,7 @@ Import erfolgreich! Die Artikel sind jetzt verfügbar.`;
     setOpen(false);
     setEditingId(null);
     setImageUploading(false);
+    setLastOrder(undefined);
   };
 
   const validate = () => {
@@ -3206,6 +3214,41 @@ TB-FC330,Toner Schwarz,Toshiba,Toner,5,89.90,Regal 3 / Fach 1`}
               {error && (
                 <Grid item xs={12}>
                   <Alert severity="error">{error}</Alert>
+                </Grid>
+              )}
+              {editingId && (
+                <Grid item xs={12}>
+                  <Divider />
+                  <Box sx={{ mt: 1.5, display: "flex", alignItems: "flex-start", gap: 1 }}>
+                    <ShoppingCartIcon fontSize="small" color="action" sx={{ mt: 0.3 }} />
+                    <Box>
+                      <Typography variant="subtitle2" color="text.secondary" gutterBottom>
+                        Letzte Bestellung
+                      </Typography>
+                      {lastOrder === undefined && (
+                        <Typography variant="body2" color="text.secondary">Wird geladen…</Typography>
+                      )}
+                      {lastOrder === null && (
+                        <Typography variant="body2" color="text.secondary">Noch nie bestellt</Typography>
+                      )}
+                      {lastOrder && (
+                        <Typography variant="body2">
+                          {lastOrder.orderedAt
+                            ? new Date(lastOrder.orderedAt).toLocaleDateString("de-DE")
+                            : "Datum unbekannt"}
+                          {lastOrder.orderNumber && (
+                            <> · <strong>{lastOrder.orderNumber}</strong></>
+                          )}
+                          {lastOrder.quantity != null && (
+                            <> · {lastOrder.quantity}{lastOrder.packSize && lastOrder.packSize > 1 ? ` (VE ${lastOrder.packSize})` : ""} Stk.</>
+                          )}
+                          {lastOrder.supplierName && (
+                            <> · {lastOrder.supplierName}</>
+                          )}
+                        </Typography>
+                      )}
+                    </Box>
+                  </Box>
                 </Grid>
               )}
             </Grid>
