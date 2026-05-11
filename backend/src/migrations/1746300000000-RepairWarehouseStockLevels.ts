@@ -32,6 +32,8 @@ export class RepairWarehouseStockLevels1746300000000 implements MigrationInterfa
         NOW() AS createdAt,
         NOW() AS updatedAt
       FROM stock_movements m
+      INNER JOIN locations l ON l.id = m.locationId
+      INNER JOIN items i ON i.id = m.itemId
       WHERE m.vehicleId IS NULL AND m.locationId IS NOT NULL
       GROUP BY m.itemId, m.locationId
       ON DUPLICATE KEY UPDATE
