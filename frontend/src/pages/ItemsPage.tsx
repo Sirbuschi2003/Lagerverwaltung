@@ -513,6 +513,7 @@ const ItemsPage = () => {
   const [hyrekaImportStatus, setHyrekaImportStatus] = useState("");
   const [hyrekaImportRunning, setHyrekaImportRunning] = useState(false);
   const [hyrekaImportProgress, setHyrekaImportProgress] = useState(0);
+  const [hyrekaKeepSupplier, setHyrekaKeepSupplier] = useState(true);
   const [hyrekaDefaultParentId, setHyrekaDefaultParentId] = useState(() => {
     if (typeof window === "undefined") return "";
     try {
@@ -760,6 +761,7 @@ const ItemsPage = () => {
     setHyrekaImportStatus("");
     setHyrekaImportRows([]);
     setHyrekaImportProgress(0);
+    setHyrekaKeepSupplier(true);
     setHyrekaImportOpen(true);
   };
 
@@ -1295,7 +1297,10 @@ const ItemsPage = () => {
             updatePayload.qrCodeValue = basePayload.qrCodeValue;
           }
           if (basePayload.descriptionSecondary !== undefined) updatePayload.descriptionSecondary = basePayload.descriptionSecondary;
-          if (basePayload.supplierId) updatePayload.supplierId = basePayload.supplierId;
+          const itemHasSupplier = Boolean(existingItem?.supplierId);
+          if (basePayload.supplierId && (!hyrekaKeepSupplier || !itemHasSupplier)) {
+            updatePayload.supplierId = basePayload.supplierId;
+          }
           if (basePayload.storageLocationId) updatePayload.storageLocationId = basePayload.storageLocationId;
           if (basePayload.price !== undefined) updatePayload.price = basePayload.price;
           if (basePayload.packSize !== undefined) updatePayload.packSize = basePayload.packSize;
@@ -2396,11 +2401,8 @@ TB-FC330,Toner Schwarz,Toshiba,Toner,5,89.90,Regal 3 / Fach 1`}
           },
         }}
       >
-        <DialogTitle>Hyreka Einmalimport (CSV)</DialogTitle>
+        <DialogTitle>Hyreka Import / Abgleich (CSV)</DialogTitle>
         <DialogContent>
-          <Alert severity="warning" sx={{ mb: 2 }}>
-            Dieser Import ist für die einmalige Übernahme aus Hyreka gedacht. Der normale Artikel-Import bleibt unverändert.
-          </Alert>
           <Alert severity="info" sx={{ mb: 2 }}>
             Fehlende Lieferanten und strukturierte Lagerorte (Regal/Fach, Schrank/Schublade) werden bei Bedarf automatisch angelegt.
           </Alert>
@@ -2451,6 +2453,25 @@ TB-FC330,Toner Schwarz,Toshiba,Toner,5,89.90,Regal 3 / Fach 1`}
               disabled={hyrekaImportRunning}
             />
           </Box>
+
+          <FormControlLabel
+            control={
+              <Checkbox
+                checked={hyrekaKeepSupplier}
+                onChange={(e) => setHyrekaKeepSupplier(e.target.checked)}
+                disabled={hyrekaImportRunning}
+              />
+            }
+            label={
+              <Box>
+                <Typography variant="body2">Lieferanten beibehalten (Abgleich-Modus)</Typography>
+                <Typography variant="caption" color="text.secondary">
+                  Wenn aktiviert: Artikel mit bereits gesetztem Lieferanten werden nicht überschrieben. Artikel ohne Lieferanten bekommen den aus Hyreka.
+                </Typography>
+              </Box>
+            }
+            sx={{ mb: 1, alignItems: "flex-start" }}
+          />
 
           {hyrekaImportStatus && (
             <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
