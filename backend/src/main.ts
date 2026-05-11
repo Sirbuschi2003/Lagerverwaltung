@@ -1,4 +1,5 @@
 import bodyParser from "body-parser";
+import compression from "compression";
 import cookieParser from "cookie-parser";
 import helmet from "helmet";
 import { Logger, ValidationPipe } from "@nestjs/common";
@@ -56,6 +57,9 @@ async function bootstrap() {
     methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allowedHeaders: ["Content-Type", "Authorization"],
   });
+
+  // gzip/deflate für alle Responses (spart 60–80 % Transfervolumen bei JSON)
+  app.use(compression());
 
   // Cookie-Parser für HttpOnly-Refresh-Token
   app.use(cookieParser());

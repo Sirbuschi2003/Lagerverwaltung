@@ -3,7 +3,7 @@ import { promises as fs, Dirent } from "node:fs";
 import path from "node:path";
 import puppeteer from "puppeteer";
 import { InjectRepository } from "@nestjs/typeorm";
-import { In, MoreThan, Repository } from "typeorm";
+import { DataSource, In, MoreThan, Repository } from "typeorm";
 
 import { ItemsService } from "../items/items.service";
 import { LocationsService } from "../locations/locations.service";
@@ -76,6 +76,7 @@ export class PurchasingService {
     private readonly emailService: EmailService,
     private readonly systemConfigService: SystemConfigService,
     private readonly loggingService: LoggingService,
+    private readonly dataSource: DataSource,
   ) {}
 
   /** Cache für Bestellvorschläge invalidieren (nach Bestandsbuchungen, Bestellungen) */
@@ -202,11 +203,15 @@ export class PurchasingService {
       throw new BadRequestException("Purchase order needs at least one line");
     }
 
+    const itemIds = payload.lines.map((l) => l.itemId);
+    const loadedItems = await this.itemsRepository.findBy({ id: In(itemIds) });
+    const itemMap = new Map(loadedItems.map((i) => [i.id, i]));
+
     const lines: PurchaseOrderLine[] = [];
     for (const line of payload.lines) {
-      const item = await this.itemsService.findOne(line.itemId);
+      const item = itemMap.get(line.itemId);
       if (!item) {
-        throw new NotFoundException("Item not found");
+        throw new NotFoundException(`Item ${line.itemId} not found`);
       }
       lines.push(
         this.linesRepository.create({
@@ -382,69 +387,73 @@ export class PurchasingService {
 
     const warehouseLocations = await this.locationsService.findAll({ type: "WAREHOUSE", includeVehicles: true });
     const defaultWarehouse = warehouseLocations[0] ?? null;
-    let hasAnyBookedQuantity = false;
 
-    for (const linePayload of payload.lines) {
-      const line = order.lines.find((entry) => entry.id === linePayload.lineId);
-      if (!line) {
-        throw new NotFoundException("Order line not found");
+    // Batch-load all items for the order lines to avoid N+1 queries
+    const lineItemIds = [...new Set(order.lines.map((l) => l.item.id))];
+    const lineItems = await this.itemsRepository.find({
+      where: { id: In(lineItemIds) },
+      relations: ["storageLocation"],
+    });
+    const lineItemMap = new Map(lineItems.map((i) => [i.id, i]));
+
+    const savedOrder = await this.dataSource.transaction(async (manager) => {
+      let hasAnyBookedQuantity = false;
+
+      for (const linePayload of payload.lines) {
+        const line = order.lines.find((entry) => entry.id === linePayload.lineId);
+        if (!line) {
+          throw new NotFoundException("Order line not found");
+        }
+
+        const remaining = line.quantity - line.receivedQuantity;
+        if (remaining <= 0) continue;
+
+        const toReceive = linePayload.receivedQuantity ?? remaining;
+        if (toReceive <= 0) continue;
+
+        hasAnyBookedQuantity = true;
+        line.receivedQuantity = Math.min(line.quantity, line.receivedQuantity + toReceive);
+
+        const item = lineItemMap.get(line.item.id);
+        const locationId = item?.storageLocation?.id ?? defaultWarehouse?.id ?? null;
+        if (!locationId) {
+          throw new BadRequestException("Keine Lagerposition fuer Wareneingang hinterlegt.");
+        }
+
+        await this.stockService.recordMovement({
+          itemId: line.item.id,
+          locationId,
+          userId,
+          type: "CHECKIN",
+          quantity: toReceive,
+          occurredAt: new Date().toISOString(),
+          note: `Wareneingang Bestellung ${order.orderNumber ?? order.id}`,
+          source: order.orderNumber ?? `purchase-order:${order.id}`,
+        });
       }
 
-      const remaining = line.quantity - line.receivedQuantity;
-      if (remaining <= 0) {
-        continue;
+      if (!hasAnyBookedQuantity) {
+        throw new BadRequestException("Keine gueltigen Mengen fuer den Wareneingang uebergeben.");
       }
 
-      const toReceive = linePayload.receivedQuantity ?? remaining;
-      if (toReceive <= 0) {
-        continue;
+      const allReceived = order.lines.every((line) => line.receivedQuantity >= line.quantity);
+      if (allReceived) {
+        order.status = "ARCHIVED";
+        order.receivedAt = new Date();
+        if (!order.orderedAt) order.orderedAt = new Date();
+      } else {
+        order.status = "ORDERED";
+        order.receivedAt = null;
+        if (!order.orderedAt) order.orderedAt = new Date();
       }
 
-      hasAnyBookedQuantity = true;
-      line.receivedQuantity = Math.min(line.quantity, line.receivedQuantity + toReceive);
-
-      const item = await this.itemsService.findOne(line.item.id);
-      const locationId = item?.storageLocation?.id ?? defaultWarehouse?.id ?? null;
-      if (!locationId) {
-        throw new BadRequestException("Keine Lagerposition fuer Wareneingang hinterlegt.");
+      if (payload.deliveryNoteNumber !== undefined) {
+        order.deliveryNoteNumber = payload.deliveryNoteNumber.trim() || null;
       }
 
-      await this.stockService.recordMovement({
-        itemId: line.item.id,
-        locationId,
-        userId,
-        type: "CHECKIN",
-        quantity: toReceive,
-        occurredAt: new Date().toISOString(),
-        note: `Wareneingang Bestellung ${order.orderNumber ?? order.id}`,
-        source: order.orderNumber ?? `purchase-order:${order.id}`,
-      });
-    }
+      return manager.save(order);
+    });
 
-    if (!hasAnyBookedQuantity) {
-      throw new BadRequestException("Keine gueltigen Mengen fuer den Wareneingang uebergeben.");
-    }
-
-    const allReceived = order.lines.every((line) => line.receivedQuantity >= line.quantity);
-    if (allReceived) {
-      order.status = "ARCHIVED";
-      order.receivedAt = new Date();
-      if (!order.orderedAt) {
-        order.orderedAt = new Date();
-      }
-    } else {
-      order.status = "ORDERED";
-      order.receivedAt = null;
-      if (!order.orderedAt) {
-        order.orderedAt = new Date();
-      }
-    }
-
-    if (payload.deliveryNoteNumber !== undefined) {
-      order.deliveryNoteNumber = payload.deliveryNoteNumber.trim() || null;
-    }
-
-    const savedOrder = await this.ordersRepository.save(order);
     this.invalidateSuggestionsCache();
     return savedOrder;
   }
@@ -1109,11 +1118,17 @@ export class PurchasingService {
       throw new BadRequestException("Ungueltiger Dateiname.");
     }
 
-    // Niederlassungs-Isolation: Dateiname muss einer Bestellung der eigenen NL entsprechen
+    // Niederlassungs-Isolation: Token aus Dateinamen direkt in der DB prüfen (kein Full-Load)
     if (branchId) {
-      const branchOrders = await this.ordersRepository.find({ where: { branchId } });
-      const isOwned = branchOrders.some((order) => this.buildStoredOrderFilename(order) === filename);
-      if (!isOwned) {
+      const token = filename.replace(/\.pdf$/i, "");
+      const owned = await this.ordersRepository.findOne({
+        where: [
+          { branchId, orderNumber: token },
+          { branchId, id: token },
+        ],
+        select: ["id"],
+      });
+      if (!owned) {
         throw new NotFoundException("Dokument nicht gefunden.");
       }
     }
@@ -1455,25 +1470,24 @@ export class PurchasingService {
     const manufacturerPrefix = this.extractNamePrefix(this.getDominantManufacturer(order), 'HERST');
     const prefix = `${branchCode}-${dateStr}`;
 
-    // Suche nach Bestellungen mit diesem Prefix (gleicher Tag, gleiche NL)
-    const existing = await this.ordersRepository
-      .createQueryBuilder("order")
-      .select("order.orderNumber", "orderNumber")
-      .where("order.orderNumber LIKE :prefix", { prefix: `${prefix}-%` })
-      .getRawMany();
-
-    let max = 0;
-    existing.forEach((row) => {
-      const value = String(row.orderNumber || "");
-      if (!value.startsWith(prefix + '-')) return;
-      // Format: {prefix}-{seq}-{HERST} → seq ist der Teil nach dem prefix
-      const afterPrefix = value.substring(prefix.length + 1);
-      const seqStr = afterPrefix.split('-')[0];
-      const num = Number(seqStr);
-      if (!Number.isNaN(num)) max = Math.max(max, num);
+    // SELECT FOR UPDATE prevents duplicate order numbers under concurrent requests
+    const suffix = await this.dataSource.transaction(async (manager) => {
+      const existing: Array<{ orderNumber: string }> = await manager.query(
+        `SELECT orderNumber FROM purchase_orders WHERE orderNumber LIKE ? FOR UPDATE`,
+        [`${prefix}-%`],
+      );
+      let max = 0;
+      for (const row of existing) {
+        const value = String(row.orderNumber || "");
+        if (!value.startsWith(prefix + "-")) continue;
+        const afterPrefix = value.substring(prefix.length + 1);
+        const seqStr = afterPrefix.split("-")[0];
+        const num = Number(seqStr);
+        if (!Number.isNaN(num)) max = Math.max(max, num);
+      }
+      return String(max + 1).padStart(3, "0");
     });
 
-    const suffix = String(max + 1).padStart(3, "0");
     return `${prefix}-${suffix}-${manufacturerPrefix}`;
   }
 

@@ -78,7 +78,7 @@ export class InventoryService {
     }
     return this.sessionsRepository.find({
       where,
-      relations: ["lines", "vehicleStatuses", "vehicleStatuses.vehicle", "branch"],
+      relations: ["vehicleStatuses", "vehicleStatuses.vehicle", "branch"],
       order: { startedAt: "DESC" },
     }).then((sessions) => {
       if (isManager) return sessions;
@@ -175,60 +175,48 @@ export class InventoryService {
   }
 
   async recordLine(dto: RecordInventoryLineDto) {
-    try {
-      // Prüfe, ob Session editierbar ist
-      await this.ensureSessionIsEditable(dto.sessionId);
+    await this.ensureSessionIsEditable(dto.sessionId);
 
-      // Session lookup
-      const session = await this.sessionsRepository.findOne({ where: { id: dto.sessionId } });
-      if (!session) {
-        throw new NotFoundException("Inventory session not found");
-      }
-
-      // Item lookup
-      const item = await this.itemsService.findOne(dto.itemId);
-      if (!item) {
-        throw new NotFoundException("Item not found");
-      }
-
-      // Vehicle lookup
-      let vehicle = null;
-      if (dto.vehicleId) {
-        vehicle = await this.vehiclesService.findOne(dto.vehicleId);
-        if (!vehicle) {
-          throw new NotFoundException("Vehicle not found");
-        }
-      }
-
-      // Location für Lager-Inventuren: explizit übergeben oder Artikel-Lagerort als Fallback
-      let location: typeof item.storageLocation | null = null;
-      if (!vehicle) {
-        if (dto.locationId && item.storageLocation?.id === dto.locationId) {
-          location = item.storageLocation;
-        } else if (item.storageLocation) {
-          location = item.storageLocation;
-        }
-      }
-
-      // Fahrzeugeintrag darf nicht bereits eingereicht sein
-      await this.ensureVehicleEditable(dto.sessionId, dto.vehicleId || vehicle?.id || null);
-
-      // Create inventory line
-      const line = this.linesRepository.create({
-        session,
-        item,
-        vehicle: vehicle,
-        location: location,
-        countedQuantity: dto.countedQuantity,
-        expectedQuantity: dto.expectedQuantity,
-        note: dto.note ?? undefined,
-      });
-
-      const saved = await this.linesRepository.save(line);
-      return saved;
-    } catch (error) {
-      throw error;
+    const session = await this.sessionsRepository.findOne({ where: { id: dto.sessionId } });
+    if (!session) {
+      throw new NotFoundException("Inventory session not found");
     }
+
+    const item = await this.itemsService.findOne(dto.itemId);
+    if (!item) {
+      throw new NotFoundException("Item not found");
+    }
+
+    let vehicle = null;
+    if (dto.vehicleId) {
+      vehicle = await this.vehiclesService.findOne(dto.vehicleId);
+      if (!vehicle) {
+        throw new NotFoundException("Vehicle not found");
+      }
+    }
+
+    let location: typeof item.storageLocation | null = null;
+    if (!vehicle) {
+      if (dto.locationId && item.storageLocation?.id === dto.locationId) {
+        location = item.storageLocation;
+      } else if (item.storageLocation) {
+        location = item.storageLocation;
+      }
+    }
+
+    await this.ensureVehicleEditable(dto.sessionId, dto.vehicleId || vehicle?.id || null);
+
+    const line = this.linesRepository.create({
+      session,
+      item,
+      vehicle: vehicle,
+      location: location,
+      countedQuantity: dto.countedQuantity,
+      expectedQuantity: dto.expectedQuantity,
+      note: dto.note ?? undefined,
+    });
+
+    return this.linesRepository.save(line);
   }
 
   async completeSession(dto: CompleteInventoryDto) {

@@ -146,16 +146,25 @@ const useOfflineQueue = create<OfflineQueueState>()(
 
       if (hasServiceWorkerSync && navigator.serviceWorker?.controller) {
         try {
-          const messageChannel = new MessageChannel();
-          navigator.serviceWorker.controller.postMessage(
-            { type: 'PROCESS_QUEUE' },
-            [messageChannel.port2]
-          );
+          await new Promise<void>((resolve) => {
+            const messageChannel = new MessageChannel();
+            // Resolve on SW acknowledgement or after 10s timeout
+            const timeout = setTimeout(resolve, 10_000);
+            messageChannel.port1.onmessage = () => {
+              clearTimeout(timeout);
+              resolve();
+            };
+            navigator.serviceWorker.controller!.postMessage(
+              { type: 'PROCESS_QUEUE' },
+              [messageChannel.port2],
+            );
+          });
+        } catch {
+          // Fall through to manual sync
+        } finally {
           set({ isSyncing: false });
-          return;
-        } catch (error) {
-          // Error silently ignored
         }
+        return;
       }
       
       const hasMovements = movements.length > 0;
@@ -232,7 +241,9 @@ const useOfflineQueue = create<OfflineQueueState>()(
                 successfulSyncs.push(queueItem.id);
               }
             } catch (err) {
-              // Error on single item ignored
+              const msg = err instanceof Error ? err.message : 'Sync-Fehler';
+              set({ lastError: `Item-Sync fehlgeschlagen: ${msg}` });
+              // Item bleibt in der Queue – nicht zu successfulSyncs hinzufügen
             }
           }
           

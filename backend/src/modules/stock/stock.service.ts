@@ -1,6 +1,6 @@
 ﻿import { BadRequestException, ForbiddenException, Injectable, Logger, NotFoundException } from "@nestjs/common";
 import { InjectRepository } from "@nestjs/typeorm";
-import { Not, Repository, LessThan } from "typeorm";
+import { DataSource, Not, Repository, LessThan } from "typeorm";
 
 import { AccessControlService } from "../access-control/access-control.service";
 import { InventorySession, InventorySessionStatus } from "../inventory/entities/inventory-session.entity";
@@ -134,6 +134,10 @@ export class StockService {
   private technicianCache: { data: Map<string, string>; expiresAt: number } | null = null;
   private readonly TECHNICIAN_CACHE_TTL_MS = 5 * 60 * 1000;
 
+  // Throttle restock sync to at most once every 30 seconds per branch
+  private restockSyncLastRun = new Map<string, number>();
+  private readonly RESTOCK_SYNC_THROTTLE_MS = 30_000;
+
   constructor(
     @InjectRepository(StockLevel)
     private readonly stockLevelsRepository: Repository<StockLevel>,
@@ -150,6 +154,7 @@ export class StockService {
     private readonly locationsService: LocationsService,
     private readonly notificationsService: NotificationsService,
     private readonly loggingService: LoggingService,
+    private readonly dataSource: DataSource,
   ) {}
 
   /**
@@ -620,24 +625,29 @@ export class StockService {
     const fiveHoursAgo = new Date(Date.now() - 5 * 60 * 60 * 1000);
     await this.restockRepository.delete({ status: "FULFILLED", fulfilledAt: LessThan(fiveHoursAgo) });
 
-    // Alle StockLevels laden und Fehlbestaende synchronisieren (nach Branch filtern)
-    const stockLevelsQb = this.stockLevelsRepository
-      .createQueryBuilder("level")
-      .leftJoinAndSelect("level.item", "item")
-      .leftJoinAndSelect("level.vehicle", "vehicle")
-      .leftJoinAndSelect("level.location", "location");
-    if (branchId) {
-      stockLevelsQb.andWhere("vehicle.branchId = :branchId", { branchId });
+    // Throttled background sync: load shortage levels and sync restock requests at most once per 30s
+    const throttleKey = branchId ?? "ALL";
+    const now = Date.now();
+    const lastRun = this.restockSyncLastRun.get(throttleKey) ?? 0;
+    if (now - lastRun >= this.RESTOCK_SYNC_THROTTLE_MS) {
+      this.restockSyncLastRun.set(throttleKey, now);
+      const stockLevelsQb = this.stockLevelsRepository
+        .createQueryBuilder("level")
+        .leftJoinAndSelect("level.item", "item")
+        .leftJoinAndSelect("level.vehicle", "vehicle")
+        .select(["level.id", "level.quantity", "level.targetQuantity", "item.id", "vehicle.id", "vehicle.branchId"]);
+      if (branchId) {
+        stockLevelsQb.andWhere("vehicle.branchId = :branchId", { branchId });
+      }
+      const allStockLevels = await stockLevelsQb.getMany();
+      const levelsWithShortage = allStockLevels.filter(
+        (level) => level.item && level.vehicle && level.targetQuantity > 0 && level.quantity < level.targetQuantity,
+      );
+      // Fire-and-forget — do not block the response
+      Promise.all(levelsWithShortage.map((level) => this.syncRestockRequest(level.id))).catch((err) =>
+        this.logger.warn("Background restock sync error", err),
+      );
     }
-    const allStockLevels = await stockLevelsQb.getMany();
-
-    // Nur die relevanten Stock-Levels bestimmen (Performance: nicht alle einzeln abfragen)
-    const levelsWithShortage = allStockLevels.filter(
-      (level) => level.item && level.vehicle && level.targetQuantity > 0 && level.quantity < level.targetQuantity,
-    );
-
-    // Parallel synchronisieren (jeder Level ist unabhaengig voneinander)
-    await Promise.all(levelsWithShortage.map((level) => this.syncRestockRequest(level.id)));
 
     const requestsQb = this.restockRepository
       .createQueryBuilder("request")
@@ -1421,25 +1431,26 @@ export class StockService {
     );
     primary.location = location;
 
-    const savedPrimary = await this.stockLevelsRepository.save(primary);
+    return this.dataSource.transaction(async (manager) => {
+      const savedPrimary = await manager.save(StockLevel, primary);
 
-    for (const duplicate of duplicates) {
-      const requests = await this.restockRepository.find({
-        where: { stockLevel: { id: duplicate.id } },
-      });
-
-      for (const request of requests) {
-        request.stockLevel = savedPrimary;
-        request.stockLevelId = savedPrimary.id;
-        await this.restockRepository.save(request);
+      for (const duplicate of duplicates) {
+        const requests = await manager.find(RestockRequest, {
+          where: { stockLevel: { id: duplicate.id } },
+        });
+        for (const request of requests) {
+          request.stockLevel = savedPrimary;
+          request.stockLevelId = savedPrimary.id;
+          await manager.save(RestockRequest, request);
+        }
       }
-    }
 
-    if (duplicates.length > 0) {
-      await this.stockLevelsRepository.remove(duplicates);
-    }
+      if (duplicates.length > 0) {
+        await manager.remove(StockLevel, duplicates);
+      }
 
-    return savedPrimary;
+      return savedPrimary;
+    });
   }
 
   private resolveDirection(type: StockMovementType) {
@@ -1533,13 +1544,17 @@ export class StockService {
   }
 
   // ADMIN: Diagnose und Reparatur von doppelten StockLevels
-  async diagnoseStockLevels() {
+  async diagnoseStockLevels(branchId?: string | null) {
     this.logger.debug('=== STOCKLEVEL DIAGNOSE GESTARTET ===');
-    
-    // 1. Finde alle StockLevels
-    const allStockLevels = await this.stockLevelsRepository.find({
-      relations: ['item', 'vehicle']
-    });
+
+    const qb = this.stockLevelsRepository
+      .createQueryBuilder("sl")
+      .innerJoinAndSelect("sl.item", "item")
+      .leftJoinAndSelect("sl.vehicle", "vehicle");
+    if (branchId) {
+      qb.andWhere("(item.branchId = :branchId OR vehicle.branchId = :branchId)", { branchId });
+    }
+    const allStockLevels = await qb.getMany();
     
     this.logger.debug(`Total StockLevels: ${allStockLevels.length}`);
     
@@ -1614,13 +1629,17 @@ export class StockService {
     };
   }
 
-  async repairDuplicateStockLevels() {
+  async repairDuplicateStockLevels(branchId?: string | null) {
     this.logger.debug('=== STOCKLEVEL REPARATUR GESTARTET ===');
-    
-    // Hole direkt die Original-Duplikate
-    const allStockLevels = await this.stockLevelsRepository.find({
-      relations: ['item', 'vehicle']
-    });
+
+    const qb = this.stockLevelsRepository
+      .createQueryBuilder("sl")
+      .innerJoinAndSelect("sl.item", "item")
+      .leftJoinAndSelect("sl.vehicle", "vehicle");
+    if (branchId) {
+      qb.andWhere("(item.branchId = :branchId OR vehicle.branchId = :branchId)", { branchId });
+    }
+    const allStockLevels = await qb.getMany();
     
     // Gruppiere nach Item+Vehicle Kombination
     const combinations = new Map<string, VehicleStockLevel[]>();

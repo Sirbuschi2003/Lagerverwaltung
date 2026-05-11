@@ -877,16 +877,26 @@ export class ItemsService {
 
   /** Bulk-Update: mehrere Artikel auf einmal aktualisieren (für Hyreka-Import) */
   async updateBulk(updates: Array<UpdateItemDto & { id: string }>, branchId?: string | null): Promise<{ updated: number; errors: string[] }> {
+    const BATCH_SIZE = 10;
     let updated = 0;
     const errors: string[] = [];
-    for (const { id, ...dto } of updates) {
-      try {
-        await this.update(id, dto, branchId);
-        updated++;
-      } catch (err) {
-        errors.push(`${id}: ${err instanceof Error ? err.message : String(err)}`);
+
+    for (let i = 0; i < updates.length; i += BATCH_SIZE) {
+      const batch = updates.slice(i, i + BATCH_SIZE);
+      const results = await Promise.allSettled(
+        batch.map(({ id, ...dto }) => this.update(id, dto, branchId)),
+      );
+      for (let j = 0; j < results.length; j++) {
+        const result = results[j];
+        if (result.status === "fulfilled") {
+          updated++;
+        } else {
+          const id = batch[j]?.id ?? "?";
+          errors.push(`${id}: ${result.reason instanceof Error ? result.reason.message : String(result.reason)}`);
+        }
       }
     }
+
     return { updated, errors };
   }
 
