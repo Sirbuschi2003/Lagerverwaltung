@@ -1,5 +1,76 @@
 # Changelog
 
+## [3.7.0] – 2026-05-11
+
+### Feature: Lieferanten-Zuweisung pro Lager
+
+- Manager können Lieferanten einem bestimmten Lager zuweisen (Teilelager / Tonerlager)
+- WAREHOUSE-User sehen nur noch Lieferanten ihres eigenen Lagers (strikte Isolation, inkl. 3-Ebenen-Hierarchie)
+- Super-Admin sieht in der Lieferanten-Tabelle ein Lager-Chip und ein Lager-Dropdown mit Niederlassungsname
+
+### Feature: Niederlassungsname im Lager-Dropdown (Super-Admin)
+
+- Lager-Dropdown zeigt jetzt `Lagername (Niederlassung)` statt nur den Lagernamen
+- Betrifft: Lieferanten-Formular, Bestellvorschläge, überall wo Super-Admin Lager wählt
+
+### Feature: Einzelnes Lager zurücksetzen (Wartungsseite)
+
+- Super-Admin kann ein einzelnes Lager mit allen zugehörigen Daten löschen
+- Vorschau zeigt betroffene Artikel, Lieferanten, Lagerorte und Buchungen
+- Löscht in korrekter Reihenfolge: Bestellzeilen → Artikelcodes → Artikel (inkl. Buchungen per Cascade) → Lieferanten → Lagerorte
+
+### Feature: Letzte Bestellung im Artikel-Dialog
+
+- Artikelstamm zeigt jetzt im Edit-Dialog die letzte Bestellung: Datum, Bestellnummer, Menge, Lieferant
+- Auch in der eigenständigen `ItemEditDialog`-Komponente verfügbar
+
+### Performance & Skalierung
+
+- **N+1-Queries behoben:** Bestellerstellung, Wareneingang, Bulk-Update, `listOrderDocuments`, `resolveWarehouseDescendants`
+- **Transaktionen:** `receiveOrder()` und `normalizeVehicleStockLevels()` sind jetzt atomar – kein inkonsistenter Zustand bei Fehler
+- **Race Condition Bestellnummern:** `generateOrderNumber()` nutzt `SELECT FOR UPDATE` (keine doppelten Bestellnummern unter Last)
+- **Restock-Sync** wird nur noch 1× pro 30 Sekunden ausgelöst (fire-and-forget, blockiert die API nicht mehr)
+- **HTTP-Kompression** (gzip) aktiviert – 60–80 % weniger Transfervolumen für JSON-Antworten
+- **PapaParse** wird jetzt dynamisch geladen – nicht mehr im initialen Bundle (~45 KB gespart)
+- **5 neue DB-Migrationen** mit Performance-Indizes auf `stock_movements`, `stock_levels` und `items`
+- `resolveWarehouseDescendants` nutzt rekursives SQL-CTE statt N+1-Schleife
+- Restock-Übersicht lädt Lines nicht mehr beim Session-Listing (nur noch beim Einzelaufruf)
+- `updateBulk` (Hyreka-Import) läuft jetzt parallel in Batches von 10 (statt seriell)
+
+### Sicherheit
+
+- **10 Security-Härtungen** (Rate-Limiting, CSP-Header, Input-Validierung, Login-Throttle, ...)
+- **Eager → Lazy Loading** für alle TypeORM-Entitäten (reduziert unbeabsichtigtes Datenleck)
+- `getOrderDocument()` prüft Branch-Zugehörigkeit jetzt per direktem `findOne` statt alle Bestellungen zu laden
+- Globaler Rate-Limiting-Guard aktiv (300 Req/min pro IP, Login 10/15 Min)
+
+### Bugfixes
+
+- Bestellvorschläge: `onSaved`-Callback übergibt jetzt den Warehouse-Filter (Filter blieb vorher verloren)
+- Bestellvorschläge: Artikel ohne zugewiesene `storageLocation` erscheinen nicht mehr in ungefilterter Ansicht
+- Offline-Queue: ServiceWorker-Sync wartet auf MessageChannel-Bestätigung (kein falsches `isSyncing: false` mehr)
+- Offline-Queue: Fehlgeschlagene Item-Syncs bleiben in der Queue + Fehlermeldung wird angezeigt
+- Doppelbuchungs-Race-Condition im Offline-Queue vollständig behoben
+- `repairDuplicateStockLevels` / `diagnoseStockLevels` nutzen jetzt Branch-Filter (kein Full-Table-Scan mehr)
+- Nutzloser `try/catch` in `recordLine()` entfernt
+- Migration bereinigt vorhandene doppelte StockLevel-Einträge (item + vehicle)
+
+---
+
+## [3.6.5] – 2026-04-28
+
+### Diverse Fixes & Verbesserungen (Schnellbuchung, Kamera, Inventur, Lager-Isolation)
+
+- Schnellbuchung: Kamera-Fix, Vorgangsnummer-Scan stabile Kamera via Ref-Pattern, Echtzeit-Sync
+- Inventur: Fahrzeug-Inventur mit vehicleId nullable, Lager-Buchung aus Artikel-Lagerort ableiten
+- Lager-Isolation: Vollständige Branch-Isolation in allen Modulen, 3-Ebenen-Hierarchie
+- Super-Admin kann finalisierte Inventuren manuell löschen
+- Inventur-Benutzerzuweisung (Mehrfach), Bewegungshistorie Pagination und Serverfilter
+- Protokollarchiv: tägliche Archivierung, Suche, Live-Modus, Archiv-Löschen (Super-Admin)
+- DB-Optimierungen für 200K Artikel / 200 gleichzeitige Nutzer
+
+---
+
 ## [3.6.4] – 2026-04-27
 
 ### Feature: Schnellzugriff-Buttons im Header
