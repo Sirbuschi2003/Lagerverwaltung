@@ -1157,19 +1157,18 @@ export class ItemsService {
   }
 
   private async resolveWarehouseDescendants(warehouseId: string): Promise<string[]> {
-    const ids = new Set<string>([warehouseId]);
-    // Kinder und Kindeskinder laden (bis zu 2 Ebenen: WAREHOUSE → SHELF → BIN)
-    const children: { id: string }[] = await this.dataSource.query(
-      `SELECT id FROM locations WHERE parentId = ?`, [warehouseId],
+    // Recursive CTE: loads the full sub-tree in a single query (MySQL 8+)
+    const rows: { id: string }[] = await this.dataSource.query(
+      `WITH RECURSIVE loc_tree AS (
+         SELECT id FROM locations WHERE id = ?
+         UNION ALL
+         SELECT l.id FROM locations l
+         INNER JOIN loc_tree t ON l.parentId = t.id
+       )
+       SELECT id FROM loc_tree`,
+      [warehouseId],
     );
-    for (const child of children) {
-      ids.add(child.id);
-      const grandChildren: { id: string }[] = await this.dataSource.query(
-        `SELECT id FROM locations WHERE parentId = ?`, [child.id],
-      );
-      for (const gc of grandChildren) ids.add(gc.id);
-    }
-    return [...ids];
+    return rows.map((r) => r.id);
   }
 
   // ─── Artikelbild ──────────────────────────────────────────────────────────

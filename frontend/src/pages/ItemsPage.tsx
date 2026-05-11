@@ -1,5 +1,4 @@
 import React, { useEffect, useMemo, useRef, useState, useCallback, type ChangeEvent, type FormEvent } from "react";
-import Papa from "papaparse";
 import {
   Alert,
   AlertTitle,
@@ -253,16 +252,19 @@ const decodeCsvTextWithFallback = async (
 
 const parseCsvText = async (
   text: string,
-  config: Papa.ParseConfig<unknown>,
-): Promise<unknown[]> =>
-  new Promise<unknown[]>((resolve, reject) => {
+  config: Record<string, unknown>,
+): Promise<unknown[]> => {
+  // Dynamic import keeps PapaParse out of the initial bundle — only loaded on first CSV import
+  const Papa = (await import("papaparse")).default;
+  return new Promise<unknown[]>((resolve, reject) => {
     Papa.parse(text, {
       ...config,
       worker: false,
-      complete: (result) => resolve((result.data as unknown[]) ?? []),
+      complete: (result: { data: unknown[] }) => resolve(result.data ?? []),
       error: (err: unknown) => reject(err),
     });
   });
+};
 
 const extractApiErrorMessage = (error: unknown): string => {
   const fallback = error instanceof Error ? error.message : String(error);

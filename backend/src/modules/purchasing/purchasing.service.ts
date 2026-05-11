@@ -699,10 +699,17 @@ export class PurchasingService {
       );
       itemEntities = await qb.getMany();
     } else {
-      itemEntities = await this.itemsRepository.find({
-        where: { targetStock: MoreThan(0), ...(branchId ? { branchId } : {}) },
-        relations: ["storageLocation", "supplier"],
-      });
+      // No warehouse filter: only return items that have a storageLocation assigned.
+      // Items without a storageLocation belong to no specific warehouse and should not
+      // pollute cross-warehouse suggestion views.
+      const qb = this.itemsRepository
+        .createQueryBuilder("item")
+        .innerJoinAndSelect("item.storageLocation", "storageLocation")
+        .leftJoin("storageLocation.parent", "slParent")
+        .leftJoinAndSelect("item.supplier", "supplier")
+        .where("item.targetStock > 0");
+      if (branchId) qb.andWhere("item.branchId = :branchId", { branchId });
+      itemEntities = await qb.getMany();
     }
     const allLocations = await this.locationsService.findAll({ includeVehicles: true, branchId: branchId ?? undefined });
     const defaultWarehouse = allLocations.find((location) => location.type === "WAREHOUSE") ?? null;
@@ -970,13 +977,40 @@ export class PurchasingService {
       // Lookup-Map: relPath → Supplier-Info (neue, mittlere und alte Pfade)
       const fileToSupplier = new Map<string, { supplierId: string | null; supplierName: string | null }>();
       const allOrders = await this.ordersRepository.find({ where: branchId ? { branchId } : undefined, relations: ["supplier"] });
+
+      // Cache folder names to avoid N×2 DB queries per order
+      const branchFolderCache = new Map<string | null, string>();
+      const locationFolderCache = new Map<string | null, string>();
+      const getBranchFolderCached = (bid: string | null | undefined) => {
+        const key = bid ?? null;
+        if (!branchFolderCache.has(key)) {
+          branchFolderCache.set(key, this.getBranchFolder(bid) as unknown as string);
+        }
+        return branchFolderCache.get(key)!;
+      };
+      const getLocationFolderCached = (lid: string | null | undefined) => {
+        const key = lid ?? null;
+        if (!locationFolderCache.has(key)) {
+          locationFolderCache.set(key, this.getLocationFolder(lid) as unknown as string);
+        }
+        return locationFolderCache.get(key)!;
+      };
+
+      // Resolve unique branchIds and locationIds in one pass
+      const uniqueBranchIds = [...new Set(allOrders.map((o) => o.branchId ?? null))];
+      const uniqueLocationIds = [...new Set(allOrders.map((o) => o.locationId ?? null))];
+      await Promise.all([
+        ...uniqueBranchIds.map(async (bid) => branchFolderCache.set(bid, await this.getBranchFolder(bid))),
+        ...uniqueLocationIds.map(async (lid) => locationFolderCache.set(lid, await this.getLocationFolder(lid))),
+      ]);
+
       for (const order of allOrders) {
         const filename = this.buildStoredOrderFilename(order);
         const refDate = new Date(order.orderedAt ?? order.createdAt ?? new Date());
         const year = String(refDate.getFullYear());
         const month = String(refDate.getMonth() + 1).padStart(2, '0');
-        const branchFolder = await this.getBranchFolder(order.branchId);
-        const locationFolder = await this.getLocationFolder(order.locationId);
+        const branchFolder = getBranchFolderCached(order.branchId);
+        const locationFolder = getLocationFolderCached(order.locationId);
         const entry = { supplierId: order.supplier?.id ?? null, supplierName: order.supplier?.name ?? null };
         // Aktuelle Struktur: branchFolder/locationFolder/YYYY/MM/filename.pdf
         fileToSupplier.set(`${branchFolder}/${locationFolder}/${year}/${month}/${filename}`, entry);

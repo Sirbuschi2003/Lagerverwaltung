@@ -1454,7 +1454,7 @@ const OrderSuggestionsTab: React.FC = () => {
         itemId={itemDialogId}
         open={itemDialogOpen}
         onClose={() => setItemDialogOpen(false)}
-        onSaved={() => loadData(true)}
+        onSaved={() => loadData(true, selectedWarehouseId)}
       />
     </Box>
   );
