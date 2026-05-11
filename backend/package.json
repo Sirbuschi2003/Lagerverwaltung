@@ -15,6 +15,7 @@
     "migration:generate": "typeorm-ts-node-commonjs migration:generate -d src/config/data-source.ts",
     "migration:run": "typeorm-ts-node-commonjs migration:run -d src/config/data-source.ts",
     "migration:run:dist": "typeorm migration:run -d dist/config/data-source.js",
+    "migration:revert:dist": "typeorm migration:revert -d dist/config/data-source.js",
     "migration:show": "typeorm-ts-node-commonjs migration:show -d src/config/data-source.ts",
     "migration:revert": "typeorm-ts-node-commonjs migration:revert -d src/config/data-source.ts",
     "test:e2e": "jest --runInBand --testPathPattern=e2e"
