@@ -730,12 +730,12 @@ export class PurchasingService {
           .where("sl.itemId IN (:...itemIds)", { itemIds })
           .andWhere("sl.vehicleId IS NULL")
       : null;
-    if (stockLevelsQb && branchId) {
-      stockLevelsQb.andWhere("location.branchId = :branchId", { branchId });
-    }
+    // Note: no location.branchId filter — stock_levels may have locationId=NULL (unassigned warehouse
+    // stock). Items are already branch-scoped via itemIds, so no cross-branch leakage.
     if (stockLevelsQb && effectiveLocationIds?.length) {
+      // Include stock_levels with no location (legacy unassigned) so their quantity is not lost.
       stockLevelsQb.andWhere(
-        "(location.id IN (:...locationIds) OR locParent.id IN (:...locationIds) OR locGrandparent.id IN (:...locationIds))",
+        "(location.id IS NULL OR location.id IN (:...locationIds) OR locParent.id IN (:...locationIds) OR locGrandparent.id IN (:...locationIds))",
         { locationIds: effectiveLocationIds },
       );
     }
