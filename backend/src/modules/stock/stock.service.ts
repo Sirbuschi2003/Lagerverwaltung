@@ -1797,6 +1797,7 @@ export class StockService {
     if (params.type) qb.andWhere('movement.type = :type', { type: params.type });
     if (params.from) qb.andWhere('movement.occurredAt >= :from', { from: params.from });
     if (params.to) qb.andWhere('movement.occurredAt <= :to', { to: params.to });
+    qb.andWhere('movement.source NOT LIKE :importPattern', { importPattern: '%import%' });
     if (params.source) qb.andWhere('movement.source LIKE :source', { source: `%${params.source}%` });
 
     const limit = Math.min(params.limit || 50, 500);
@@ -1827,6 +1828,7 @@ export class StockService {
     if (params.type) summaryQb.andWhere('movement.type = :type', { type: params.type });
     if (params.from) summaryQb.andWhere('movement.occurredAt >= :from', { from: params.from });
     if (params.to) summaryQb.andWhere('movement.occurredAt <= :to', { to: params.to });
+    summaryQb.andWhere('movement.source NOT LIKE :importPattern', { importPattern: '%import%' });
 
     const raw = await summaryQb.groupBy('movement.type').getRawMany<MovementSummaryRow>();
     const summary = {

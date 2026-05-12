@@ -160,7 +160,7 @@ export class PurchasingController {
     const result = await this.purchasingService.getOrderPdf(id, req.user?.branchId);
     return new StreamableFile(result.buffer, {
       type: "application/pdf",
-      disposition: `attachment; filename="${result.filename}"`,
+      disposition: `inline; filename="${result.filename}"`,
     });
   }
 
