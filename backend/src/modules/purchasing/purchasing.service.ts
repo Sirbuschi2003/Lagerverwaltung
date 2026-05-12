@@ -1193,7 +1193,7 @@ export class PurchasingService {
   }
 
   private async buildOrderPdf(order: PurchaseOrder): Promise<Buffer> {
-    const template = await this.systemConfigService.getPurchaseOrderPdfTemplate();
+    const template = await this.systemConfigService.getPurchaseOrderPdfTemplate(order.branchId);
     const company = await this.systemConfigService.getCompanyConfig(order.branchId);
 
     const orderNumber = order.orderNumber ?? order.id;
