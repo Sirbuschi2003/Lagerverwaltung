@@ -11,9 +11,10 @@ import { ItemsController } from "./items.controller";
 import { ItemsService } from "./items.service";
 import { AccessControlModule } from "../access-control/access-control.module";
 import { LoggingModule } from "../logging/logging.module";
+import { LocationsModule } from "../locations/locations.module";
 
 @Module({
-  imports: [TypeOrmModule.forFeature([Item, ItemCode, StockLevel, StockMovement, Location, Supplier]), AccessControlModule, LoggingModule],
+  imports: [TypeOrmModule.forFeature([Item, ItemCode, StockLevel, StockMovement, Location, Supplier]), AccessControlModule, LoggingModule, LocationsModule],
   controllers: [ItemsController],
   providers: [ItemsService],
   exports: [ItemsService],

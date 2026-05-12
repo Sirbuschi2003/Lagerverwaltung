@@ -47,6 +47,7 @@ import {
 } from "@mui/icons-material";
 
 import {
+  fetchItems,
   fetchSlowMovers,
   fetchSlowMoverSettings,
   saveSlowMoverSettings,
@@ -61,7 +62,6 @@ import {
   type LocationDto,
 } from "../utils/api";
 import useAuthStore from "../store/useAuthStore";
-import useItemsStore from "../store/useItemsStore";
 
 // ── Datum-Helfer ──────────────────────────────────────────────────────────────
 
@@ -534,22 +534,21 @@ const MONTH_LABELS: Record<string, string> = {
 
 const ConsumptionTrendTab: React.FC<{ warehouseId?: string }> = ({ warehouseId }) => {
   const theme = useTheme();
-  const { items, loadItems } = useItemsStore();
 
   const [months, setMonths] = useState<6 | 12>(12);
   const [selectedItem, setSelectedItem] = useState<{ id: string; label: string } | null>(null);
   const [data, setData] = useState<ConsumptionTrendEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [itemOptions, setItemOptions] = useState<{ id: string; label: string }[]>([]);
 
+  // Artikel-Dropdown warehouse-gefiltert laden
   useEffect(() => {
-    if (items.length === 0) loadItems().catch(() => null);
-  }, [items.length, loadItems]);
-
-  const itemOptions = useMemo(
-    () => items.map((i) => ({ id: i.id, label: `${i.code} – ${i.description}` })),
-    [items],
-  );
+    fetchItems({ limit: 5000, warehouseId }).then((result) => {
+      setItemOptions(result.items.map((i) => ({ id: i.id, label: `${i.code} – ${i.description}` })));
+    }).catch(() => null);
+    setSelectedItem(null);
+  }, [warehouseId]);
 
   const load = useCallback(async (m: 6 | 12, itemId?: string) => {
     setLoading(true);

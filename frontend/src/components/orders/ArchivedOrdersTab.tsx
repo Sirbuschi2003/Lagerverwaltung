@@ -197,11 +197,12 @@ const ArchivedOrdersTab: React.FC = () => {
   const handleViewPdf = async (order: PurchaseOrderDto) => {
     try {
       const blob = await fetchPurchaseOrderPdf(order.id);
-      const url = window.URL.createObjectURL(blob);
-      const tab = window.open(url, "_blank");
-      // Blob-URL freigeben sobald der neue Tab geladen ist
-      if (tab) tab.addEventListener("load", () => window.URL.revokeObjectURL(url), { once: true });
-      else window.URL.revokeObjectURL(url);
+      // Expliziter MIME-Typ notwendig, sonst zeigt Firefox JSON-Fehler
+      const pdfBlob = new Blob([blob], { type: "application/pdf" });
+      const url = window.URL.createObjectURL(pdfBlob);
+      window.open(url, "_blank");
+      // URL nach genug Zeit freigeben (tab.addEventListener("load") funktioniert nicht cross-origin)
+      setTimeout(() => window.URL.revokeObjectURL(url), 30000);
     } catch (err: any) {
       alert(`PDF konnte nicht geöffnet werden: ${err?.response?.data?.message || err?.message || "Unbekannt"}`);
     }

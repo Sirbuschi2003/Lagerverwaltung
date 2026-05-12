@@ -3,6 +3,10 @@ import {
   Box,
   Button,
   Checkbox,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
   MenuItem,
   Paper,
   Typography,
@@ -29,6 +33,7 @@ import {
   TextField,
 } from '@mui/material';
 import BuildIcon from '@mui/icons-material/Build';
+import BackupIcon from '@mui/icons-material/Backup';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import ErrorIcon from '@mui/icons-material/Error';
 import DeleteSweepIcon from '@mui/icons-material/DeleteSweep';
@@ -39,6 +44,7 @@ import RefreshIcon from '@mui/icons-material/Refresh';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import ExpandLessIcon from '@mui/icons-material/ExpandLess';
 import ArticleIcon from '@mui/icons-material/Article';
+import WarningAmberIcon from '@mui/icons-material/WarningAmber';
 import {
   checkDatabaseMaintenance,
   fixDatabaseIssues,
@@ -61,6 +67,7 @@ import {
   type LocationDto,
   type WarehouseResetPreview,
 } from '../utils/api';
+import api from '../utils/api';
 import useAuthStore from '../store/useAuthStore';
 
 const RETENTION_YEARS = 10;
@@ -95,6 +102,10 @@ const AdminMaintenancePage = () => {
   const [waitingForRestart, setWaitingForRestart] = useState(false);
   const [waitingForCaddy, setWaitingForCaddy] = useState(false); // Caddy/Frontend noch nicht bereit
   const [updateError, setUpdateError] = useState<string | null>(null);
+  const [updateDialogOpen, setUpdateDialogOpen] = useState(false);
+  const [backupDownloaded, setBackupDownloaded] = useState(false);
+  const [backupDownloading, setBackupDownloading] = useState(false);
+  const [backupError, setBackupError] = useState<string | null>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const backendWentOfflineRef = useRef(false); // Ref statt State – vermeidet Stale-Closure in setInterval
   const forceReloadTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -336,22 +347,51 @@ const AdminMaintenancePage = () => {
     }
   };
 
-  const handleApplyUpdate = async () => {
-    if (!window.confirm(
-      'Update jetzt einspielen?\n\nDie Anwendung wird für ca. 30–60 Sekunden nicht erreichbar sein.'
-    )) return;
+  const handleOpenUpdateDialog = () => {
+    setBackupDownloaded(false);
+    setBackupError(null);
+    setUpdateDialogOpen(true);
+  };
 
+  const handleDownloadPreUpdateBackup = async () => {
+    setBackupDownloading(true);
+    setBackupError(null);
+    try {
+      const response = await api.get('/setup/backup', { responseType: 'json', timeout: 120000 });
+      const blob = new Blob([JSON.stringify(response.data, null, 2)], { type: 'application/json' });
+      const url = window.URL.createObjectURL(blob);
+      const now = new Date();
+      const ts = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}_${String(now.getHours()).padStart(2, '0')}${String(now.getMinutes()).padStart(2, '0')}`;
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `backup_pre_update_${ts}.json`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      window.URL.revokeObjectURL(url);
+      setBackupDownloaded(true);
+    } catch (err: any) {
+      setBackupError('Backup fehlgeschlagen: ' + (err?.response?.data?.message || err?.message || 'Unbekannt'));
+    } finally {
+      setBackupDownloading(false);
+    }
+  };
+
+  const handleConfirmUpdate = async () => {
+    setUpdateDialogOpen(false);
     setUpdateError(null);
     setUpdateStarting(true);
     try {
       await applyUpdate();
-      // Sofort pollen starten
       startPolling();
     } catch (err: any) {
       setUpdateError('Fehler beim Starten: ' + (err.response?.data?.message || err.message));
       setUpdateStarting(false);
     }
   };
+
+  // Compat alias (wird noch von Button onClick referenziert)
+  const handleApplyUpdate = handleOpenUpdateDialog;
 
   // DB-Wartung
   const checkForIssues = async () => {
@@ -1036,6 +1076,56 @@ const AdminMaintenancePage = () => {
           {warehouseResetError && <Alert severity="error" sx={{ mt: 2 }}>{warehouseResetError}</Alert>}
         </Paper>
       )}
+
+      {/* Update-Dialog mit Backup-Gate */}
+      <Dialog open={updateDialogOpen} onClose={() => !backupDownloading && setUpdateDialogOpen(false)} maxWidth="sm" fullWidth>
+        <DialogTitle sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+          <WarningAmberIcon color="warning" />
+          Update einspielen – Backup erforderlich
+        </DialogTitle>
+        <DialogContent>
+          <Alert severity="warning" sx={{ mb: 2 }}>
+            Vor dem Update muss ein Backup heruntergeladen werden. Ohne lokale Sicherungskopie kann bei einem fehlgeschlagenen Update kein Rollback durchgeführt werden.
+          </Alert>
+
+          {!backupDownloaded ? (
+            <Box>
+              <Typography variant="body2" sx={{ mb: 2 }}>
+                Klicke auf <strong>„Backup erstellen & herunterladen"</strong>, um eine vollständige Datensicherung zu erstellen. Der Download startet automatisch.
+              </Typography>
+              <Button
+                variant="outlined"
+                color="primary"
+                fullWidth
+                startIcon={backupDownloading ? <CircularProgress size={18} /> : <BackupIcon />}
+                onClick={handleDownloadPreUpdateBackup}
+                disabled={backupDownloading}
+              >
+                {backupDownloading ? 'Backup wird erstellt…' : 'Backup erstellen & herunterladen'}
+              </Button>
+              {backupError && <Alert severity="error" sx={{ mt: 1 }}>{backupError}</Alert>}
+            </Box>
+          ) : (
+            <Alert severity="success" icon={<CheckCircleIcon />}>
+              Backup wurde erfolgreich heruntergeladen. Das Update kann jetzt eingespielt werden.
+            </Alert>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setUpdateDialogOpen(false)} disabled={backupDownloading}>
+            Abbrechen
+          </Button>
+          <Button
+            variant="contained"
+            color="warning"
+            startIcon={<SystemUpdateAltIcon />}
+            onClick={handleConfirmUpdate}
+            disabled={!backupDownloaded}
+          >
+            Jetzt updaten auf v{updateStatus?.latestVersion}
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 };

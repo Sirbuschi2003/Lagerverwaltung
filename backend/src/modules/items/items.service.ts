@@ -15,6 +15,7 @@ import { StockLevel } from "../stock/entities/stock-level.entity";
 import { StockMovement } from "../stock/entities/stock-movement.entity";
 import { LoggingService } from "../logging/services/logging.service";
 import { LogCategory, LogLevel } from "../logging/entities/system-log.entity";
+import { LocationsService } from "../locations/locations.service";
 
 const sanitizeCodes = (codes: string[] | undefined): string[] => {
   if (!codes) {
@@ -115,9 +116,10 @@ export class ItemsService {
     private readonly suppliersRepository: Repository<Supplier>,
     private readonly loggingService: LoggingService,
     private readonly dataSource: DataSource,
+    private readonly locationsService: LocationsService,
   ) {}
 
-  async findAll(params?: { page?: number; limit?: number; search?: string; manufacturer?: string; productGroup?: string; branchId?: string | null; locationIds?: string[] }) {
+  async findAll(params?: { page?: number; limit?: number; search?: string; manufacturer?: string; productGroup?: string; branchId?: string | null; locationIds?: string[]; warehouseId?: string }) {
     try {
       const page = Math.max(1, Number(params?.page) || 1);
       // Offline-Sync übergibt limit=50000 explizit (PWA SyncPage), reguläre UI-Abfragen liegen ≤1000.
@@ -136,14 +138,19 @@ export class ItemsService {
         .addOrderBy("item.productGroup", "ASC")
         .addOrderBy("item.description", "ASC");
 
-      // Lager-Filterung: Benutzer mit Lager-Zuweisung sieht nur Artikel deren Lagerort
-      // direkt einem der zugewiesenen Lager entspricht, oder ein Kind/Enkelelement davon ist.
-      if (params?.locationIds?.length) {
+      // Lager-Filterung: warehouseId hat Priorität, löst alle Unter-Lagerorte auf.
+      // Sonst: locationIds aus JWT (Benutzer-Lager-Zuweisung).
+      // Sonst: nur branchId-Filter.
+      let effectiveLocationIds = params?.locationIds;
+      if (params?.warehouseId) {
+        effectiveLocationIds = await this.locationsService.getDescendantLocationIds(params.warehouseId, params.branchId);
+      }
+      if (effectiveLocationIds?.length) {
         qb.leftJoin("storageLocation.parent", "slParent")
           .leftJoin("slParent.parent", "slGrandparent")
           .andWhere(
             "(storageLocation.id IN (:...locationIds) OR slParent.id IN (:...locationIds) OR slGrandparent.id IN (:...locationIds))",
-            { locationIds: params.locationIds }
+            { locationIds: effectiveLocationIds }
           );
       } else if (params?.branchId) {
         qb.andWhere("item.branchId = :branchId", { branchId: params.branchId });

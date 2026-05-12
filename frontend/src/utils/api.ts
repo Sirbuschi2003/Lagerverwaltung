@@ -325,6 +325,7 @@ export const fetchItems = async (params?: {
   search?: string;
   manufacturer?: string;
   productGroup?: string;
+  warehouseId?: string;
 }): Promise<ItemListResponse> => {
   const response = await api.get<ItemListResponse>("/items", { params });
   return response.data;

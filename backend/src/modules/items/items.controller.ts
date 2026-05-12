@@ -54,6 +54,7 @@ export class ItemsController {
     @Query("search") search?: string,
     @Query("manufacturer") manufacturer?: string,
     @Query("productGroup") productGroup?: string,
+    @Query("warehouseId") warehouseId?: string,
   ) {
     try {
       // Validiere Parameter
@@ -64,7 +65,7 @@ export class ItemsController {
         throw new BadRequestException('Parameter "limit" muss eine gültige Zahl sein');
       }
 
-      this.logger.debug(`Items Anfrage: page=${page}, limit=${limit}, search=${search}, manufacturer=${manufacturer}, productGroup=${productGroup}`);
+      this.logger.debug(`Items Anfrage: page=${page}, limit=${limit}, search=${search}, manufacturer=${manufacturer}, productGroup=${productGroup}, warehouseId=${warehouseId}`);
 
       const result = await this.itemsService.findAll({
         page: page ? parseInt(page, 10) : undefined,
@@ -74,6 +75,7 @@ export class ItemsController {
         productGroup,
         branchId: req.user?.branchId,
         locationIds: req.user?.locationIds,
+        warehouseId,
       });
 
       return {
