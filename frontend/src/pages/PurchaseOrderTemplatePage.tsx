@@ -3,8 +3,10 @@ import {
   Alert,
   Box,
   Button,
+  Checkbox,
   CircularProgress,
   Divider,
+  FormControlLabel,
   Grid,
   MenuItem,
   Paper,
@@ -98,6 +100,59 @@ const ELEMENT_LABELS = new Map(
   ELEMENT_PALETTE.map((item) => [item.type, item.label]),
 );
 
+type FieldDef = { key: string; label: string };
+
+const ELEMENT_FIELDS: Partial<Record<string, FieldDef[]>> = {
+  companyDetails: [
+    { key: "addressLine1", label: "Adresszeile 1" },
+    { key: "addressLine2", label: "Adresszeile 2" },
+    { key: "cityLine", label: "PLZ + Stadt" },
+    { key: "country", label: "Land" },
+    { key: "phone", label: "Telefon" },
+    { key: "email", label: "E-Mail" },
+  ],
+  orderMeta: [
+    { key: "orderNumber", label: "Bestellnummer" },
+    { key: "orderDate", label: "Datum" },
+  ],
+  supplierBlock: [
+    { key: "name", label: "Name" },
+    { key: "addressLine1", label: "Adresszeile 1" },
+    { key: "addressLine2", label: "Adresszeile 2" },
+    { key: "cityLine", label: "PLZ + Stadt" },
+    { key: "country", label: "Land" },
+    { key: "contactName", label: "Kontakt" },
+    { key: "email", label: "E-Mail" },
+    { key: "phone", label: "Telefon" },
+    { key: "customerNumber", label: "Kundennummer" },
+  ],
+  linesTable: [
+    { key: "pos", label: "Pos" },
+    { key: "itemCode", label: "Artikelnr." },
+    { key: "description", label: "Beschreibung" },
+    { key: "quantity", label: "Menge" },
+    { key: "packSize", label: "VE (Verpackungseinheit)" },
+    { key: "received", label: "Geliefert" },
+    { key: "remaining", label: "Offen" },
+  ],
+  totalsBlock: [
+    { key: "totalQuantity", label: "Gesamtmenge" },
+    { key: "totalReceived", label: "Geliefert" },
+    { key: "totalRemaining", label: "Offen" },
+  ],
+};
+
+const getDefaultFields = (type: string): Record<string, boolean> => {
+  const defs = ELEMENT_FIELDS[type];
+  if (!defs) return {};
+  return Object.fromEntries(defs.map((f) => [f.key, true]));
+};
+
+const isFieldVisible = (element: PurchaseOrderDesignerElement, key: string): boolean => {
+  if (!element.fields) return true;
+  return element.fields[key] !== false;
+};
+
 const createElement = (type: PurchaseOrderDesignerElement["type"]): PurchaseOrderDesignerElement => {
   const base: PurchaseOrderDesignerElement = {
     id: `${type}-${Date.now()}-${Math.random().toString(16).slice(2, 8)}`,
@@ -108,6 +163,7 @@ const createElement = (type: PurchaseOrderDesignerElement["type"]): PurchaseOrde
     h: 60,
     fontSize: 10,
     align: "left",
+    fields: getDefaultFields(type),
   };
 
   switch (type) {
@@ -146,20 +202,22 @@ const renderElementPreview = (element: PurchaseOrderDesignerElement) => {
     whiteSpace: "pre-wrap",
   };
 
+  const fv = (key: string) => isFieldVisible(element, key);
+
   switch (element.type) {
     case "companyName":
       return <div style={{ ...textStyle, fontWeight: 600 }}>{SAMPLE_DATA.companyName}</div>;
     case "companyDetails":
       return (
         <div style={textStyle}>
-          <div>{SAMPLE_DATA.companyAddressLine1}</div>
-          <div>{SAMPLE_DATA.companyAddressLine2}</div>
-          <div>
-            {SAMPLE_DATA.companyPostalCode} {SAMPLE_DATA.companyCity}
-          </div>
-          <div>{SAMPLE_DATA.companyCountry}</div>
-          <div>Telefon: {SAMPLE_DATA.companyPhone}</div>
-          <div>E-Mail: {SAMPLE_DATA.companyEmail}</div>
+          {fv("addressLine1") && <div>{SAMPLE_DATA.companyAddressLine1}</div>}
+          {fv("addressLine2") && <div>{SAMPLE_DATA.companyAddressLine2}</div>}
+          {fv("cityLine") && (
+            <div>{SAMPLE_DATA.companyPostalCode} {SAMPLE_DATA.companyCity}</div>
+          )}
+          {fv("country") && <div>{SAMPLE_DATA.companyCountry}</div>}
+          {fv("phone") && <div>Telefon: {SAMPLE_DATA.companyPhone}</div>}
+          {fv("email") && <div>E-Mail: {SAMPLE_DATA.companyEmail}</div>}
         </div>
       );
     case "companyLogo":
@@ -174,56 +232,69 @@ const renderElementPreview = (element: PurchaseOrderDesignerElement) => {
     case "orderMeta":
       return (
         <div style={textStyle}>
-          <div>Bestellnr.: {SAMPLE_DATA.orderNumber}</div>
-          <div>Datum: {SAMPLE_DATA.orderDate}</div>
-          <div>Status: {SAMPLE_DATA.orderStatus}</div>
+          {fv("orderNumber") && <div>Bestellnr.: {SAMPLE_DATA.orderNumber}</div>}
+          {fv("orderDate") && <div>Datum: {SAMPLE_DATA.orderDate}</div>}
         </div>
       );
     case "supplierBlock":
       return (
         <div style={textStyle}>
-          <div style={{ fontWeight: 600 }}>{SAMPLE_DATA.supplierName}</div>
-          <div>{SAMPLE_DATA.supplierAddressLine1}</div>
-          <div>{SAMPLE_DATA.supplierAddressLine2}</div>
-          <div>
-            {SAMPLE_DATA.supplierPostalCode} {SAMPLE_DATA.supplierCity}
-          </div>
-          <div>{SAMPLE_DATA.supplierCountry}</div>
-          <div>Kontakt: {SAMPLE_DATA.supplierContactName}</div>
-          <div>E-Mail: {SAMPLE_DATA.supplierEmail}</div>
-          <div>Telefon: {SAMPLE_DATA.supplierPhone}</div>
-          <div>Kundennr.: {SAMPLE_DATA.supplierCustomerNumber}</div>
+          {fv("name") && <div style={{ fontWeight: 600 }}>{SAMPLE_DATA.supplierName}</div>}
+          {fv("addressLine1") && <div>{SAMPLE_DATA.supplierAddressLine1}</div>}
+          {fv("addressLine2") && <div>{SAMPLE_DATA.supplierAddressLine2}</div>}
+          {fv("cityLine") && (
+            <div>{SAMPLE_DATA.supplierPostalCode} {SAMPLE_DATA.supplierCity}</div>
+          )}
+          {fv("country") && <div>{SAMPLE_DATA.supplierCountry}</div>}
+          {fv("contactName") && <div>Kontakt: {SAMPLE_DATA.supplierContactName}</div>}
+          {fv("email") && <div>E-Mail: {SAMPLE_DATA.supplierEmail}</div>}
+          {fv("phone") && <div>Telefon: {SAMPLE_DATA.supplierPhone}</div>}
+          {fv("customerNumber") && <div>Kundennr.: {SAMPLE_DATA.supplierCustomerNumber}</div>}
         </div>
       );
-    case "linesTable":
+    case "linesTable": {
+      const showPos = fv("pos");
+      const showCode = fv("itemCode");
+      const showDesc = fv("description");
+      const showQty = fv("quantity");
+      const showPack = fv("packSize");
+      const showRecv = fv("received");
+      const showRem = fv("remaining");
       return (
         <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 9 }}>
           <thead>
             <tr>
-              <th style={{ textAlign: "left", borderBottom: "1px solid #ccc" }}>Artikel</th>
-              <th style={{ textAlign: "right", borderBottom: "1px solid #ccc" }}>Menge</th>
-              <th style={{ textAlign: "right", borderBottom: "1px solid #ccc" }}>Offen</th>
+              {showPos && <th style={{ textAlign: "left", borderBottom: "1px solid #ccc" }}>Pos</th>}
+              {showCode && <th style={{ textAlign: "left", borderBottom: "1px solid #ccc" }}>Artikel</th>}
+              {showDesc && <th style={{ textAlign: "left", borderBottom: "1px solid #ccc" }}>Beschreibung</th>}
+              {showQty && <th style={{ textAlign: "right", borderBottom: "1px solid #ccc" }}>Menge</th>}
+              {showPack && <th style={{ textAlign: "right", borderBottom: "1px solid #ccc" }}>VE</th>}
+              {showRecv && <th style={{ textAlign: "right", borderBottom: "1px solid #ccc" }}>Geliefert</th>}
+              {showRem && <th style={{ textAlign: "right", borderBottom: "1px solid #ccc" }}>Offen</th>}
             </tr>
           </thead>
           <tbody>
             {SAMPLE_DATA.lines.map((line) => (
               <tr key={line.lineIndex}>
-                <td style={{ borderBottom: "1px solid #eee" }}>
-                  {line.itemCode} {line.itemDescription}
-                </td>
-                <td style={{ textAlign: "right", borderBottom: "1px solid #eee" }}>{line.quantity}</td>
-                <td style={{ textAlign: "right", borderBottom: "1px solid #eee" }}>{line.remainingQuantity}</td>
+                {showPos && <td style={{ borderBottom: "1px solid #eee" }}>{line.lineIndex}</td>}
+                {showCode && <td style={{ borderBottom: "1px solid #eee" }}>{line.itemCode}</td>}
+                {showDesc && <td style={{ borderBottom: "1px solid #eee" }}>{line.itemDescription}</td>}
+                {showQty && <td style={{ textAlign: "right", borderBottom: "1px solid #eee" }}>{line.quantity}</td>}
+                {showPack && <td style={{ textAlign: "right", borderBottom: "1px solid #eee" }}>{line.packSize || "-"}</td>}
+                {showRecv && <td style={{ textAlign: "right", borderBottom: "1px solid #eee" }}>{line.receivedQuantity}</td>}
+                {showRem && <td style={{ textAlign: "right", borderBottom: "1px solid #eee" }}>{line.remainingQuantity}</td>}
               </tr>
             ))}
           </tbody>
         </table>
       );
+    }
     case "totalsBlock":
       return (
         <div style={textStyle}>
-          <div>Gesamt: {SAMPLE_DATA.totalQuantity}</div>
-          <div>Geliefert: {SAMPLE_DATA.totalReceived}</div>
-          <div>Offen: {SAMPLE_DATA.totalRemaining}</div>
+          {fv("totalQuantity") && <div>Gesamtmenge: {SAMPLE_DATA.totalQuantity}</div>}
+          {fv("totalReceived") && <div>Geliefert: {SAMPLE_DATA.totalReceived}</div>}
+          {fv("totalRemaining") && <div>Offen: {SAMPLE_DATA.totalRemaining}</div>}
         </div>
       );
     case "noteBlock":
@@ -307,84 +378,70 @@ body {
 
       const wrap = (inner: string) => `<div class="${baseClass}" style="${styleParts}">${inner}</div>`;
 
+      const ef = (key: string) => isFieldVisible(element, key);
+
       switch (element.type) {
         case "companyName":
           return wrap(`<div style="font-weight:600;">{{companyName}}</div>`);
         case "companyDetails":
-          return wrap(`
-            {{#companyAddressLine1}}<div>{{companyAddressLine1}}</div>{{/companyAddressLine1}}
-            {{#companyAddressLine2}}<div>{{companyAddressLine2}}</div>{{/companyAddressLine2}}
-            {{#companyCityLine}}<div>{{companyCityLine}}</div>{{/companyCityLine}}
-            {{#companyCountry}}<div>{{companyCountry}}</div>{{/companyCountry}}
-            {{#companyPhone}}<div>Telefon: {{companyPhone}}</div>{{/companyPhone}}
-            {{#companyEmail}}<div>E-Mail: {{companyEmail}}</div>{{/companyEmail}}
-          `);
+          return wrap([
+            ef("addressLine1") ? `{{#companyAddressLine1}}<div>{{companyAddressLine1}}</div>{{/companyAddressLine1}}` : "",
+            ef("addressLine2") ? `{{#companyAddressLine2}}<div>{{companyAddressLine2}}</div>{{/companyAddressLine2}}` : "",
+            ef("cityLine") ? `{{#companyCityLine}}<div>{{companyCityLine}}</div>{{/companyCityLine}}` : "",
+            ef("country") ? `{{#companyCountry}}<div>{{companyCountry}}</div>{{/companyCountry}}` : "",
+            ef("phone") ? `{{#companyPhone}}<div>Telefon: {{companyPhone}}</div>{{/companyPhone}}` : "",
+            ef("email") ? `{{#companyEmail}}<div>E-Mail: {{companyEmail}}</div>{{/companyEmail}}` : "",
+          ].filter(Boolean).join("\n"));
         case "companyLogo":
           return wrap(`{{#companyLogo}}<img src="{{companyLogo}}" alt="Logo" />{{/companyLogo}}`);
         case "orderMeta":
-          return wrap(`
-            <div>Bestellnr.: {{orderNumber}}</div>
-            <div>Datum: {{orderDate}}</div>
-            <div>Status: {{orderStatus}}</div>
-          `);
+          return wrap([
+            ef("orderNumber") ? `<div>Bestellnr.: {{orderNumber}}</div>` : "",
+            ef("orderDate") ? `<div>Datum: {{orderDate}}</div>` : "",
+          ].filter(Boolean).join("\n"));
         case "supplierBlock":
-          return wrap(`
-            <div style="font-weight:600;">{{supplierName}}</div>
-            {{#supplierAddressLine1}}<div>{{supplierAddressLine1}}</div>{{/supplierAddressLine1}}
-            {{#supplierAddressLine2}}<div>{{supplierAddressLine2}}</div>{{/supplierAddressLine2}}
-            {{#supplierCity}}<div>{{supplierPostalCode}} {{supplierCity}}</div>{{/supplierCity}}
-            {{#supplierCountry}}<div>{{supplierCountry}}</div>{{/supplierCountry}}
-            {{#supplierContactName}}<div>Kontakt: {{supplierContactName}}</div>{{/supplierContactName}}
-            {{#supplierEmail}}<div>E-Mail: {{supplierEmail}}</div>{{/supplierEmail}}
-            {{#supplierPhone}}<div>Telefon: {{supplierPhone}}</div>{{/supplierPhone}}
-            {{#supplierCustomerNumber}}<div>Kundennr.: {{supplierCustomerNumber}}</div>{{/supplierCustomerNumber}}
-          `);
-        case "linesTable":
-          return wrap(`
-            <table>
-              <thead>
-                <tr>
-                  <th>Pos</th>
-                  <th>Artikel</th>
-                  <th>Beschreibung</th>
-                  <th style="text-align:right;">Menge</th>
-                  <th style="text-align:right;">VE</th>
-                  <th style="text-align:right;">Geliefert</th>
-                  <th style="text-align:right;">Offen</th>
-                </tr>
-              </thead>
-              <tbody>
-                {{#lines}}
-                <tr>
-                  <td>{{lineIndex}}</td>
-                  <td>{{itemCode}}</td>
-                  <td>{{itemDescription}}</td>
-                  <td style="text-align:right;">{{quantity}}</td>
-                  <td style="text-align:right;">{{#packSize}}{{packSize}}{{/packSize}}{{^packSize}}-{{/packSize}}</td>
-                  <td style="text-align:right;">{{receivedQuantity}}</td>
-                  <td style="text-align:right;">{{remainingQuantity}}</td>
-                </tr>
-                {{/lines}}
-              </tbody>
-            </table>
-          `);
+          return wrap([
+            ef("name") ? `<div style="font-weight:600;">{{supplierName}}</div>` : "",
+            ef("addressLine1") ? `{{#supplierAddressLine1}}<div>{{supplierAddressLine1}}</div>{{/supplierAddressLine1}}` : "",
+            ef("addressLine2") ? `{{#supplierAddressLine2}}<div>{{supplierAddressLine2}}</div>{{/supplierAddressLine2}}` : "",
+            ef("cityLine") ? `{{#supplierCity}}<div>{{supplierPostalCode}} {{supplierCity}}</div>{{/supplierCity}}` : "",
+            ef("country") ? `{{#supplierCountry}}<div>{{supplierCountry}}</div>{{/supplierCountry}}` : "",
+            ef("contactName") ? `{{#supplierContactName}}<div>Kontakt: {{supplierContactName}}</div>{{/supplierContactName}}` : "",
+            ef("email") ? `{{#supplierEmail}}<div>E-Mail: {{supplierEmail}}</div>{{/supplierEmail}}` : "",
+            ef("phone") ? `{{#supplierPhone}}<div>Telefon: {{supplierPhone}}</div>{{/supplierPhone}}` : "",
+            ef("customerNumber") ? `{{#supplierCustomerNumber}}<div>Kundennr.: {{supplierCustomerNumber}}</div>{{/supplierCustomerNumber}}` : "",
+          ].filter(Boolean).join("\n"));
+        case "linesTable": {
+          const headers = [
+            ef("pos") ? `<th>Pos</th>` : "",
+            ef("itemCode") ? `<th>Artikel</th>` : "",
+            ef("description") ? `<th>Beschreibung</th>` : "",
+            ef("quantity") ? `<th style="text-align:right;">Menge</th>` : "",
+            ef("packSize") ? `<th style="text-align:right;">VE</th>` : "",
+            ef("received") ? `<th style="text-align:right;">Geliefert</th>` : "",
+            ef("remaining") ? `<th style="text-align:right;">Offen</th>` : "",
+          ].filter(Boolean).join("");
+          const cells = [
+            ef("pos") ? `<td>{{lineIndex}}</td>` : "",
+            ef("itemCode") ? `<td>{{itemCode}}</td>` : "",
+            ef("description") ? `<td>{{itemDescription}}</td>` : "",
+            ef("quantity") ? `<td style="text-align:right;">{{quantity}}</td>` : "",
+            ef("packSize") ? `<td style="text-align:right;">{{#packSize}}{{packSize}}{{/packSize}}{{^packSize}}-{{/packSize}}</td>` : "",
+            ef("received") ? `<td style="text-align:right;">{{receivedQuantity}}</td>` : "",
+            ef("remaining") ? `<td style="text-align:right;">{{remainingQuantity}}</td>` : "",
+          ].filter(Boolean).join("");
+          return wrap(`<table><thead><tr>${headers}</tr></thead><tbody>{{#lines}}<tr>${cells}</tr>{{/lines}}</tbody></table>`);
+        }
         case "totalsBlock":
-          return wrap(`
-            <div>Gesamtmenge: {{totalQuantity}}</div>
-            <div>Geliefert: {{totalReceived}}</div>
-            <div>Offen: {{totalRemaining}}</div>
-          `);
+          return wrap([
+            ef("totalQuantity") ? `<div>Gesamtmenge: {{totalQuantity}}</div>` : "",
+            ef("totalReceived") ? `<div>Geliefert: {{totalReceived}}</div>` : "",
+            ef("totalRemaining") ? `<div>Offen: {{totalRemaining}}</div>` : "",
+          ].filter(Boolean).join("\n"));
         case "noteBlock":
-          return wrap(`
-            {{#note}}
-            <div style="font-weight:600;">Notiz</div>
-            <div>{{note}}</div>
-            {{/note}}
-          `);
+          return wrap(`{{#note}}<div style="font-weight:600;">Notiz</div><div>{{note}}</div>{{/note}}`);
         case "footerBlock":
-          return wrap(`
-            {{companyName}} · {{companyAddressLine1}} · {{companyPostalCode}} {{companyCity}} · Telefon: {{companyPhone}} · {{companyEmail}}
-          `);
+          return wrap(`{{companyName}} · {{companyAddressLine1}} · {{companyPostalCode}} {{companyCity}} · Telefon: {{companyPhone}} · {{companyEmail}}`);
         case "customText": {
           const content = escapeHtml(element.content ?? "").replace(/\n/g, "<br />");
           return wrap(`<div>${content}</div>`);
@@ -754,6 +811,40 @@ const PurchaseOrderTemplatePage: React.FC = () => {
                       }))
                     }
                   />
+                )}
+                {ELEMENT_FIELDS[selectedElement.type] && (
+                  <>
+                    <Divider />
+                    <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600 }}>
+                      Felder anzeigen
+                    </Typography>
+                    {ELEMENT_FIELDS[selectedElement.type]!.map((fieldDef) => {
+                      const checked = isFieldVisible(selectedElement, fieldDef.key);
+                      return (
+                        <FormControlLabel
+                          key={fieldDef.key}
+                          control={
+                            <Checkbox
+                              size="small"
+                              checked={checked}
+                              onChange={(e) =>
+                                updateElement(selectedElement.id, (el) => ({
+                                  ...el,
+                                  fields: {
+                                    ...getDefaultFields(el.type),
+                                    ...el.fields,
+                                    [fieldDef.key]: e.target.checked,
+                                  },
+                                }))
+                              }
+                            />
+                          }
+                          label={<Typography variant="body2">{fieldDef.label}</Typography>}
+                          sx={{ m: 0 }}
+                        />
+                      );
+                    })}
+                  </>
                 )}
                 <Button
                   variant="outlined"

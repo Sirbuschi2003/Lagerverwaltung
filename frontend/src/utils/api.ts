@@ -1661,6 +1661,7 @@ export interface PurchaseOrderDesignerElement {
   fontSize?: number;
   align?: "left" | "center" | "right";
   content?: string;
+  fields?: Record<string, boolean>;
 }
 
 export interface PurchaseOrderDesignerConfig {
