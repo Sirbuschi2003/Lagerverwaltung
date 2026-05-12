@@ -84,6 +84,27 @@ export class SetupService {
     return users.length === 0;
   }
 
+  /**
+   * Erstellt ein vollständiges Backup und speichert es als pre-migration Datei.
+   * Gibt den Dateipfad zurück, null bei Fehler.
+   */
+  async createPreMigrationBackup(): Promise<string | null> {
+    try {
+      this.logger.log('Erstelle Pre-Migration-Backup...');
+      const backup = await this.createBackup();
+      const backupDir = this.ensureBackupDir();
+      const timestamp = new Date().toISOString().replace(/:/g, '-').slice(0, 19);
+      const filename = `pre-migration-${timestamp}.json`;
+      const filepath = path.join(backupDir, filename);
+      fs.writeFileSync(filepath, JSON.stringify(backup, null, 2));
+      this.logger.log(`Pre-Migration-Backup gespeichert: ${filepath}`);
+      return filepath;
+    } catch (error) {
+      this.logger.error('Pre-Migration-Backup fehlgeschlagen:', error);
+      return null;
+    }
+  }
+
   async createBackup(): Promise<any> {
     const [
       users,

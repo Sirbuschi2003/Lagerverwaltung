@@ -40,7 +40,7 @@ export class DatabaseConfigService implements TypeOrmOptionsFactory {
       database: database.name,
       autoLoadEntities: true,
       synchronize: database.synchronize ?? false,
-      migrationsRun: database.migrationsRun ?? true,
+      migrationsRun: false, // Migrationen werden manuell in main.ts nach Pre-Migration-Backup ausgeführt
       migrations: ["dist/migrations/*.js"],
       charset: "utf8mb4",
       logging: ["error", "warn"],

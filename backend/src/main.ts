@@ -5,12 +5,69 @@ import helmet from "helmet";
 import { Logger, ValidationPipe } from "@nestjs/common";
 import { NestFactory } from "@nestjs/core";
 import { NextFunction, Request, Response } from "express";
+import { DataSource } from "typeorm";
 
 import { AppModule } from "./app.module";
+import { SetupService } from "./modules/setup/setup.service";
+
+async function runMigrationsWithBackup(app: Awaited<ReturnType<typeof NestFactory.create>>): Promise<void> {
+  const logger = new Logger("MigrationBootstrap");
+  const dataSource = app.get(DataSource);
+
+  let hasPending = false;
+  try {
+    hasPending = await dataSource.showMigrations();
+  } catch {
+    logger.warn("Konnte ausstehende Migrationen nicht prüfen – führe trotzdem aus.");
+    hasPending = true;
+  }
+
+  if (!hasPending) {
+    logger.log("Keine ausstehenden Migrationen.");
+    return;
+  }
+
+  // Nur auf bestehenden Installationen sichern (Migrations-Tabelle vorhanden + befüllt)
+  let isExistingInstallation = false;
+  try {
+    const rows: Array<{ cnt: string }> = await dataSource.query(
+      "SELECT COUNT(*) AS cnt FROM migrations"
+    );
+    isExistingInstallation = Number(rows[0]?.cnt ?? 0) > 0;
+  } catch {
+    // Migrations-Tabelle existiert noch nicht → Erstinstallation
+  }
+
+  if (isExistingInstallation) {
+    logger.log("Ausstehende Migrationen auf bestehender Installation erkannt – erstelle Pre-Migration-Backup...");
+    try {
+      const setupService = app.get(SetupService);
+      const backupPath = await setupService.createPreMigrationBackup();
+      if (backupPath) {
+        logger.log(`Pre-Migration-Backup erfolgreich: ${backupPath}`);
+      } else {
+        logger.warn("Pre-Migration-Backup fehlgeschlagen – Migrationen werden trotzdem ausgeführt!");
+      }
+    } catch (backupErr) {
+      logger.error("Pre-Migration-Backup Fehler – Migrationen werden trotzdem ausgeführt:", backupErr);
+    }
+  }
+
+  logger.log("Starte Datenbankmigrationen...");
+  try {
+    await dataSource.runMigrations();
+    logger.log("Datenbankmigrationen erfolgreich abgeschlossen.");
+  } catch (migrationErr) {
+    logger.error("KRITISCH: Datenbankmigrationen fehlgeschlagen!", migrationErr);
+    logger.error("Die Anwendung startet trotzdem – bitte Backup zurückspielen und Migrationen prüfen.");
+  }
+}
 
 async function bootstrap() {
   const requestLogger = new Logger("HTTP");
   const app = await NestFactory.create(AppModule);
+
+  await runMigrationsWithBackup(app);
 
   // Sicherheits-Header (OWASP-Empfehlungen)
   app.use(helmet({
