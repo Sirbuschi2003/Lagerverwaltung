@@ -711,7 +711,7 @@ const GoodsReceiptTab: React.FC = () => {
           <Button onClick={handleCloseReceiptDialog}>Abbrechen</Button>
           <Button
             variant="contained"
-            onClick={handleReceiveOrder}
+            onClick={() => void handleReceiveOrder()}
             disabled={receiving || !hasPlannedReceipt}
             startIcon={receiving ? <CircularProgress size={18} /> : <CheckIcon />}
           >
