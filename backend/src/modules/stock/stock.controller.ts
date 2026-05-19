@@ -46,11 +46,6 @@ export class StockController {
     return this.stockService.findDashboardSnapshot(req.user);
   }
 
-  @Get("dashboard/below-target")
-  getBelowTargetItems(@Req() req: StockRequest) {
-    return this.stockService.findBelowTargetItems(req.user);
-  }
-
   @Get("movements")
   findMovements(@Req() req: StockRequest, @Query("limit") limit?: string) {
     const parsed = limit ? Number(limit) : undefined;

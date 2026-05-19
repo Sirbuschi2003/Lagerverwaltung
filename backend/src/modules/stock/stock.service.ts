@@ -205,16 +205,9 @@ export class StockService {
     return qb;
   }
 
-  private static readonly BELOW_TARGET_CONDITION =
-    "(sl.targetQuantity > 0 AND sl.quantity < sl.targetQuantity) OR " +
-    "(sl.vehicleId IS NULL AND item.minimumStock > 0 AND sl.quantity < item.minimumStock)";
-
   async findDashboardSnapshot(user?: { role?: string; vehicleId?: string | null; branchId?: string | null; locationIds?: string[] }) {
     try {
-      const [belowTarget, totalItems, openInventorySessions] = await Promise.all([
-        this.buildScopedStockLevelQuery(user)
-          .andWhere(StockService.BELOW_TARGET_CONDITION)
-          .getCount(),
+      const [totalItems, openInventorySessions] = await Promise.all([
         this.itemsService.countItems(user?.branchId, user?.locationIds),
         this.inventorySessionRepository.count({
           where: [
@@ -224,47 +217,9 @@ export class StockService {
         }),
       ]);
 
-      return { totalItems, belowTarget, openInventorySessions };
+      return { totalItems, openInventorySessions };
     } catch (error) {
       this.logger.error("Fehler beim Laden des Dashboard-Snapshots:", error);
-      throw error;
-    }
-  }
-
-  async findBelowTargetItems(user?: { role?: string; vehicleId?: string | null; branchId?: string | null; locationIds?: string[] }) {
-    try {
-      const belowLevels = await this.buildScopedStockLevelQuery(user)
-        .andWhere(StockService.BELOW_TARGET_CONDITION)
-        .getMany();
-
-      return belowLevels.map((level) => {
-        const isWarehouse = !level.vehicle;
-        const minStock = isWarehouse ? (level.item.minimumStock ?? 0) : 0;
-        const shortage = Math.max(0, level.targetQuantity - level.quantity, minStock - level.quantity);
-        const effectiveTarget = level.targetQuantity > 0
-          ? Math.max(level.targetQuantity, minStock)
-          : minStock || level.targetQuantity;
-        const drivenByMinStock = isWarehouse && minStock > 0 && (minStock - level.quantity) >= (level.targetQuantity - level.quantity);
-        return {
-          stockLevelId: level.id,
-          itemId: level.item.id,
-          itemCode: level.item.code,
-          itemDescription: level.item.description,
-          locationLabel: level.vehicle
-            ? (level.vehicle.licensePlate || level.vehicle.id)
-            : level.location
-              ? level.location.name
-              : "Lager",
-          quantity: level.quantity,
-          targetQuantity: level.targetQuantity,
-          minimumStock: level.item.minimumStock ?? null,
-          effectiveTarget,
-          drivenByMinStock,
-          shortage,
-        };
-      });
-    } catch (error) {
-      this.logger.error("Fehler beim Laden der Unterbestand-Artikel:", error);
       throw error;
     }
   }

@@ -3,7 +3,6 @@ import api from "../utils/api";
 
 interface DashboardSummary {
   totalItems: number;
-  belowTarget: number;
   openInventorySessions: number;
 }
 
@@ -16,7 +15,6 @@ const CACHE_KEY = "lv-dashboard-summary";
 
 const defaultSummary: DashboardSummary = {
   totalItems: 0,
-  belowTarget: 0,
   openInventorySessions: 0,
 };
 

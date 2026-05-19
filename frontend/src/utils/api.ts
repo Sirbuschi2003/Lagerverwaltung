@@ -1001,24 +1001,6 @@ export const downloadPurchaseOrderDocument = async (
   return response.data;
 };
 
-export interface BelowTargetItemDto {
-  stockLevelId: string;
-  itemId: string;
-  itemCode: string;
-  itemDescription: string;
-  locationLabel: string;
-  quantity: number;
-  targetQuantity: number;
-  minimumStock: number | null;
-  effectiveTarget: number;
-  drivenByMinStock: boolean;
-  shortage: number;
-}
-
-export const fetchBelowTargetItems = async (): Promise<BelowTargetItemDto[]> => {
-  const response = await api.get<BelowTargetItemDto[]>("/stock/dashboard/below-target");
-  return response.data;
-};
 
 export const fetchFleetStock = async (params?: { vehicleId?: string; search?: string }): Promise<FleetVehicleStockDto[]> => {
   const response = await api.get<FleetVehicleStockDto[]>("/stock/fleet", { params });
