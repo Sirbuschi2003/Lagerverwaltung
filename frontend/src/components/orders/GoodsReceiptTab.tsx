@@ -155,6 +155,7 @@ const GoodsReceiptTab: React.FC = () => {
   const [scanFeedback, setScanFeedback] = useState<string | null>(null);
   const barcodeInputRef = useRef<HTMLInputElement | null>(null);
   const [itemDialogId, setItemDialogId] = useState<string | null>(null);
+  const [confirmWithoutNoteOpen, setConfirmWithoutNoteOpen] = useState(false);
 
   const focusBarcodeInput = () => {
     window.setTimeout(() => {
@@ -370,8 +371,13 @@ const GoodsReceiptTab: React.FC = () => {
     focusBarcodeInput();
   };
 
-  const handleReceiveOrder = async () => {
+  const handleReceiveOrder = async (skipNoteCheck = false) => {
     if (!selectedOrder) return;
+
+    if (!skipNoteCheck && !deliveryNoteNumber.trim()) {
+      setConfirmWithoutNoteOpen(true);
+      return;
+    }
 
     setReceiving(true);
     setError(null);
@@ -710,6 +716,52 @@ const GoodsReceiptTab: React.FC = () => {
             startIcon={receiving ? <CircularProgress size={18} /> : <CheckIcon />}
           >
             {receiving ? "Verarbeite..." : "Wareneingang buchen"}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog open={confirmWithoutNoteOpen} onClose={() => setConfirmWithoutNoteOpen(false)} maxWidth="xs" fullWidth>
+        <DialogTitle>Keine Lieferscheinnummer</DialogTitle>
+        <DialogContent>
+          <Typography sx={{ mb: 2 }}>
+            Es wurde keine Lieferscheinnummer eingegeben. Du kannst sie hier noch nachtragen oder ohne buchen.
+          </Typography>
+          <TextField
+            label="Lieferschein-Nr."
+            value={deliveryNoteNumber}
+            onChange={(e) => setDeliveryNoteNumber(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && deliveryNoteNumber.trim()) {
+                setConfirmWithoutNoteOpen(false);
+                void handleReceiveOrder(true);
+              }
+            }}
+            size="small"
+            fullWidth
+            autoFocus
+            inputProps={{ maxLength: 128 }}
+            autoComplete="off"
+          />
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setConfirmWithoutNoteOpen(false)}>Zurück</Button>
+          <Button
+            onClick={() => {
+              setConfirmWithoutNoteOpen(false);
+              void handleReceiveOrder(true);
+            }}
+          >
+            Ohne Nummer buchen
+          </Button>
+          <Button
+            variant="contained"
+            disabled={!deliveryNoteNumber.trim()}
+            onClick={() => {
+              setConfirmWithoutNoteOpen(false);
+              void handleReceiveOrder(true);
+            }}
+          >
+            Buchen
           </Button>
         </DialogActions>
       </Dialog>
