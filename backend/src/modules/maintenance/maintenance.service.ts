@@ -222,13 +222,13 @@ export class MaintenanceService implements OnModuleInit, OnModuleDestroy {
 
   async getDbStats(): Promise<DbStats> {
     const rows: Array<{
-      table_name: string;
+      tname: string;
       table_rows: string;
       data_length: string;
       index_length: string;
     }> = await this.dataSource.query(`
       SELECT
-        table_name,
+        table_name                AS tname,
         COALESCE(table_rows, 0)   AS table_rows,
         COALESCE(data_length, 0)  AS data_length,
         COALESCE(index_length, 0) AS index_length
@@ -242,7 +242,7 @@ export class MaintenanceService implements OnModuleInit, OnModuleDestroy {
       const dataMb  = Number(r.data_length)  / 1024 / 1024;
       const indexMb = Number(r.index_length) / 1024 / 1024;
       return {
-        tableName: r.table_name,
+        tableName: r.tname,
         rows:      Number(r.table_rows),
         dataMb:    Math.round(dataMb  * 100) / 100,
         indexMb:   Math.round(indexMb * 100) / 100,
