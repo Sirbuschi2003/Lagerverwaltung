@@ -1281,6 +1281,21 @@ export const updateCompanyConfig = async (payload: UpdateCompanyConfigRequest): 
   return response.data;
 };
 
+// ── Scan-Töne ─────────────────────────────────────────────────────────────
+
+export const fetchScanSounds = async (): Promise<{ success: string | null; error: string | null }> => {
+  const response = await api.get<{ success: string | null; error: string | null }>("/company/scan-sounds");
+  return response.data;
+};
+
+export const uploadScanSound = async (type: "success" | "error", dataUrl: string): Promise<void> => {
+  await api.put(`/company/scan-sounds/${type}`, { dataUrl });
+};
+
+export const deleteScanSound = async (type: "success" | "error"): Promise<void> => {
+  await api.delete(`/company/scan-sounds/${type}`);
+};
+
 // Passwort-Änderung
 export interface ChangePasswordRequest {
   currentPassword: string;

@@ -791,4 +791,28 @@ body {
     }
   }
 
+  // ── Scan-Töne ─────────────────────────────────────────────────────────────
+
+  async getScanSounds(): Promise<{ success: string | null; error: string | null }> {
+    const [success, error] = await Promise.all([
+      this.configRepository.findOne({ where: { key: "scan.successSound" } }),
+      this.configRepository.findOne({ where: { key: "scan.errorSound" } }),
+    ]);
+    return {
+      success: success?.value ?? null,
+      error:   error?.value   ?? null,
+    };
+  }
+
+  async setScanSound(type: "success" | "error", dataUrl: string): Promise<void> {
+    await this.ensureValueColumnIsLongText();
+    const key = type === "success" ? "scan.successSound" : "scan.errorSound";
+    await this.saveConfig(key, dataUrl, `Custom Scan-Ton (${type})`);
+  }
+
+  async deleteScanSound(type: "success" | "error"): Promise<void> {
+    const key = type === "success" ? "scan.successSound" : "scan.errorSound";
+    await this.configRepository.delete({ key });
+  }
+
 }
