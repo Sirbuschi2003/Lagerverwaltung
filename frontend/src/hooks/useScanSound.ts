@@ -28,61 +28,44 @@ const useScanSound = () => {
     return contextRef.current;
   }, []);
 
-  const playTone = useCallback(
-    (frequency: number) => {
-      const ctx = getContext();
-      if (!ctx) {
-        return;
-      }
-      if (ctx.state === "suspended") {
-        void ctx.resume();
-      }
-      const oscillator = ctx.createOscillator();
-      const gain = ctx.createGain();
-
-      oscillator.type = "sine";
-      oscillator.frequency.setValueAtTime(frequency, ctx.currentTime);
-
-      gain.gain.setValueAtTime(0.0001, ctx.currentTime);
-      gain.gain.exponentialRampToValueAtTime(0.08, ctx.currentTime + 0.01);
-      gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.25);
-
-      oscillator.connect(gain);
-      gain.connect(ctx.destination);
-
-      oscillator.start();
-      oscillator.stop(ctx.currentTime + 0.25);
-    },
-    [getContext],
-  );
-
-  const playSuccess = useCallback(() => {
-    playTone(880);
-  }, [playTone]);
-
-  // Zwei absteigende Töne (quadratische Wellenform, deutlich lauter) als klares Warnsignal
-  const playError = useCallback(() => {
-    const ctx = getContext();
-    if (!ctx) return;
-    if (ctx.state === "suspended") void ctx.resume();
-
-    const playBuzz = (frequency: number, startTime: number) => {
+  const playBeep = useCallback(
+    (frequency: number, startTime: number, duration: number, peakGain: number, ctx: AudioContext) => {
       const osc = ctx.createOscillator();
       const gain = ctx.createGain();
       osc.type = "square";
       osc.frequency.setValueAtTime(frequency, startTime);
       gain.gain.setValueAtTime(0.0001, startTime);
-      gain.gain.exponentialRampToValueAtTime(0.28, startTime + 0.01);
-      gain.gain.exponentialRampToValueAtTime(0.0001, startTime + 0.18);
+      gain.gain.exponentialRampToValueAtTime(peakGain, startTime + 0.008);
+      gain.gain.setValueAtTime(peakGain, startTime + duration - 0.02);
+      gain.gain.exponentialRampToValueAtTime(0.0001, startTime + duration);
       osc.connect(gain);
       gain.connect(ctx.destination);
       osc.start(startTime);
-      osc.stop(startTime + 0.18);
-    };
+      osc.stop(startTime + duration);
+    },
+    [],
+  );
 
-    playBuzz(440, ctx.currentTime);
-    playBuzz(260, ctx.currentTime + 0.2);
-  }, [getContext]);
+  // Zwei aufsteigende Doppel-Beeps – kurz, scharf, klar positiv
+  const playSuccess = useCallback(() => {
+    const ctx = getContext();
+    if (!ctx) return;
+    if (ctx.state === "suspended") void ctx.resume();
+    const t = ctx.currentTime;
+    playBeep(900,  t,        0.12, 0.45, ctx);
+    playBeep(1400, t + 0.15, 0.15, 0.45, ctx);
+  }, [getContext, playBeep]);
+
+  // Drei absteigende Buzzer – laut, tief, penetrant
+  const playError = useCallback(() => {
+    const ctx = getContext();
+    if (!ctx) return;
+    if (ctx.state === "suspended") void ctx.resume();
+    const t = ctx.currentTime;
+    playBeep(320, t,        0.18, 0.5, ctx);
+    playBeep(260, t + 0.22, 0.18, 0.5, ctx);
+    playBeep(200, t + 0.44, 0.22, 0.5, ctx);
+  }, [getContext, playBeep]);
 
   return {
     playSuccess,
