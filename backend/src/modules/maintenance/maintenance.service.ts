@@ -252,7 +252,7 @@ export class MaintenanceService implements OnModuleInit, OnModuleDestroy {
 
     const totalMb = tables.reduce((s, t) => s + t.totalMb, 0);
 
-    const [[{ db }]] = await this.dataSource.query(`SELECT DATABASE() AS db`);
+    const [{ db }] = await this.dataSource.query(`SELECT DATABASE() AS db`);
 
     return {
       databaseName: db,
