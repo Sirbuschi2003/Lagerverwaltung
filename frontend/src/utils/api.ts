@@ -1908,6 +1908,50 @@ export const fixDatabaseIssues = async (): Promise<MaintenanceFixResponse> => {
   return response.data;
 };
 
+// ── Datenbank-Statistiken ──────────────────────────────────────────────────
+
+export interface DbTableStat {
+  tableName: string;
+  rows: number;
+  dataMb: number;
+  indexMb: number;
+  totalMb: number;
+}
+
+export interface DbStats {
+  databaseName: string;
+  totalMb: number;
+  tables: DbTableStat[];
+  retrievedAt: string;
+}
+
+export const fetchDbStats = async (): Promise<DbStats> => {
+  const response = await api.get<DbStats>("/maintenance/db-stats");
+  return response.data;
+};
+
+// ── Bewegungs-Retention ───────────────────────────────────────────────────
+
+export const fetchMovementRetention = async (): Promise<{ retentionDays: number }> => {
+  const response = await api.get<{ retentionDays: number }>("/maintenance/movement-retention");
+  return response.data;
+};
+
+export const setMovementRetention = async (days: number): Promise<{ success: boolean; retentionDays: number }> => {
+  const response = await api.put<{ success: boolean; retentionDays: number }>("/maintenance/movement-retention", { retentionDays: days });
+  return response.data;
+};
+
+export const previewMovementCleanup = async (days: number): Promise<{ count: number; oldestDate: string | null }> => {
+  const response = await api.get<{ count: number; oldestDate: string | null }>("/maintenance/movement-cleanup/preview", { params: { days } });
+  return response.data;
+};
+
+export const runMovementCleanup = async (days: number): Promise<{ deleted: number }> => {
+  const response = await api.post<{ deleted: number }>("/maintenance/movement-cleanup", { days });
+  return response.data;
+};
+
 // Archive-Funktionen für Log-Archivierung
 export interface ArchiveData {
   date: string;

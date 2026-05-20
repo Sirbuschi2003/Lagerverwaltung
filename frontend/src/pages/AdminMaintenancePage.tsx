@@ -45,6 +45,8 @@ import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import ExpandLessIcon from '@mui/icons-material/ExpandLess';
 import ArticleIcon from '@mui/icons-material/Article';
 import WarningAmberIcon from '@mui/icons-material/WarningAmber';
+import StorageIcon from '@mui/icons-material/Storage';
+import HistoryIcon from '@mui/icons-material/History';
 import {
   checkDatabaseMaintenance,
   fixDatabaseIssues,
@@ -59,6 +61,11 @@ import {
   fetchWarehouses,
   fetchWarehouseResetPreview,
   resetWarehouseData,
+  fetchDbStats,
+  fetchMovementRetention,
+  setMovementRetention,
+  previewMovementCleanup,
+  runMovementCleanup,
   type MaintenanceIssue,
   type UpdateStatus,
   type UpdatePhase,
@@ -66,6 +73,7 @@ import {
   type BranchDto,
   type LocationDto,
   type WarehouseResetPreview,
+  type DbStats,
 } from '../utils/api';
 import api from '../utils/api';
 import useAuthStore from '../store/useAuthStore';
@@ -145,10 +153,32 @@ const AdminMaintenancePage = () => {
   const [warehouseResetResult, setWarehouseResetResult] = useState<string | null>(null);
   const [warehouseResetError, setWarehouseResetError] = useState<string | null>(null);
 
+  // DB-Statistiken
+  const [dbStats, setDbStats] = useState<DbStats | null>(null);
+  const [dbStatsLoading, setDbStatsLoading] = useState(false);
+  const [dbStatsError, setDbStatsError] = useState<string | null>(null);
+
+  // Bewegungs-Retention
+  const [movementRetentionDays, setMovementRetentionDays] = useState<number>(3650);
+  const [movementRetentionInput, setMovementRetentionInput] = useState<string>('3650');
+  const [movementRetentionLoading, setMovementRetentionLoading] = useState(false);
+  const [movementRetentionSaved, setMovementRetentionSaved] = useState(false);
+  const [movementCleanupPreview, setMovementCleanupPreview] = useState<{ count: number; oldestDate: string | null } | null>(null);
+  const [movementCleanupPreviewLoading, setMovementCleanupPreviewLoading] = useState(false);
+  const [movementCleanupRunning, setMovementCleanupRunning] = useState(false);
+  const [movementCleanupResult, setMovementCleanupResult] = useState<string | null>(null);
+  const [movementCleanupError, setMovementCleanupError] = useState<string | null>(null);
+
   useEffect(() => {
     if (isSuperAdmin) {
       fetchBranches().then(setBranches).catch(() => {});
       fetchWarehouses().then(setWarehouses).catch(() => {});
+      fetchMovementRetention()
+        .then(({ retentionDays }) => {
+          setMovementRetentionDays(retentionDays);
+          setMovementRetentionInput(String(retentionDays));
+        })
+        .catch(() => {});
     }
   }, [isSuperAdmin]);
 
@@ -489,6 +519,78 @@ const AdminMaintenancePage = () => {
       setWarehouseResetError('Fehler beim Zurücksetzen: ' + (error.response?.data?.message || error.message));
     } finally {
       setWarehouseResetLoading(false);
+    }
+  };
+
+  // ── DB-Statistiken ────────────────────────────────────────────────────────
+
+  const handleLoadDbStats = async () => {
+    setDbStatsLoading(true);
+    setDbStatsError(null);
+    try {
+      const stats = await fetchDbStats();
+      setDbStats(stats);
+    } catch {
+      setDbStatsError('Datenbank-Statistiken konnten nicht geladen werden.');
+    } finally {
+      setDbStatsLoading(false);
+    }
+  };
+
+  // ── Bewegungs-Retention ───────────────────────────────────────────────────
+
+  const handleSaveMovementRetention = async () => {
+    const days = parseInt(movementRetentionInput, 10);
+    if (isNaN(days) || days < 365) return;
+    setMovementRetentionLoading(true);
+    setMovementRetentionSaved(false);
+    try {
+      await setMovementRetention(days);
+      setMovementRetentionDays(days);
+      setMovementRetentionSaved(true);
+      setMovementCleanupPreview(null);
+      setTimeout(() => setMovementRetentionSaved(false), 3000);
+    } catch (error: any) {
+      alert('Fehler beim Speichern: ' + (error.response?.data?.message || error.message));
+    } finally {
+      setMovementRetentionLoading(false);
+    }
+  };
+
+  const handleMovementCleanupPreview = async () => {
+    const days = parseInt(movementRetentionInput, 10);
+    if (isNaN(days) || days < 365) return;
+    setMovementCleanupPreviewLoading(true);
+    setMovementCleanupPreview(null);
+    setMovementCleanupResult(null);
+    setMovementCleanupError(null);
+    try {
+      const preview = await previewMovementCleanup(days);
+      setMovementCleanupPreview(preview);
+    } catch {
+      setMovementCleanupError('Vorschau konnte nicht geladen werden.');
+    } finally {
+      setMovementCleanupPreviewLoading(false);
+    }
+  };
+
+  const handleMovementCleanupRun = async () => {
+    const days = parseInt(movementRetentionInput, 10);
+    if (!movementCleanupPreview || movementCleanupPreview.count === 0 || isNaN(days)) return;
+    if (!window.confirm(
+      `Möchten Sie ${movementCleanupPreview.count.toLocaleString('de-DE')} Buchungen, die älter als ${days} Tage sind, unwiderruflich löschen?`
+    )) return;
+    setMovementCleanupRunning(true);
+    setMovementCleanupResult(null);
+    setMovementCleanupError(null);
+    try {
+      const result = await runMovementCleanup(days);
+      setMovementCleanupResult(`${result.deleted.toLocaleString('de-DE')} Buchungen erfolgreich gelöscht.`);
+      setMovementCleanupPreview(null);
+    } catch (error: any) {
+      setMovementCleanupError('Fehler beim Löschen: ' + (error.response?.data?.message || error.message));
+    } finally {
+      setMovementCleanupRunning(false);
     }
   };
 
@@ -847,6 +949,187 @@ const AdminMaintenancePage = () => {
           <Alert severity="success" sx={{ mt: 2 }}>{purgeResult}</Alert>
         )}
       </Paper>
+
+      {/* ===== Datenbank-Statistiken ===== */}
+      {isSuperAdmin && (
+        <Paper sx={{ p: 3, mt: 3 }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 2 }}>
+            <StorageIcon sx={{ fontSize: 40, color: 'primary.main' }} />
+            <Box sx={{ flex: 1 }}>
+              <Typography variant="h5" sx={{ fontWeight: 600 }}>Datenbank-Statistiken</Typography>
+              <Typography variant="body2" color="text.secondary">
+                Übersicht über Tabellengröße und Zeilenanzahl der MySQL-Datenbank
+              </Typography>
+            </Box>
+            <Button
+              variant="outlined"
+              size="small"
+              onClick={handleLoadDbStats}
+              disabled={dbStatsLoading}
+              startIcon={dbStatsLoading ? <CircularProgress size={16} /> : <RefreshIcon />}
+            >
+              {dbStats ? 'Aktualisieren' : 'Laden'}
+            </Button>
+          </Box>
+
+          <Divider sx={{ my: 2 }} />
+
+          {dbStatsError && <Alert severity="error" sx={{ mb: 2 }}>{dbStatsError}</Alert>}
+
+          {dbStats && (
+            <>
+              <Box sx={{ display: 'flex', gap: 3, mb: 2, flexWrap: 'wrap' }}>
+                <Box>
+                  <Typography variant="caption" color="text.secondary">Datenbank</Typography>
+                  <Typography variant="body1" sx={{ fontWeight: 600 }}>{dbStats.databaseName}</Typography>
+                </Box>
+                <Box>
+                  <Typography variant="caption" color="text.secondary">Gesamtgröße</Typography>
+                  <Typography variant="body1" sx={{ fontWeight: 600, color: dbStats.totalMb > 500 ? 'warning.main' : 'success.main' }}>
+                    {dbStats.totalMb >= 1024
+                      ? `${(dbStats.totalMb / 1024).toFixed(2)} GB`
+                      : `${dbStats.totalMb} MB`}
+                  </Typography>
+                </Box>
+                <Box>
+                  <Typography variant="caption" color="text.secondary">Tabellen</Typography>
+                  <Typography variant="body1" sx={{ fontWeight: 600 }}>{dbStats.tables.length}</Typography>
+                </Box>
+                <Box>
+                  <Typography variant="caption" color="text.secondary">Stand</Typography>
+                  <Typography variant="body1">{new Date(dbStats.retrievedAt).toLocaleString('de-DE')}</Typography>
+                </Box>
+              </Box>
+              <TableContainer sx={{ maxHeight: 400 }}>
+                <Table size="small" stickyHeader>
+                  <TableHead>
+                    <TableRow>
+                      <TableCell sx={{ fontWeight: 600 }}>Tabelle</TableCell>
+                      <TableCell align="right" sx={{ fontWeight: 600 }}>Zeilen (ca.)</TableCell>
+                      <TableCell align="right" sx={{ fontWeight: 600 }}>Daten</TableCell>
+                      <TableCell align="right" sx={{ fontWeight: 600 }}>Index</TableCell>
+                      <TableCell align="right" sx={{ fontWeight: 600 }}>Gesamt</TableCell>
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {dbStats.tables.map((t) => (
+                      <TableRow key={t.tableName} hover>
+                        <TableCell sx={{ fontFamily: 'monospace', fontSize: '0.8rem' }}>{t.tableName}</TableCell>
+                        <TableCell align="right">{t.rows.toLocaleString('de-DE')}</TableCell>
+                        <TableCell align="right">{t.dataMb} MB</TableCell>
+                        <TableCell align="right">{t.indexMb} MB</TableCell>
+                        <TableCell align="right" sx={{ fontWeight: t.totalMb > 10 ? 600 : 400, color: t.totalMb > 100 ? 'warning.main' : 'inherit' }}>
+                          {t.totalMb} MB
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </TableContainer>
+            </>
+          )}
+
+          {!dbStats && !dbStatsLoading && (
+            <Typography color="text.secondary" variant="body2">
+              Klicke auf „Laden" um die aktuellen Datenbank-Statistiken abzurufen.
+            </Typography>
+          )}
+        </Paper>
+      )}
+
+      {/* ===== Buchungshistorie-Aufbewahrung ===== */}
+      {isSuperAdmin && (
+        <Paper sx={{ p: 3, mt: 3 }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 2 }}>
+            <HistoryIcon sx={{ fontSize: 40, color: 'warning.main' }} />
+            <Box>
+              <Typography variant="h5" sx={{ fontWeight: 600 }}>Buchungshistorie-Aufbewahrung</Typography>
+              <Typography variant="body2" color="text.secondary">
+                Automatische Bereinigung alter Lagerbewegungen (täglich um 04:00 Uhr)
+              </Typography>
+            </Box>
+          </Box>
+
+          <Divider sx={{ my: 2 }} />
+
+          <Alert severity="info" sx={{ mb: 2 }}>
+            <strong>GoBD-Hinweis:</strong> Lagerbewegungen gelten als steuerrelevante Aufzeichnungen.
+            Die gesetzliche Mindestaufbewahrungsfrist beträgt <strong>10 Jahre (3.650 Tage)</strong>.
+            Eine kürzere Frist sollte nur nach Rücksprache mit dem Steuerberater gesetzt werden.
+          </Alert>
+
+          <Box sx={{ display: 'flex', gap: 2, alignItems: 'flex-end', flexWrap: 'wrap', mb: 2 }}>
+            <TextField
+              label="Aufbewahrungsdauer (Tage)"
+              type="number"
+              size="small"
+              value={movementRetentionInput}
+              onChange={(e) => {
+                setMovementRetentionInput(e.target.value);
+                setMovementRetentionSaved(false);
+              }}
+              inputProps={{ min: 365, max: 36500 }}
+              helperText={`${Math.round(parseInt(movementRetentionInput || '0', 10) / 365 * 10) / 10} Jahre · aktuell gespeichert: ${movementRetentionDays} Tage`}
+              sx={{ width: 240 }}
+            />
+            <Button
+              variant="contained"
+              onClick={handleSaveMovementRetention}
+              disabled={movementRetentionLoading || parseInt(movementRetentionInput, 10) < 365}
+              startIcon={movementRetentionLoading ? <CircularProgress size={16} /> : null}
+              color={movementRetentionSaved ? 'success' : 'primary'}
+            >
+              {movementRetentionSaved ? 'Gespeichert' : 'Speichern'}
+            </Button>
+          </Box>
+
+          <Divider sx={{ my: 2 }} />
+
+          <Typography variant="subtitle2" gutterBottom>Manuelle Bereinigung</Typography>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+            Buchungen, die älter als die eingestellte Aufbewahrungsdauer sind, werden gelöscht.
+            Die tägliche Bereinigung läuft automatisch – hier kann sie manuell angestoßen werden.
+          </Typography>
+
+          <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap', mb: 2 }}>
+            <Button
+              variant="outlined"
+              color="warning"
+              onClick={handleMovementCleanupPreview}
+              disabled={movementCleanupPreviewLoading || parseInt(movementRetentionInput, 10) < 365}
+              startIcon={movementCleanupPreviewLoading ? <CircularProgress size={18} /> : <SearchIcon />}
+            >
+              Vorschau prüfen
+            </Button>
+            <Button
+              variant="contained"
+              color="error"
+              onClick={handleMovementCleanupRun}
+              disabled={!movementCleanupPreview || movementCleanupPreview.count === 0 || movementCleanupRunning}
+              startIcon={movementCleanupRunning ? <CircularProgress size={18} /> : <DeleteSweepIcon />}
+            >
+              Jetzt bereinigen
+            </Button>
+          </Box>
+
+          {movementCleanupPreview && (
+            <Alert severity={movementCleanupPreview.count === 0 ? 'success' : 'warning'} sx={{ mb: 2 }}>
+              {movementCleanupPreview.count === 0 ? (
+                'Keine Buchungen zu löschen – alle Einträge liegen innerhalb der Aufbewahrungsfrist.'
+              ) : (
+                <>
+                  <strong>{movementCleanupPreview.count.toLocaleString('de-DE')} Buchungen</strong> würden gelöscht.
+                  {movementCleanupPreview.oldestDate && (
+                    <> Älteste Buchung: {new Date(movementCleanupPreview.oldestDate).toLocaleDateString('de-DE')}.</>
+                  )}
+                </>
+              )}
+            </Alert>
+          )}
+          {movementCleanupResult && <Alert severity="success" sx={{ mb: 1 }}>{movementCleanupResult}</Alert>}
+          {movementCleanupError && <Alert severity="error" sx={{ mb: 1 }}>{movementCleanupError}</Alert>}
+        </Paper>
+      )}
 
       {/* ── Lager zurücksetzen ─────────────────────────────────────────── */}
       <Paper sx={{ p: 3 }}>
