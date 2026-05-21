@@ -811,7 +811,7 @@ const QuickBookingPage: React.FC = () => {
                     <IconButton
                       size="small"
                       color="error"
-                      onClick={() => setBookingList((prev) => prev.filter((_, i) => i !== idx))}
+                      onClick={() => { setBookingList((prev) => prev.filter((_, i) => i !== idx)); refocusBarcode(); }}
                       sx={{ ml: 1, flexShrink: 0 }}
                     >
                       <DeleteIcon fontSize="small" />
@@ -885,7 +885,7 @@ const QuickBookingPage: React.FC = () => {
                       <Button
                         size="small"
                         color="error"
-                        onClick={() => setBookingList((prev) => prev.filter((_, i) => i !== idx))}
+                        onClick={() => { setBookingList((prev) => prev.filter((_, i) => i !== idx)); refocusBarcode(); }}
                       >
                         <DeleteIcon fontSize="small" />
                       </Button>
