@@ -186,7 +186,12 @@ const QuickBookingPage: React.FC = () => {
     socketRef.current.emit("quickbook:update", { userId: user.id, list: bookingList });
   }, [bookingList]);
 
-  const refocusBarcode = () => setTimeout(() => barcodeWrapperRef.current?.querySelector<HTMLInputElement>("input")?.focus(), 80);
+  const refocusBarcode = () => {
+    // double-rAF: ensures React has committed the new DOM before focusing
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+      barcodeWrapperRef.current?.querySelector<HTMLInputElement>("input")?.focus();
+    }));
+  };
 
   const showSuccess = (msg: string) => {
     setSuccessMsg(msg);
