@@ -1,5 +1,58 @@
 # Changelog
 
+## [3.8.0] – 2026-05-21
+
+### Feature: Custom Scan-Töne
+
+- Eigene Scan-Töne für Erfolg und Fehler hochladbar (WAV/MP3/OGG, max. 2 MB)
+- Standard-Töne: schärfere Square-Wave-Synthese, höherer Gain, mehrere Beeps – deutlich penetranter / besser hörbar in lauter Umgebung
+- Lautstärke wird direkt beim Laden maximiert (keine separate Lautstärke-Einstellung nötig)
+
+### Feature: DB-Statistiken für Super-Admin
+
+- Neuer Bereich in Wartung & Update: Datenbankstatistiken (Tabellengröße, Zeilenanzahl, Index-Größe)
+- Buchungshistorie-Aufbewahrung konfigurierbar: ältere Bewegungen automatisch archivieren/löschen
+
+### Feature: Wareneingang – Lieferscheinnummer-Bestätigung
+
+- Beim Wareneingang ohne Lieferscheinnummer erscheint ein Bestätigungsdialog mit Inline-Eingabe
+- Buchung kann direkt im Dialog mit Lieferscheinnummer abgeschlossen oder ohne fortgesetzt werden
+
+### Feature: Bestell-PDF Designer – Felder pro Element konfigurierbar
+
+- Im PDF-Designer können jetzt pro Tabellenelement gezielt Felder ein-/ausgeblendet werden
+- Layout wird auf Basis des Niederlassungs-Templates gerendert (kein generisches Fallback mehr)
+
+### Feature: Pre-Migration-Backup
+
+- Vor jedem Datenbankupdate (Migration) wird automatisch ein Backup erstellt
+- Schützt vor Datenverlust bei fehlgeschlagenen Migrationen
+
+### Feature: Hyreka-Abgleich-Modus – Lieferanten beibehalten
+
+- Neuer Modus beim Hyreka-Import: Lieferanten-Zuweisung bestehender Artikel wird nicht überschrieben
+- Nützlich für regelmäßige Bestandsabgleiche ohne Verlust manueller Lieferanten-Zuordnungen
+
+### Feature: MySQL-Port für SSH-Tunnel-Zugriff
+
+- MySQL-Port wird auf Host-Loopback (127.0.0.1:3306) exponiert – direkter DB-Zugriff per SSH-Tunnel möglich
+
+### Bugfix
+
+- Schnellbuchung: Nach Löschen eines Artikels über den Mülleimer-Button springt der Cursor sofort zurück ins Barcode-Feld
+- Wareneingang: Event-Objekt als Argument überschrieb die Lieferscheinnummer – Button-Handler korrigiert
+- DB-Stats: `table_name`-Alias explizit gesetzt (information_schema liefert UPPERCASE-Spaltennamen)
+- DB-Stats: Doppelte Destrukturierung `[[{db}]]` auf `[{db}]` korrigiert
+- Hyreka: Buchungen aus der Bewegungshistorie ausgeblendet (erschienen als normale CHECK_IN-Buchungen)
+- PDF-Archiv: Inline-Anzeige im Archiv korrigiert
+- Lager-Isolation: Verbrauchstrend filtert jetzt korrekt nach Lager
+- Backup-Gate: Backup-Prüfung greift jetzt vor jedem Update zuverlässig
+- Bestellvorschläge: Artikel ohne Lagerort (`locationId=NULL`) zeigen jetzt korrekt den Bestand
+- Dashboard: KPI „Unter Sollbestand" entfernt (war redundant / veraltet)
+- Repair-Migration: Nur Bewegungen mit gültiger Location werden verarbeitet
+
+---
+
 ## [3.7.0] – 2026-05-11
 
 ### Feature: Lieferanten-Zuweisung pro Lager
