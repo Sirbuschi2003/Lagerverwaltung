@@ -20,16 +20,21 @@ import {
   CircularProgress,
   Alert,
   Autocomplete,
+  FormControlLabel,
+  Switch,
 } from "@mui/material";
 import dayjs from "dayjs";
 import useItemsStore from "../store/useItemsStore";
 import useUsersStore from "../store/useUsersStore";
+import useAuthStore from "../store/useAuthStore";
 import { fetchMovementHistory, fetchWarehouses, cleanupMovements, MovementDto, type LocationDto } from "../utils/api";
 import ReportsPage from "./ReportsPage";
 
 const MovementHistoryTab: React.FC = () => {
   const { items, loadItems } = useItemsStore();
   const { users, loadUsers } = useUsersStore();
+  const { user: authUser } = useAuthStore();
+  const hasLocationScope = (authUser?.locationIds?.length ?? 0) > 0;
   const [filters, setFilters] = useState({
     itemId: "",
     vehicleId: "",
@@ -40,6 +45,7 @@ const MovementHistoryTab: React.FC = () => {
   });
   const [warehouseId, setWarehouseId] = useState<string>("");
   const [warehouses, setWarehouses] = useState<LocationDto[]>([]);
+  const [includeVehicles, setIncludeVehicles] = useState(!hasLocationScope);
   const [data, setData] = useState<MovementDto[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(0);
@@ -107,6 +113,7 @@ const MovementHistoryTab: React.FC = () => {
         offset: currentPage * rpp,
         warehouseId: warehouseId || undefined,
         source: sourceSearch.trim() || undefined,
+        includeVehicles: includeVehicles || undefined,
       });
       setData(res.movements);
       setTotal(res.total);
@@ -226,6 +233,18 @@ const MovementHistoryTab: React.FC = () => {
             sx={{ minWidth: 200 }}
             placeholder="z.B. A-1234"
           />
+          {hasLocationScope && (
+            <FormControlLabel
+              control={
+                <Switch
+                  checked={includeVehicles}
+                  onChange={(e) => setIncludeVehicles(e.target.checked)}
+                  size="small"
+                />
+              }
+              label="Fahrzeugbuchungen einschließen"
+            />
+          )}
           <Button variant="contained" onClick={handleFilter} disabled={loading}>
             {loading ? "Lade..." : "Filtern"}
           </Button>

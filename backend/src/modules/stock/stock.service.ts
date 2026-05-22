@@ -1725,10 +1725,13 @@ export class StockService {
     locationIds?: string[];
     warehouseId?: string;
     source?: string;
+    includeVehicleMovements?: boolean;
   }): Promise<{ movements: StockMovement[]; total: number; summary: { totalCheckinQty: number; totalCheckoutQty: number; totalCheckinCount: number; totalCheckoutCount: number } }> {
     const effectiveLocationIds = params.warehouseId
       ? await this.locationsService.getDescendantLocationIds(params.warehouseId, params.branchId)
       : params.locationIds;
+
+    const excludeVehicles = effectiveLocationIds?.length && !params.includeVehicleMovements;
 
     const qb = this.movementsRepository
       .createQueryBuilder('movement')
@@ -1746,6 +1749,7 @@ export class StockService {
         { locationIds: effectiveLocationIds },
       );
     }
+    if (excludeVehicles) qb.andWhere('movement.vehicleId IS NULL');
     if (params.itemId) qb.andWhere('item.id = :itemId', { itemId: params.itemId });
     if (params.vehicleId) qb.andWhere('vehicle.id = :vehicleId', { vehicleId: params.vehicleId });
     if (params.userId) qb.andWhere('user.id = :userId', { userId: params.userId });
@@ -1777,6 +1781,7 @@ export class StockService {
         { locationIds: effectiveLocationIds },
       );
     }
+    if (excludeVehicles) summaryQb.andWhere('movement.vehicleId IS NULL');
     if (params.itemId) summaryQb.andWhere('movement.itemId = :itemId', { itemId: params.itemId });
     if (params.vehicleId) summaryQb.andWhere('movement.vehicleId = :vehicleId', { vehicleId: params.vehicleId });
     if (params.userId) summaryQb.andWhere('movement.userId = :userId', { userId: params.userId });

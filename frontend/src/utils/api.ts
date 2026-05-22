@@ -1795,6 +1795,7 @@ export const fetchMovementHistory = async (params: {
   offset?: number;
   warehouseId?: string;
   source?: string;
+  includeVehicles?: boolean;
 }): Promise<{ movements: MovementDto[]; total: number; summary: MovementSummary }> => {
   const query = new URLSearchParams();
   if (params.itemId) query.append("itemId", params.itemId);
@@ -1807,6 +1808,7 @@ export const fetchMovementHistory = async (params: {
   if (params.offset) query.append("offset", String(params.offset));
   if (params.warehouseId) query.append("warehouseId", params.warehouseId);
   if (params.source) query.append("source", params.source);
+  if (params.includeVehicles) query.append("includeVehicles", "true");
 
   const response = await api.get<{ movements: MovementDto[]; total: number; summary: MovementSummary }>(`/stock/movements/history?${query.toString()}`);
   return response.data;
@@ -2132,10 +2134,11 @@ export const saveSlowMoverSettings = async (days: number): Promise<{ days: numbe
   return response.data;
 };
 
-export const fetchSlowMovers = async (days?: number, warehouseId?: string): Promise<SlowMoverRow[]> => {
+export const fetchSlowMovers = async (days?: number, warehouseId?: string, includeVehicles?: boolean): Promise<SlowMoverRow[]> => {
   const params: Record<string, unknown> = {};
   if (days !== undefined) params.days = days;
   if (warehouseId) params.warehouseId = warehouseId;
+  if (includeVehicles) params.includeVehicles = "true";
   const response = await api.get<SlowMoverRow[]>("/reports/slow-movers", { params });
   return response.data;
 };
@@ -2159,9 +2162,10 @@ export interface ForecastRow {
   minimumStock: number | null;
 }
 
-export const fetchForecast = async (days: number, warehouseId?: string): Promise<ForecastRow[]> => {
+export const fetchForecast = async (days: number, warehouseId?: string, includeVehicles?: boolean): Promise<ForecastRow[]> => {
   const params: Record<string, unknown> = { days };
   if (warehouseId) params.warehouseId = warehouseId;
+  if (includeVehicles) params.includeVehicles = "true";
   const response = await api.get<ForecastRow[]>("/reports/forecast", { params });
   return response.data;
 };
@@ -2172,10 +2176,11 @@ export interface ConsumptionTrendEntry {
   checkins: number;
 }
 
-export const fetchConsumptionTrend = async (months: 6 | 12 = 12, itemId?: string, warehouseId?: string): Promise<ConsumptionTrendEntry[]> => {
+export const fetchConsumptionTrend = async (months: 6 | 12 = 12, itemId?: string, warehouseId?: string, includeVehicles?: boolean): Promise<ConsumptionTrendEntry[]> => {
   const params: Record<string, unknown> = { months };
   if (itemId) params.itemId = itemId;
   if (warehouseId) params.warehouseId = warehouseId;
+  if (includeVehicles) params.includeVehicles = "true";
   const response = await api.get<ConsumptionTrendEntry[]>("/reports/consumption-trend", { params });
   return response.data;
 };
@@ -2194,9 +2199,10 @@ export interface ArticleActivityRow {
   lastMovementAt: string | null;
 }
 
-export const fetchArticleActivity = async (from: string, to: string, warehouseId?: string): Promise<ArticleActivityRow[]> => {
+export const fetchArticleActivity = async (from: string, to: string, warehouseId?: string, includeVehicles?: boolean): Promise<ArticleActivityRow[]> => {
   const params: Record<string, unknown> = { from, to };
   if (warehouseId) params.warehouseId = warehouseId;
+  if (includeVehicles) params.includeVehicles = "true";
   const response = await api.get<ArticleActivityRow[]>("/reports/article-activity", { params });
   return response.data;
 };

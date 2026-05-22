@@ -157,6 +157,7 @@ export class StockController {
     @Query("offset") offset?: string,
     @Query("warehouseId") warehouseId?: string,
     @Query("source") source?: string,
+    @Query("includeVehicles") includeVehicles?: string,
   ) {
     const parsedFrom = from ? new Date(from) : undefined;
     // Date-only strings (YYYY-MM-DD) are parsed as midnight UTC; extend to end of day to include all movements on that date
@@ -176,6 +177,7 @@ export class StockController {
       locationIds: req.user?.locationIds,
       warehouseId,
       source: source || undefined,
+      includeVehicleMovements: includeVehicles === "true",
     });
     return data;
   }

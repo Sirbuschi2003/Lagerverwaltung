@@ -24,17 +24,23 @@ export class ReportsController {
 
   @Get("consumption")
   @Roles("MANAGER", "WAREHOUSE")
-  async consumption(@Req() req: ReportsRequest, @Query("from") from: string, @Query("to") to: string, @Query("warehouseId") warehouseId?: string) {
+  async consumption(
+    @Req() req: ReportsRequest,
+    @Query("from") from: string,
+    @Query("to") to: string,
+    @Query("warehouseId") warehouseId?: string,
+    @Query("includeVehicles") includeVehicles?: string,
+  ) {
     const fallbackTo = new Date();
     const end = to ? new Date(to) : fallbackTo;
     const start = from ? new Date(from) : new Date(end.getTime() - 1000 * 60 * 60 * 24 * 30);
-    return this.reportsService.consumptionReport(start, end, req.user?.branchId, req.user?.locationIds, warehouseId);
+    return this.reportsService.consumptionReport(start, end, req.user?.branchId, req.user?.locationIds, warehouseId, includeVehicles === "true");
   }
 
   @Get("stock-status")
   @Roles("MANAGER", "WAREHOUSE")
-  stockStatus(@Req() req: ReportsRequest) {
-    return this.reportsService.stockStatusSummary(req.user?.branchId, req.user?.locationIds);
+  stockStatus(@Req() req: ReportsRequest, @Query("includeVehicles") includeVehicles?: string) {
+    return this.reportsService.stockStatusSummary(req.user?.branchId, req.user?.locationIds, includeVehicles === "true");
   }
 
   @Get("consumption/export")
@@ -45,13 +51,14 @@ export class ReportsController {
     @Query("to") to: string,
     @Query("format") format: 'csv' | 'pdf' = 'csv',
     @Query("warehouseId") warehouseId: string | undefined,
+    @Query("includeVehicles") includeVehicles: string | undefined,
     @Res() res: Response,
   ) {
     const fallbackTo = new Date();
     const end = to ? new Date(to) : fallbackTo;
     const start = from ? new Date(from) : new Date(end.getTime() - 1000 * 60 * 60 * 24 * 30);
 
-    const movements = await this.reportsService.consumptionReport(start, end, req.user?.branchId, req.user?.locationIds, warehouseId);
+    const movements = await this.reportsService.consumptionReport(start, end, req.user?.branchId, req.user?.locationIds, warehouseId, includeVehicles === "true");
 
     if (format === 'csv') {
       const csvBuffer = await this.exportService.exportMovementsToCsv(movements);
@@ -71,9 +78,10 @@ export class ReportsController {
   async exportStockStatus(
     @Req() req: ReportsRequest,
     @Query("format") format: 'csv' | 'pdf' = 'csv',
+    @Query("includeVehicles") includeVehicles: string | undefined,
     @Res() res: Response,
   ) {
-    const stockLevels = await this.reportsService.stockStatusSummary(req.user?.branchId, req.user?.locationIds);
+    const stockLevels = await this.reportsService.stockStatusSummary(req.user?.branchId, req.user?.locationIds, includeVehicles === "true");
 
     if (format === 'csv') {
       const csvBuffer = await this.exportService.exportStockToCsv(stockLevels);
@@ -95,9 +103,10 @@ export class ReportsController {
     @Query("months") monthsParam?: string,
     @Query("itemId") itemId?: string,
     @Query("warehouseId") warehouseId?: string,
+    @Query("includeVehicles") includeVehicles?: string,
   ) {
     const months = monthsParam === "6" ? 6 : 12;
-    return this.reportsService.consumptionTrend(months, req.user?.branchId, itemId || null, req.user?.locationIds, warehouseId);
+    return this.reportsService.consumptionTrend(months, req.user?.branchId, itemId || null, req.user?.locationIds, warehouseId, includeVehicles === "true");
   }
 
   @Get("article-activity")
@@ -107,10 +116,11 @@ export class ReportsController {
     @Query("from") from?: string,
     @Query("to") to?: string,
     @Query("warehouseId") warehouseId?: string,
+    @Query("includeVehicles") includeVehicles?: string,
   ) {
     const end = to ? new Date(to) : new Date();
     const start = from ? new Date(from) : new Date(end.getTime() - 1000 * 60 * 60 * 24 * 30);
-    return this.reportsService.articleActivityReport(start, end, req.user?.branchId, req.user?.locationIds, warehouseId);
+    return this.reportsService.articleActivityReport(start, end, req.user?.branchId, req.user?.locationIds, warehouseId, includeVehicles === "true");
   }
 
   @Get("forecast")
@@ -119,9 +129,10 @@ export class ReportsController {
     @Req() req: ReportsRequest,
     @Query("days") daysParam?: string,
     @Query("warehouseId") warehouseId?: string,
+    @Query("includeVehicles") includeVehicles?: string,
   ) {
     const days = daysParam ? Math.min(Math.max(Number.parseInt(daysParam, 10) || 30, 7), 365) : 30;
-    return this.reportsService.forecastReport(days, req.user?.branchId, req.user?.locationIds, warehouseId);
+    return this.reportsService.forecastReport(days, req.user?.branchId, req.user?.locationIds, warehouseId, includeVehicles === "true");
   }
 
   @Get("slow-movers/settings")
@@ -140,7 +151,7 @@ export class ReportsController {
 
   @Get("slow-movers")
   @Roles("MANAGER", "WAREHOUSE")
-  async slowMovers(@Req() req: ReportsRequest, @Query("days") daysParam?: string, @Query("warehouseId") warehouseId?: string) {
+  async slowMovers(@Req() req: ReportsRequest, @Query("days") daysParam?: string, @Query("warehouseId") warehouseId?: string, @Query("includeVehicles") includeVehicles?: string) {
     let days: number;
     if (daysParam) {
       const parsed = Number.parseInt(daysParam, 10);
@@ -148,7 +159,7 @@ export class ReportsController {
     } else {
       days = await this.reportsService.getSlowMoverThreshold(req.user?.branchId);
     }
-    return this.reportsService.slowMoverReport(days, req.user?.branchId, req.user?.locationIds, warehouseId);
+    return this.reportsService.slowMoverReport(days, req.user?.branchId, req.user?.locationIds, warehouseId, includeVehicles === "true");
   }
 
   @Get("items/qr-catalog")

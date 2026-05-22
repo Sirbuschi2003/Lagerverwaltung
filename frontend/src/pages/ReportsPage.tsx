@@ -11,11 +11,13 @@ import {
   DialogContent,
   DialogTitle,
   Divider,
+  FormControlLabel,
   IconButton,
   InputAdornment,
   MenuItem,
   Paper,
   Stack,
+  Switch,
   Tab,
   Table,
   TableBody,
@@ -310,7 +312,7 @@ const getDaysSeverity = (days: number | null): "error" | "warning" | "info" | "d
   return "info";
 };
 
-const SlowMoverTab: React.FC<{ warehouseId?: string }> = ({ warehouseId }) => {
+const SlowMoverTab: React.FC<{ warehouseId?: string; includeVehicles?: boolean }> = ({ warehouseId, includeVehicles }) => {
   const { user } = useAuthStore();
   const isManager = user?.role === "MANAGER";
 
@@ -332,7 +334,7 @@ const SlowMoverTab: React.FC<{ warehouseId?: string }> = ({ warehouseId }) => {
     setLoading(true);
     setError(null);
     try {
-      const [settings, data] = await Promise.all([fetchSlowMoverSettings(), fetchSlowMovers(undefined, warehouseId)]);
+      const [settings, data] = await Promise.all([fetchSlowMoverSettings(), fetchSlowMovers(undefined, warehouseId, includeVehicles)]);
       setThreshold(settings.days);
       setEditDays(settings.days);
       setRows(data);
@@ -341,7 +343,7 @@ const SlowMoverTab: React.FC<{ warehouseId?: string }> = ({ warehouseId }) => {
     } finally {
       setLoading(false);
     }
-  }, [warehouseId]);
+  }, [warehouseId, includeVehicles]);
 
   useEffect(() => { void load(); }, [load]);
 
@@ -352,7 +354,7 @@ const SlowMoverTab: React.FC<{ warehouseId?: string }> = ({ warehouseId }) => {
       setThreshold(saved.days);
       setSettingsOpen(false);
       setLoading(true);
-      const data = await fetchSlowMovers(saved.days, warehouseId);
+      const data = await fetchSlowMovers(saved.days, warehouseId, includeVehicles);
       setRows(data);
     } catch (err: any) {
       setError(err?.response?.data?.message || err?.message || "Fehler beim Speichern");
@@ -536,7 +538,7 @@ const MONTH_LABELS: Record<string, string> = {
   "07": "Jul", "08": "Aug", "09": "Sep", "10": "Okt", "11": "Nov", "12": "Dez",
 };
 
-const ConsumptionTrendTab: React.FC<{ warehouseId?: string }> = ({ warehouseId }) => {
+const ConsumptionTrendTab: React.FC<{ warehouseId?: string; includeVehicles?: boolean }> = ({ warehouseId, includeVehicles }) => {
   const theme = useTheme();
 
   const [months, setMonths] = useState<6 | 12>(12);
@@ -558,14 +560,14 @@ const ConsumptionTrendTab: React.FC<{ warehouseId?: string }> = ({ warehouseId }
     setLoading(true);
     setError(null);
     try {
-      const result = await fetchConsumptionTrend(m, itemId, warehouseId);
+      const result = await fetchConsumptionTrend(m, itemId, warehouseId, includeVehicles);
       setData(result);
     } catch (err: any) {
       setError(err?.response?.data?.message || err?.message || "Fehler beim Laden");
     } finally {
       setLoading(false);
     }
-  }, [warehouseId]);
+  }, [warehouseId, includeVehicles]);
 
   useEffect(() => { void load(months, selectedItem?.id); }, [load, months, selectedItem]);
 
@@ -724,7 +726,7 @@ const ConsumptionTrendTab: React.FC<{ warehouseId?: string }> = ({ warehouseId }
 type SortField = "checkoutCount" | "checkinCount" | "checkoutQty" | "checkinQty" | "lastMovementAt" | "code";
 type SortDir = "asc" | "desc";
 
-const ArticleActivityTab: React.FC<{ warehouseId?: string }> = ({ warehouseId }) => {
+const ArticleActivityTab: React.FC<{ warehouseId?: string; includeVehicles?: boolean }> = ({ warehouseId, includeVehicles }) => {
   const theme = useTheme();
 
   const defaultRange = getPresetRange(30);
@@ -747,14 +749,14 @@ const ArticleActivityTab: React.FC<{ warehouseId?: string }> = ({ warehouseId })
     setLoading(true);
     setError(null);
     try {
-      const data = await fetchArticleActivity(f, t, warehouseId);
+      const data = await fetchArticleActivity(f, t, warehouseId, includeVehicles);
       setRows(data);
     } catch (err: any) {
       setError(err?.response?.data?.message || err?.message || "Fehler beim Laden");
     } finally {
       setLoading(false);
     }
-  }, [warehouseId]);
+  }, [warehouseId, includeVehicles]);
 
   useEffect(() => { void load(from, to); }, [load]);
 
@@ -1079,7 +1081,7 @@ const exportForecastCsv = (rows: ForecastRow[], days: number) => {
   URL.revokeObjectURL(url);
 };
 
-const ForecastTab: React.FC<{ warehouseId?: string }> = ({ warehouseId }) => {
+const ForecastTab: React.FC<{ warehouseId?: string; includeVehicles?: boolean }> = ({ warehouseId, includeVehicles }) => {
   const theme = useTheme();
   const [forecastDays, setForecastDays] = useState<number>(30);
   const [rows, setRows] = useState<ForecastRow[]>([]);
@@ -1094,14 +1096,14 @@ const ForecastTab: React.FC<{ warehouseId?: string }> = ({ warehouseId }) => {
     setLoading(true);
     setError(null);
     try {
-      const data = await fetchForecast(days, warehouseId);
+      const data = await fetchForecast(days, warehouseId, includeVehicles);
       setRows(data);
     } catch (err: any) {
       setError(err?.response?.data?.message || err?.message || "Fehler beim Laden");
     } finally {
       setLoading(false);
     }
-  }, [warehouseId]);
+  }, [warehouseId, includeVehicles]);
 
   useEffect(() => { void load(forecastDays); }, [load, forecastDays]);
 
@@ -1393,9 +1395,12 @@ const TABS = [
 ];
 
 const ReportsPage: React.FC<{ embedded?: boolean }> = ({ embedded = false }) => {
+  const { user: authUser } = useAuthStore();
+  const hasLocationScope = (authUser?.locationIds?.length ?? 0) > 0;
   const [tab, setTab] = useState(0);
   const [warehouses, setWarehouses] = useState<LocationDto[]>([]);
   const [warehouseId, setWarehouseId] = useState<string>("");
+  const [includeVehicles, setIncludeVehicles] = useState(!hasLocationScope);
 
   useEffect(() => {
     fetchWarehouses().then(setWarehouses).catch(() => null);
@@ -1410,29 +1415,43 @@ const ReportsPage: React.FC<{ embedded?: boolean }> = ({ embedded = false }) => 
         </>
       )}
 
-      {warehouses.length > 1 && (
+      {(warehouses.length > 1 || hasLocationScope) && (
         <Paper variant="outlined" sx={{ p: 1.5, mb: 2 }}>
-          <Stack direction="row" alignItems="center" spacing={2}>
+          <Stack direction="row" alignItems="center" spacing={2} flexWrap="wrap">
             <FilterIcon fontSize="small" sx={{ color: "text.secondary" }} />
-            <TextField
-              select
-              size="small"
-              label="Lager"
-              value={warehouseId}
-              onChange={(e) => setWarehouseId(e.target.value)}
-              sx={{ minWidth: 220 }}
-            >
-              <MenuItem value="">Alle Lager</MenuItem>
-              {warehouses.map((w) => (
-                <MenuItem key={w.id} value={w.id}>
-                  {w.name ? `${w.code} – ${w.name}` : w.code}
-                </MenuItem>
-              ))}
-            </TextField>
+            {warehouses.length > 1 && (
+              <TextField
+                select
+                size="small"
+                label="Lager"
+                value={warehouseId}
+                onChange={(e) => setWarehouseId(e.target.value)}
+                sx={{ minWidth: 220 }}
+              >
+                <MenuItem value="">Alle Lager</MenuItem>
+                {warehouses.map((w) => (
+                  <MenuItem key={w.id} value={w.id}>
+                    {w.name ? `${w.code} – ${w.name}` : w.code}
+                  </MenuItem>
+                ))}
+              </TextField>
+            )}
             {warehouseId && (
               <Button size="small" startIcon={<ClearIcon />} onClick={() => setWarehouseId("")}>
                 Zurücksetzen
               </Button>
+            )}
+            {hasLocationScope && (
+              <FormControlLabel
+                control={
+                  <Switch
+                    checked={includeVehicles}
+                    onChange={(e) => setIncludeVehicles(e.target.checked)}
+                    size="small"
+                  />
+                }
+                label="Fahrzeugbuchungen einschließen"
+              />
             )}
           </Stack>
         </Paper>
@@ -1450,10 +1469,10 @@ const ReportsPage: React.FC<{ embedded?: boolean }> = ({ embedded = false }) => 
         ))}
       </Tabs>
 
-      {tab === 0 && <ArticleActivityTab warehouseId={warehouseId || undefined} />}
-      {tab === 1 && <ConsumptionTrendTab warehouseId={warehouseId || undefined} />}
-      {tab === 2 && <SlowMoverTab warehouseId={warehouseId || undefined} />}
-      {tab === 3 && <ForecastTab warehouseId={warehouseId || undefined} />}
+      {tab === 0 && <ArticleActivityTab warehouseId={warehouseId || undefined} includeVehicles={includeVehicles} />}
+      {tab === 1 && <ConsumptionTrendTab warehouseId={warehouseId || undefined} includeVehicles={includeVehicles} />}
+      {tab === 2 && <SlowMoverTab warehouseId={warehouseId || undefined} includeVehicles={includeVehicles} />}
+      {tab === 3 && <ForecastTab warehouseId={warehouseId || undefined} includeVehicles={includeVehicles} />}
     </Box>
   );
 };

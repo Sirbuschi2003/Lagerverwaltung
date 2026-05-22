@@ -87,8 +87,9 @@ export class ReportsService {
     return days;
   }
 
-  async slowMoverReport(thresholdDays: number, branchId?: string | null, locationIds?: string[], warehouseId?: string): Promise<SlowMoverRow[]> {
+  async slowMoverReport(thresholdDays: number, branchId?: string | null, locationIds?: string[], warehouseId?: string, includeVehicleMovements = false): Promise<SlowMoverRow[]> {
     const effectiveLocationIds = await this.resolveLocationIds(warehouseId, locationIds, branchId);
+    const excludeVehicles = effectiveLocationIds?.length && !includeVehicleMovements;
     const levelsQb = this.stockLevelsRepository
       .createQueryBuilder("level")
       .select("level.itemId", "itemId")
@@ -107,6 +108,7 @@ export class ReportsService {
         { locationIds: effectiveLocationIds },
       );
     }
+    if (excludeVehicles) levelsQb.andWhere("level.vehicleId IS NULL");
 
     levelsQb.groupBy("level.itemId").having("SUM(level.quantity) >= 0");
 
@@ -177,8 +179,9 @@ export class ReportsService {
     });
   }
 
-  async consumptionReport(from: Date, to: Date, branchId?: string | null, locationIds?: string[], warehouseId?: string) {
+  async consumptionReport(from: Date, to: Date, branchId?: string | null, locationIds?: string[], warehouseId?: string, includeVehicleMovements = false) {
     const effectiveLocationIds = await this.resolveLocationIds(warehouseId, locationIds, branchId);
+    const excludeVehicles = effectiveLocationIds?.length && !includeVehicleMovements;
     const qb = this.movementsRepository
       .createQueryBuilder("movement")
       .leftJoin("movement.item", "item")
@@ -199,11 +202,13 @@ export class ReportsService {
         { locationIds: effectiveLocationIds },
       );
     }
+    if (excludeVehicles) qb.andWhere("movement.vehicleId IS NULL");
 
     return qb.getMany();
   }
 
-  async stockStatusSummary(branchId?: string | null, locationIds?: string[]) {
+  async stockStatusSummary(branchId?: string | null, locationIds?: string[], includeVehicleMovements = false) {
+    const excludeVehicles = locationIds?.length && !includeVehicleMovements;
     const qb = this.stockLevelsRepository
       .createQueryBuilder("level")
       .leftJoin("level.item", "item")
@@ -221,6 +226,7 @@ export class ReportsService {
         { locationIds },
       );
     }
+    if (excludeVehicles) qb.andWhere("level.vehicleId IS NULL");
 
     return qb.getMany();
   }
@@ -231,8 +237,10 @@ export class ReportsService {
     itemId?: string | null,
     locationIds?: string[],
     warehouseId?: string,
+    includeVehicleMovements = false,
   ): Promise<Array<{ month: string; checkouts: number; checkins: number }>> {
     const effectiveLocationIds = await this.resolveLocationIds(warehouseId, locationIds, branchId);
+    const excludeVehicles = effectiveLocationIds?.length && !includeVehicleMovements;
     const now = new Date();
     const from = new Date(now.getFullYear(), now.getMonth() - months + 1, 1);
 
@@ -246,6 +254,8 @@ export class ReportsService {
       .andWhere("mv.source NOT LIKE :importPattern", { importPattern: "%import%" })
       .groupBy("month")
       .orderBy("month", "ASC");
+
+    if (excludeVehicles) qb.andWhere("mv.vehicleId IS NULL");
 
     if (branchId || itemId || effectiveLocationIds?.length) {
       qb.leftJoin("mv.item", "item");
@@ -283,8 +293,10 @@ export class ReportsService {
     branchId?: string | null,
     locationIds?: string[],
     warehouseId?: string,
+    includeVehicleMovements = false,
   ): Promise<ArticleActivityRow[]> {
     const effectiveLocationIds = await this.resolveLocationIds(warehouseId, locationIds, branchId);
+    const excludeVehicles = effectiveLocationIds?.length && !includeVehicleMovements;
     const qb = this.movementsRepository
       .createQueryBuilder("mv")
       .select("mv.itemId", "itemId")
@@ -311,6 +323,7 @@ export class ReportsService {
         { locationIds: effectiveLocationIds },
       );
     }
+    if (excludeVehicles) qb.andWhere("mv.vehicleId IS NULL");
 
     const raw: Array<{
       itemId: string;
@@ -365,8 +378,10 @@ export class ReportsService {
     branchId?: string | null,
     locationIds?: string[],
     warehouseId?: string,
+    includeVehicleMovements = false,
   ): Promise<ForecastRow[]> {
     const effectiveLocationIds = await this.resolveLocationIds(warehouseId, locationIds, branchId);
+    const excludeVehicles = effectiveLocationIds?.length && !includeVehicleMovements;
     const now = new Date();
     const analysisFrom = new Date(now.getTime() - forecastDays * 24 * 60 * 60 * 1000);
 
@@ -391,6 +406,7 @@ export class ReportsService {
         { locationIds: effectiveLocationIds },
       );
     }
+    if (excludeVehicles) consumptionQb.andWhere("mv.vehicleId IS NULL");
 
     const consumptionRaw: Array<{ itemId: string; totalConsumed: string }> = await consumptionQb.getRawMany();
 
@@ -410,6 +426,7 @@ export class ReportsService {
         { locationIds: effectiveLocationIds },
       );
     }
+    if (excludeVehicles) stockQb.andWhere("level.vehicleId IS NULL");
     stockQb.groupBy("level.itemId");
 
     const stockRaw: Array<{ itemId: string; currentStock: string }> = await stockQb.getRawMany();
