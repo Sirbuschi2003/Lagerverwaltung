@@ -7,6 +7,25 @@ import { StockLevel } from "../stock/entities/stock-level.entity";
 import { StockMovement } from "../stock/entities/stock-movement.entity";
 import { SystemConfigService } from "../system-config/system-config.service";
 
+export interface ForecastRow {
+  itemId: string;
+  code: string;
+  description: string;
+  descriptionSecondary: string | null;
+  manufacturer: string | null;
+  productGroup: string | null;
+  analysisDays: number;
+  totalConsumed: number;
+  avgDailyConsumption: number;
+  forecastQty: number;
+  currentStock: number;
+  deficit: number;
+  daysUntilEmpty: number | null;
+  reorderPoint: number | null;
+  targetStock: number | null;
+  minimumStock: number | null;
+}
+
 export interface SlowMoverRow {
   itemId: string;
   code: string;
@@ -339,6 +358,128 @@ export class ReportsService {
       })
       .filter((r): r is ArticleActivityRow => r !== null)
       .sort((a, b) => (b.checkoutCount + b.checkinCount) - (a.checkoutCount + a.checkinCount));
+  }
+
+  async forecastReport(
+    forecastDays: number,
+    branchId?: string | null,
+    locationIds?: string[],
+    warehouseId?: string,
+  ): Promise<ForecastRow[]> {
+    const effectiveLocationIds = await this.resolveLocationIds(warehouseId, locationIds, branchId);
+    const now = new Date();
+    const analysisFrom = new Date(now.getTime() - forecastDays * 24 * 60 * 60 * 1000);
+
+    // Verbrauch (CHECKOUT) im Analysezeitraum pro Artikel
+    const consumptionQb = this.movementsRepository
+      .createQueryBuilder("mv")
+      .select("mv.itemId", "itemId")
+      .addSelect("SUM(mv.quantity)", "totalConsumed")
+      .leftJoin("mv.item", "item")
+      .leftJoin("item.storageLocation", "storageLocation")
+      .leftJoin("storageLocation.parent", "slParent")
+      .where("mv.occurredAt >= :analysisFrom", { analysisFrom })
+      .andWhere("mv.type = 'CHECKOUT'")
+      .andWhere("mv.isVoided = false")
+      .andWhere("mv.source NOT LIKE :importPattern", { importPattern: "%import%" })
+      .groupBy("mv.itemId");
+
+    if (branchId) consumptionQb.andWhere("item.branchId = :branchId", { branchId });
+    if (effectiveLocationIds?.length) {
+      consumptionQb.andWhere(
+        "(storageLocation.id IN (:...locationIds) OR slParent.id IN (:...locationIds))",
+        { locationIds: effectiveLocationIds },
+      );
+    }
+
+    const consumptionRaw: Array<{ itemId: string; totalConsumed: string }> = await consumptionQb.getRawMany();
+
+    // Aktueller Bestand pro Artikel
+    const stockQb = this.stockLevelsRepository
+      .createQueryBuilder("level")
+      .select("level.itemId", "itemId")
+      .addSelect("SUM(level.quantity)", "currentStock")
+      .leftJoin("level.item", "item")
+      .leftJoin("item.storageLocation", "storageLocation")
+      .leftJoin("storageLocation.parent", "slParent");
+
+    if (branchId) stockQb.andWhere("item.branchId = :branchId", { branchId });
+    if (effectiveLocationIds?.length) {
+      stockQb.andWhere(
+        "(storageLocation.id IN (:...locationIds) OR slParent.id IN (:...locationIds))",
+        { locationIds: effectiveLocationIds },
+      );
+    }
+    stockQb.groupBy("level.itemId");
+
+    const stockRaw: Array<{ itemId: string; currentStock: string }> = await stockQb.getRawMany();
+
+    const allItemIds = [...new Set([...consumptionRaw.map((r) => r.itemId), ...stockRaw.map((r) => r.itemId)])];
+    if (allItemIds.length === 0) return [];
+
+    const itemDetailsRaw: Array<{
+      id: string; code: string; description: string;
+      descriptionSecondary: string | null; manufacturer: string | null; productGroup: string | null;
+      targetStock: string | null; minimumStock: string | null; reorderPoint: string | null;
+    }> = await this.movementsRepository.manager
+      .createQueryBuilder()
+      .select([
+        "item.id AS id", "item.code AS code", "item.description AS description",
+        "item.descriptionSecondary AS descriptionSecondary",
+        "item.manufacturer AS manufacturer", "item.productGroup AS productGroup",
+        "item.targetStock AS targetStock", "item.minimumStock AS minimumStock",
+        "item.reorderPoint AS reorderPoint",
+      ])
+      .from("items", "item")
+      .where("item.id IN (:...itemIds)", { itemIds: allItemIds })
+      .getRawMany();
+
+    const itemMap = new Map(itemDetailsRaw.map((i) => [i.id, i]));
+    const consumptionMap = new Map(consumptionRaw.map((r) => [r.itemId, Number(r.totalConsumed)]));
+    const stockMap = new Map(stockRaw.map((r) => [r.itemId, Number(r.currentStock)]));
+
+    const rows: ForecastRow[] = [];
+    for (const itemId of allItemIds) {
+      const item = itemMap.get(itemId);
+      if (!item) continue;
+
+      const totalConsumed = consumptionMap.get(itemId) ?? 0;
+      const currentStock = Math.max(0, stockMap.get(itemId) ?? 0);
+
+      if (totalConsumed === 0 && currentStock === 0) continue;
+
+      const avgDailyConsumption = Math.round((totalConsumed / forecastDays) * 100) / 100;
+      const forecastQty = totalConsumed; // Verbrauch im gleichen Zeitraum = Prognose
+      const deficit = Math.max(0, forecastQty - currentStock);
+      const daysUntilEmpty = avgDailyConsumption > 0 ? Math.floor(currentStock / avgDailyConsumption) : null;
+
+      rows.push({
+        itemId,
+        code: item.code,
+        description: item.description,
+        descriptionSecondary: item.descriptionSecondary ?? null,
+        manufacturer: item.manufacturer ?? null,
+        productGroup: item.productGroup ?? null,
+        analysisDays: forecastDays,
+        totalConsumed,
+        avgDailyConsumption,
+        forecastQty,
+        currentStock,
+        deficit,
+        daysUntilEmpty,
+        reorderPoint: item.reorderPoint != null ? Number(item.reorderPoint) : null,
+        targetStock: item.targetStock != null ? Number(item.targetStock) : null,
+        minimumStock: item.minimumStock != null ? Number(item.minimumStock) : null,
+      });
+    }
+
+    return rows.sort((a, b) => {
+      if (b.deficit !== a.deficit) return b.deficit - a.deficit;
+      if (a.daysUntilEmpty === null && b.daysUntilEmpty === null) return 0;
+      if (a.daysUntilEmpty === null) return 1;
+      if (b.daysUntilEmpty === null) return -1;
+      return a.daysUntilEmpty - b.daysUntilEmpty;
+    });
   }
 
   async getVehicleStockLevels(vehicleId: string, branchId?: string | null) {

@@ -2140,6 +2140,32 @@ export const fetchSlowMovers = async (days?: number, warehouseId?: string): Prom
   return response.data;
 };
 
+export interface ForecastRow {
+  itemId: string;
+  code: string;
+  description: string;
+  descriptionSecondary: string | null;
+  manufacturer: string | null;
+  productGroup: string | null;
+  analysisDays: number;
+  totalConsumed: number;
+  avgDailyConsumption: number;
+  forecastQty: number;
+  currentStock: number;
+  deficit: number;
+  daysUntilEmpty: number | null;
+  reorderPoint: number | null;
+  targetStock: number | null;
+  minimumStock: number | null;
+}
+
+export const fetchForecast = async (days: number, warehouseId?: string): Promise<ForecastRow[]> => {
+  const params: Record<string, unknown> = { days };
+  if (warehouseId) params.warehouseId = warehouseId;
+  const response = await api.get<ForecastRow[]>("/reports/forecast", { params });
+  return response.data;
+};
+
 export interface ConsumptionTrendEntry {
   month: string; // "YYYY-MM"
   checkouts: number;

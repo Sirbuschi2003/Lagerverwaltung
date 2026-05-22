@@ -113,6 +113,17 @@ export class ReportsController {
     return this.reportsService.articleActivityReport(start, end, req.user?.branchId, req.user?.locationIds, warehouseId);
   }
 
+  @Get("forecast")
+  @Roles("MANAGER", "WAREHOUSE")
+  async forecast(
+    @Req() req: ReportsRequest,
+    @Query("days") daysParam?: string,
+    @Query("warehouseId") warehouseId?: string,
+  ) {
+    const days = daysParam ? Math.min(Math.max(Number.parseInt(daysParam, 10) || 30, 7), 365) : 30;
+    return this.reportsService.forecastReport(days, req.user?.branchId, req.user?.locationIds, warehouseId);
+  }
+
   @Get("slow-movers/settings")
   @Roles("MANAGER", "WAREHOUSE")
   async getSlowMoverSettings(@Req() req: ReportsRequest) {

@@ -37,6 +37,7 @@ import {
   Edit as EditIcon,
   Refresh as RefreshIcon,
   TrendingDown as TrendingDownIcon,
+  TrendingUp as TrendingUpIcon,
   ShowChart as ShowChartIcon,
   FilterList as FilterIcon,
   Clear as ClearIcon,
@@ -55,11 +56,13 @@ import {
   fetchArticleActivity,
   fetchMovementHistory,
   fetchWarehouses,
+  fetchForecast,
   type SlowMoverRow,
   type ConsumptionTrendEntry,
   type ArticleActivityRow,
   type MovementDto,
   type LocationDto,
+  type ForecastRow,
 } from "../utils/api";
 import useAuthStore from "../store/useAuthStore";
 
@@ -1036,12 +1039,307 @@ const ArticleActivityTab: React.FC<{ warehouseId?: string }> = ({ warehouseId })
   );
 };
 
+// ── Forecast Tab ─────────────────────────────────────────────────────────────
+
+const FORECAST_PERIODS = [
+  { label: "7 Tage", days: 7 },
+  { label: "30 Tage", days: 30 },
+  { label: "60 Tage", days: 60 },
+  { label: "90 Tage", days: 90 },
+  { label: "180 Tage", days: 180 },
+  { label: "365 Tage", days: 365 },
+];
+
+const getDaysUntilEmptyColor = (days: number | null, forecastDays: number): "error" | "warning" | "success" | "default" => {
+  if (days === null) return "default";
+  if (days < forecastDays * 0.25) return "error";
+  if (days < forecastDays * 0.75) return "warning";
+  return "success";
+};
+
+const exportForecastCsv = (rows: ForecastRow[], days: number) => {
+  const header = [
+    "Artikelnummer", "Bezeichnung", "Bezeichnung 2", "Hersteller", "Warengruppe",
+    `Verbrauch (${days} Tage)`, "Ø / Tag", "Prognose", "Bestand", "Bedarf", "Reicht bis (Tage)",
+  ];
+  const lines = rows.map((r) => [
+    r.code, r.description, r.descriptionSecondary ?? "",
+    r.manufacturer ?? "", r.productGroup ?? "",
+    r.totalConsumed, r.avgDailyConsumption, r.forecastQty, r.currentStock, r.deficit,
+    r.daysUntilEmpty ?? "",
+  ].map((v) => `"${String(v).replace(/"/g, '""')}"`).join(";"));
+  const csv = "﻿" + [header.join(";"), ...lines].join("\r\n");
+  const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `verbrauchsprognose_${days}tage_${new Date().toISOString().split("T")[0]}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+};
+
+const ForecastTab: React.FC<{ warehouseId?: string }> = ({ warehouseId }) => {
+  const theme = useTheme();
+  const [forecastDays, setForecastDays] = useState<number>(30);
+  const [rows, setRows] = useState<ForecastRow[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [search, setSearch] = useState("");
+  const [filterManufacturer, setFilterManufacturer] = useState("");
+  const [filterGroup, setFilterGroup] = useState("");
+  const [filterOnlyDeficit, setFilterOnlyDeficit] = useState(false);
+
+  const load = useCallback(async (days: number) => {
+    setLoading(true);
+    setError(null);
+    try {
+      const data = await fetchForecast(days, warehouseId);
+      setRows(data);
+    } catch (err: any) {
+      setError(err?.response?.data?.message || err?.message || "Fehler beim Laden");
+    } finally {
+      setLoading(false);
+    }
+  }, [warehouseId]);
+
+  useEffect(() => { void load(forecastDays); }, [load, forecastDays]);
+
+  const manufacturers = useMemo(() => {
+    const set = new Set(rows.map((r) => r.manufacturer).filter(Boolean) as string[]);
+    return [...set].sort((a, b) => a.localeCompare(b, "de"));
+  }, [rows]);
+
+  const productGroups = useMemo(() => {
+    const set = new Set(rows.map((r) => r.productGroup).filter(Boolean) as string[]);
+    return [...set].sort((a, b) => a.localeCompare(b, "de"));
+  }, [rows]);
+
+  const filteredRows = useMemo(() => {
+    const q = search.toLowerCase().trim();
+    return rows.filter((row) => {
+      if (filterOnlyDeficit && row.deficit === 0) return false;
+      if (filterManufacturer && row.manufacturer !== filterManufacturer) return false;
+      if (filterGroup && row.productGroup !== filterGroup) return false;
+      if (q) {
+        return (
+          row.code.toLowerCase().includes(q) ||
+          row.description.toLowerCase().includes(q) ||
+          (row.descriptionSecondary ?? "").toLowerCase().includes(q) ||
+          (row.manufacturer ?? "").toLowerCase().includes(q) ||
+          (row.productGroup ?? "").toLowerCase().includes(q)
+        );
+      }
+      return true;
+    });
+  }, [rows, search, filterManufacturer, filterGroup, filterOnlyDeficit]);
+
+  const totalDeficit = useMemo(() => filteredRows.reduce((s, r) => s + r.deficit, 0), [filteredRows]);
+  const deficitCount = useMemo(() => filteredRows.filter((r) => r.deficit > 0).length, [filteredRows]);
+
+  const hasFilter = search || filterManufacturer || filterGroup || filterOnlyDeficit;
+
+  return (
+    <Box>
+      <Stack direction="row" justifyContent="space-between" alignItems="flex-start" flexWrap="wrap" gap={1.5} sx={{ mb: 2 }}>
+        <Box>
+          <Typography variant="h6" sx={{ fontWeight: 700 }}>Verbrauchsprognose</Typography>
+          <Typography variant="body2" color="text.secondary">
+            Prognostizierter Bedarf auf Basis des Verbrauchs der letzten {forecastDays} Tage
+          </Typography>
+        </Box>
+        <Stack direction="row" gap={1} alignItems="center" flexWrap="wrap">
+          <Button variant="outlined" startIcon={<FileDownloadIcon />} size="small"
+            onClick={() => exportForecastCsv(filteredRows, forecastDays)} disabled={filteredRows.length === 0}>
+            CSV
+          </Button>
+          <Button variant="outlined" startIcon={<RefreshIcon />} onClick={() => load(forecastDays)} size="small">
+            Aktualisieren
+          </Button>
+        </Stack>
+      </Stack>
+
+      {/* Zeitraum-Auswahl */}
+      <Paper variant="outlined" sx={{ p: 1.5, mb: 2 }}>
+        <Stack direction={{ xs: "column", sm: "row" }} gap={1.5} alignItems={{ xs: "flex-start", sm: "center" }} flexWrap="wrap">
+          <Typography variant="body2" color="text.secondary" sx={{ whiteSpace: "nowrap" }}>Zeitraum:</Typography>
+          <ToggleButtonGroup
+            value={forecastDays}
+            exclusive
+            size="small"
+            onChange={(_, v) => { if (v) setForecastDays(v as number); }}
+          >
+            {FORECAST_PERIODS.map((p) => (
+              <ToggleButton key={p.days} value={p.days}>{p.label}</ToggleButton>
+            ))}
+          </ToggleButtonGroup>
+        </Stack>
+      </Paper>
+
+      {/* Filter */}
+      <Paper variant="outlined" sx={{ p: 1.5, mb: 2 }}>
+        <Stack direction={{ xs: "column", sm: "row" }} gap={1.5} flexWrap="wrap" alignItems="center">
+          <TextField
+            size="small"
+            placeholder="Suche: Artikelnr., Bezeichnung, Hersteller…"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            sx={{ flex: 1, minWidth: 220 }}
+            InputProps={{
+              startAdornment: <InputAdornment position="start"><FilterIcon fontSize="small" /></InputAdornment>,
+              endAdornment: search ? <InputAdornment position="end"><IconButton size="small" onClick={() => setSearch("")}><ClearIcon fontSize="small" /></IconButton></InputAdornment> : null,
+            }}
+          />
+          {manufacturers.length > 0 && (
+            <TextField select size="small" label="Hersteller" value={filterManufacturer}
+              onChange={(e) => setFilterManufacturer(e.target.value)} sx={{ minWidth: 160 }}>
+              <MenuItem value="">Alle</MenuItem>
+              {manufacturers.map((m) => <MenuItem key={m} value={m}>{m}</MenuItem>)}
+            </TextField>
+          )}
+          {productGroups.length > 0 && (
+            <TextField select size="small" label="Warengruppe" value={filterGroup}
+              onChange={(e) => setFilterGroup(e.target.value)} sx={{ minWidth: 160 }}>
+              <MenuItem value="">Alle</MenuItem>
+              {productGroups.map((g) => <MenuItem key={g} value={g}>{g}</MenuItem>)}
+            </TextField>
+          )}
+          <Tooltip title="Nur Artikel mit Bedarf (Prognose > Bestand)">
+            <Chip
+              label="Nur Bedarf"
+              color={filterOnlyDeficit ? "error" : "default"}
+              variant={filterOnlyDeficit ? "filled" : "outlined"}
+              onClick={() => setFilterOnlyDeficit((v) => !v)}
+              size="small"
+            />
+          </Tooltip>
+          {hasFilter && (
+            <Button size="small" startIcon={<ClearIcon />} onClick={() => {
+              setSearch(""); setFilterManufacturer(""); setFilterGroup(""); setFilterOnlyDeficit(false);
+            }}>
+              Zurücksetzen
+            </Button>
+          )}
+        </Stack>
+      </Paper>
+
+      {error && <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError(null)}>{error}</Alert>}
+
+      {/* KPI-Zusammenfassung */}
+      {!loading && rows.length > 0 && (
+        <Stack direction="row" spacing={2} sx={{ mb: 2, flexWrap: "wrap" }}>
+          <Paper variant="outlined" sx={{ p: 1.5, minWidth: 150 }}>
+            <Typography variant="caption" color="text.secondary">Artikel analysiert</Typography>
+            <Typography variant="h5" sx={{ fontWeight: 700 }}>{filteredRows.length}</Typography>
+          </Paper>
+          <Paper variant="outlined" sx={{ p: 1.5, minWidth: 150, borderColor: deficitCount > 0 ? "error.main" : "divider" }}>
+            <Typography variant="caption" color="text.secondary">Artikel mit Bedarf</Typography>
+            <Typography variant="h5" sx={{ fontWeight: 700, color: deficitCount > 0 ? "error.main" : "text.primary" }}>
+              {deficitCount}
+            </Typography>
+          </Paper>
+          <Paper variant="outlined" sx={{ p: 1.5, minWidth: 150, borderColor: totalDeficit > 0 ? "error.main" : "divider" }}>
+            <Typography variant="caption" color="text.secondary">Gesamtbedarf (Stk.)</Typography>
+            <Typography variant="h5" sx={{ fontWeight: 700, color: totalDeficit > 0 ? "error.main" : "text.primary" }}>
+              {totalDeficit}
+            </Typography>
+          </Paper>
+        </Stack>
+      )}
+
+      {loading ? (
+        <Box sx={{ display: "flex", justifyContent: "center", py: 6 }}><CircularProgress /></Box>
+      ) : filteredRows.length === 0 ? (
+        <Typography color="text.secondary" sx={{ py: 4, textAlign: "center" }}>
+          {rows.length === 0 ? "Keine Daten für den gewählten Zeitraum." : "Keine Artikel entsprechen den Filterkriterien."}
+        </Typography>
+      ) : (
+        <TableContainer component={Paper} variant="outlined">
+          <Table size="small" stickyHeader>
+            <TableHead>
+              <TableRow>
+                <TableCell sx={{ fontWeight: 700 }}>Artikel</TableCell>
+                <TableCell sx={{ fontWeight: 700 }}>Hersteller</TableCell>
+                <TableCell sx={{ fontWeight: 700 }}>Gruppe</TableCell>
+                <TableCell align="right" sx={{ fontWeight: 700 }}>Verbrauch</TableCell>
+                <TableCell align="right" sx={{ fontWeight: 700 }}>Ø / Tag</TableCell>
+                <TableCell align="right" sx={{ fontWeight: 700 }}>Prognose</TableCell>
+                <TableCell align="right" sx={{ fontWeight: 700 }}>Bestand</TableCell>
+                <TableCell align="right" sx={{ fontWeight: 700 }}>Bedarf</TableCell>
+                <TableCell align="right" sx={{ fontWeight: 700 }}>Reicht bis</TableCell>
+              </TableRow>
+            </TableHead>
+            <TableBody>
+              {filteredRows.map((row) => {
+                const daysColor = getDaysUntilEmptyColor(row.daysUntilEmpty, forecastDays);
+                const hasDeficit = row.deficit > 0;
+                return (
+                  <TableRow
+                    key={row.itemId}
+                    hover
+                    sx={hasDeficit ? { bgcolor: theme.palette.mode === "dark" ? "rgba(211,47,47,0.08)" : "rgba(211,47,47,0.04)" } : undefined}
+                  >
+                    <TableCell>
+                      <Typography variant="body2" sx={{ fontWeight: 600, fontFamily: "monospace" }}>{row.code}</Typography>
+                      <Typography variant="caption" color="text.secondary" display="block">{row.description}</Typography>
+                      {row.descriptionSecondary && (
+                        <Typography variant="caption" color="text.secondary" display="block">{row.descriptionSecondary}</Typography>
+                      )}
+                    </TableCell>
+                    <TableCell>
+                      <Typography variant="caption">{row.manufacturer ?? "–"}</Typography>
+                    </TableCell>
+                    <TableCell>
+                      <Typography variant="caption">{row.productGroup ?? "–"}</Typography>
+                    </TableCell>
+                    <TableCell align="right">
+                      <Typography variant="body2">{row.totalConsumed}</Typography>
+                    </TableCell>
+                    <TableCell align="right">
+                      <Typography variant="body2" color="text.secondary">{row.avgDailyConsumption.toFixed(2)}</Typography>
+                    </TableCell>
+                    <TableCell align="right">
+                      <Typography variant="body2" sx={{ fontWeight: 600 }}>{row.forecastQty}</Typography>
+                    </TableCell>
+                    <TableCell align="right">
+                      <Typography variant="body2">{row.currentStock}</Typography>
+                    </TableCell>
+                    <TableCell align="right">
+                      {hasDeficit ? (
+                        <Chip label={`+${row.deficit}`} size="small" color="error" />
+                      ) : (
+                        <Typography variant="body2" color="success.main">–</Typography>
+                      )}
+                    </TableCell>
+                    <TableCell align="right">
+                      {row.daysUntilEmpty === null ? (
+                        <Typography variant="caption" color="text.disabled">∞</Typography>
+                      ) : (
+                        <Chip
+                          label={`${row.daysUntilEmpty} Tage`}
+                          size="small"
+                          color={daysColor === "default" ? undefined : daysColor}
+                          variant={daysColor === "default" ? "outlined" : "filled"}
+                        />
+                      )}
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
+            </TableBody>
+          </Table>
+        </TableContainer>
+      )}
+    </Box>
+  );
+};
+
 // ── Hauptseite ────────────────────────────────────────────────────────────────
 
 const TABS = [
   { label: "Artikel-Auswertung", icon: <BarChartIcon /> },
   { label: "Verbrauchstrend", icon: <ShowChartIcon /> },
   { label: "Slow-Mover / Dead-Stock", icon: <TrendingDownIcon /> },
+  { label: "Verbrauchsprognose", icon: <TrendingUpIcon /> },
 ];
 
 const ReportsPage: React.FC<{ embedded?: boolean }> = ({ embedded = false }) => {
@@ -1105,6 +1403,7 @@ const ReportsPage: React.FC<{ embedded?: boolean }> = ({ embedded = false }) => 
       {tab === 0 && <ArticleActivityTab warehouseId={warehouseId || undefined} />}
       {tab === 1 && <ConsumptionTrendTab warehouseId={warehouseId || undefined} />}
       {tab === 2 && <SlowMoverTab warehouseId={warehouseId || undefined} />}
+      {tab === 3 && <ForecastTab warehouseId={warehouseId || undefined} />}
     </Box>
   );
 };
