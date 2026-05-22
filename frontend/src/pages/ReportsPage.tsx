@@ -1263,6 +1263,7 @@ const ForecastTab: React.FC<{ warehouseId?: string }> = ({ warehouseId }) => {
           {rows.length === 0 ? "Keine Daten für den gewählten Zeitraum." : "Keine Artikel entsprechen den Filterkriterien."}
         </Typography>
       ) : (
+        <>
         {/* Formel-Erklärung */}
         <Paper variant="outlined" sx={{ p: 1.5, mb: 1.5, bgcolor: "action.hover" }}>
           <Stack direction="row" spacing={1} alignItems="flex-start">
@@ -1376,6 +1377,7 @@ const ForecastTab: React.FC<{ warehouseId?: string }> = ({ warehouseId }) => {
             </TableBody>
           </Table>
         </TableContainer>
+        </>
       )}
     </Box>
   );
