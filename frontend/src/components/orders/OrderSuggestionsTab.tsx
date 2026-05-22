@@ -908,6 +908,11 @@ const OrderSuggestionsTab: React.FC = () => {
                           <Chip label={`${group.items.length} Artikel`} size="small" />
                         </Box>
                       </TableCell>
+                      <TableCell align="right">
+                        <Typography variant="caption" sx={{ fontWeight: 700, color: "text.secondary" }}>
+                          Reichweite ({forecastPeriod}d)
+                        </Typography>
+                      </TableCell>
                     </TableRow>
 
                     {group.items.map((suggestion, itemIndex) => (
