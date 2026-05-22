@@ -45,6 +45,7 @@ import {
   FileDownload as FileDownloadIcon,
   ArrowUpward as ArrowUpIcon,
   ArrowDownward as ArrowDownIcon,
+  InfoOutlined as InfoIcon,
 } from "@mui/icons-material";
 
 import {
@@ -1222,6 +1223,15 @@ const ForecastTab: React.FC<{ warehouseId?: string }> = ({ warehouseId }) => {
         </Stack>
       </Paper>
 
+      {/* Datenqualitäts-Hinweis */}
+      {forecastDays >= 90 && (
+        <Alert severity="info" icon={<InfoIcon fontSize="small" />} sx={{ mb: 2 }}>
+          <strong>Hinweis Datenqualität:</strong> Bei {forecastDays} Tagen Zeitraum werden alle {forecastDays} Tage durch die tatsächlichen Buchungen geteilt –
+          auch Tage ohne Verbrauch. Wenn das System noch keine {forecastDays} Tage läuft, erscheint der Ø/Tag künstlich niedrig
+          und „Reicht bis" übertrieben lang. <strong>Für kurze Systemlaufzeiten (unter 3 Monate) sind 30-Tage-Werte am zuverlässigsten.</strong>
+        </Alert>
+      )}
+
       {error && <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError(null)}>{error}</Alert>}
 
       {/* KPI-Zusammenfassung */}
@@ -1253,6 +1263,24 @@ const ForecastTab: React.FC<{ warehouseId?: string }> = ({ warehouseId }) => {
           {rows.length === 0 ? "Keine Daten für den gewählten Zeitraum." : "Keine Artikel entsprechen den Filterkriterien."}
         </Typography>
       ) : (
+        {/* Formel-Erklärung */}
+        <Paper variant="outlined" sx={{ p: 1.5, mb: 1.5, bgcolor: "action.hover" }}>
+          <Stack direction="row" spacing={1} alignItems="flex-start">
+            <InfoIcon fontSize="small" color="info" sx={{ mt: 0.2, flexShrink: 0 }} />
+            <Box>
+              <Typography variant="caption" color="text.secondary" display="block">
+                <strong>Ø / Tag</strong> = Verbrauch ÷ {forecastDays} Tage &nbsp;|&nbsp;
+                <strong>Prognose</strong> = Ø/Tag × {forecastDays} (= Verbrauch im gleichen Zeitraum) &nbsp;|&nbsp;
+                <strong>Bedarf</strong> = max(0, Prognose − Bestand) &nbsp;|&nbsp;
+                <strong>Reicht bis</strong> = Bestand ÷ Ø/Tag
+              </Typography>
+              <Typography variant="caption" color="text.disabled" display="block" sx={{ mt: 0.25 }}>
+                Beispiel: Bestand 28, Ø/Tag 1,23 → reicht noch 22 Tage &nbsp;·&nbsp; Reicht-bis ändert sich beim Zeitraumwechsel, weil sich Ø/Tag ändert
+              </Typography>
+            </Box>
+          </Stack>
+        </Paper>
+
         <TableContainer component={Paper} variant="outlined">
           <Table size="small" stickyHeader>
             <TableHead>
@@ -1260,12 +1288,32 @@ const ForecastTab: React.FC<{ warehouseId?: string }> = ({ warehouseId }) => {
                 <TableCell sx={{ fontWeight: 700 }}>Artikel</TableCell>
                 <TableCell sx={{ fontWeight: 700 }}>Hersteller</TableCell>
                 <TableCell sx={{ fontWeight: 700 }}>Gruppe</TableCell>
-                <TableCell align="right" sx={{ fontWeight: 700 }}>Verbrauch</TableCell>
-                <TableCell align="right" sx={{ fontWeight: 700 }}>Ø / Tag</TableCell>
-                <TableCell align="right" sx={{ fontWeight: 700 }}>Prognose</TableCell>
+                <TableCell align="right" sx={{ fontWeight: 700 }}>
+                  <Tooltip title={`Tatsächliche CHECKOUT-Buchungen der letzten ${forecastDays} Tage`} placement="top">
+                    <span style={{ cursor: "help", borderBottom: "1px dashed currentColor" }}>Verbrauch</span>
+                  </Tooltip>
+                </TableCell>
+                <TableCell align="right" sx={{ fontWeight: 700 }}>
+                  <Tooltip title={`Verbrauch ÷ ${forecastDays} Tage. Sinkt bei längeren Zeiträumen wenn noch wenig Daten vorhanden sind.`} placement="top">
+                    <span style={{ cursor: "help", borderBottom: "1px dashed currentColor" }}>Ø / Tag</span>
+                  </Tooltip>
+                </TableCell>
+                <TableCell align="right" sx={{ fontWeight: 700 }}>
+                  <Tooltip title={`Erwarteter Bedarf für ${forecastDays} Tage = Verbrauch im gleichen Zeitraum. Wieviel Sie brauchen, damit der Vorrat reicht.`} placement="top">
+                    <span style={{ cursor: "help", borderBottom: "1px dashed currentColor" }}>Prognose</span>
+                  </Tooltip>
+                </TableCell>
                 <TableCell align="right" sx={{ fontWeight: 700 }}>Bestand</TableCell>
-                <TableCell align="right" sx={{ fontWeight: 700 }}>Bedarf</TableCell>
-                <TableCell align="right" sx={{ fontWeight: 700 }}>Reicht bis</TableCell>
+                <TableCell align="right" sx={{ fontWeight: 700 }}>
+                  <Tooltip title={`max(0, Prognose − Bestand). Wieviel Sie bestellen müssten, damit der Vorrat für ${forecastDays} Tage reicht.`} placement="top">
+                    <span style={{ cursor: "help", borderBottom: "1px dashed currentColor" }}>Bedarf</span>
+                  </Tooltip>
+                </TableCell>
+                <TableCell align="right" sx={{ fontWeight: 700 }}>
+                  <Tooltip title="Bestand ÷ Ø/Tag = wie viele Tage der aktuelle Vorrat bei gleichem Tempo reicht. Ändert sich beim Zeitraumwechsel, weil Ø/Tag neu berechnet wird." placement="top">
+                    <span style={{ cursor: "help", borderBottom: "1px dashed currentColor" }}>Reicht bis</span>
+                  </Tooltip>
+                </TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
