@@ -58,6 +58,7 @@ import {
   uploadItemImage,
   deleteItemImage,
   fetchLastOrderForItem,
+  fetchItemById,
   type LastOrderForItemDto,
 } from "../utils/api";
 import useBarcodeScanner from "../hooks/useBarcodeScanner";
@@ -1969,6 +1970,14 @@ Import erfolgreich! Die Artikel sind jetzt verfügbar.`;
     setLastOrder(undefined);
     setOpen(true);
     fetchLastOrderForItem(id).then(setLastOrder).catch(() => setLastOrder(null));
+    fetchItemById(id)
+      .then((fresh) => {
+        setForm((prev) => ({
+          ...prev,
+          currentQuantity: fresh.storageLocation ? (fresh.currentQuantity ?? 0) : undefined,
+        }));
+      })
+      .catch(() => {});
   };
 
   const handleCloseDialog = () => {
