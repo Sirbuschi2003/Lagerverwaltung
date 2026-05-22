@@ -854,6 +854,7 @@ export interface PurchaseOrderSuggestionDto {
   currentQuantity: number;
   neededQuantity: number;
   availableInOtherBranches?: Array<{ branchId: string; branchName: string; quantity: number }>;
+  consumptionRates?: { d30: number; d60: number; d90: number; d180: number; d365: number };
 }
 
 export interface PurchaseOrderQueryParams {

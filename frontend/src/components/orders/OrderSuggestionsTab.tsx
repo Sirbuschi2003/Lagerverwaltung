@@ -106,6 +106,7 @@ const OrderSuggestionsTab: React.FC = () => {
 
   const [selectedSuggestions, setSelectedSuggestions] = useState<Record<string, boolean>>({});
   const [suggestionQuantities, setSuggestionQuantities] = useState<Record<string, number>>({});
+  const [forecastPeriod, setForecastPeriod] = useState<30 | 60 | 90 | 180 | 365>(30);
   
   // Wizard
   const [wizardOpen, setWizardOpen] = useState(false);
@@ -188,6 +189,23 @@ const OrderSuggestionsTab: React.FC = () => {
     if (structuredCode) return structuredCode;
 
     return target.code || "-";
+  };
+
+  const getDailyRate = (suggestion: PurchaseOrderSuggestionDto) => {
+    const rates = suggestion.consumptionRates;
+    if (!rates) return null;
+    const key = `d${forecastPeriod}` as keyof typeof rates;
+    return rates[key] ?? null;
+  };
+
+  const formatReachability = (suggestion: PurchaseOrderSuggestionDto, orderQty: number) => {
+    const rate = getDailyRate(suggestion);
+    if (!rate || rate <= 0) return null;
+    const totalStock = suggestion.currentQuantity + orderQty;
+    const days = Math.round(totalStock / rate);
+    if (days >= 365) return `~${Math.round(days / 30)} Mo.`;
+    if (days >= 60) return `~${Math.round(days / 7)} Wo.`;
+    return `~${days} Tage`;
   };
 
   const formatLocation = (locationId?: string | null) => {
@@ -741,6 +759,21 @@ const OrderSuggestionsTab: React.FC = () => {
               label="Bestand anderer Niederlassungen"
             />
           </Tooltip>
+          <TextField
+            select
+            size="small"
+            label="Reichweite-Basis"
+            value={forecastPeriod}
+            onChange={(e) => setForecastPeriod(Number(e.target.value) as 30 | 60 | 90 | 180 | 365)}
+            sx={{ minWidth: 140 }}
+            SelectProps={{ native: true }}
+          >
+            <option value={30}>30 Tage</option>
+            <option value={60}>60 Tage</option>
+            <option value={90}>90 Tage</option>
+            <option value={180}>180 Tage</option>
+            <option value={365}>365 Tage</option>
+          </TextField>
         </Box>
         <Box sx={{ display: "flex", gap: 1 }}>
           <Button
@@ -788,6 +821,11 @@ const OrderSuggestionsTab: React.FC = () => {
                 <TableCell align="right">Soll</TableCell>
                 <TableCell align="right">Benötigt</TableCell>
                 <TableCell align="right">Menge bestellen</TableCell>
+                <TableCell align="right">
+                  <Tooltip title="Hochgerechnete Reichweite nach Eingang der Bestellmenge, basierend auf dem Verbrauch im gewählten Zeitraum (nur Lagerabgänge, ohne Fahrzeuge)">
+                    <span>Reichweite ({forecastPeriod}d)</span>
+                  </Tooltip>
+                </TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
@@ -1003,6 +1041,21 @@ const OrderSuggestionsTab: React.FC = () => {
                             sx={{ width: 80 }}
                             disabled={!canCreate}
                           />
+                        </TableCell>
+                        <TableCell align="right">
+                          {(() => {
+                            const qty = suggestionQuantities[suggestion.itemId] ?? 0;
+                            const label = formatReachability(suggestion, qty);
+                            if (!label) return <Typography variant="caption" color="text.disabled">–</Typography>;
+                            const rate = getDailyRate(suggestion);
+                            const days = rate && rate > 0 ? Math.round((suggestion.currentQuantity + qty) / rate) : 0;
+                            const color = days < 30 ? "error" : days < 90 ? "warning.main" : "success.main";
+                            return (
+                              <Typography variant="caption" fontWeight="bold" color={color}>
+                                {label}
+                              </Typography>
+                            );
+                          })()}
                         </TableCell>
                       </TableRow>
                     ))}

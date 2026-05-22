@@ -766,6 +766,7 @@ export class PurchasingService {
       currentQuantity: number;
       neededQuantity: number;
       availableInOtherBranches: Array<{ branchId: string; branchName: string; quantity: number }>;
+      consumptionRates: { d30: number; d60: number; d90: number; d180: number; d365: number };
     }> = [];
 
     for (const item of itemEntities) {
@@ -812,7 +813,45 @@ export class PurchasingService {
         currentQuantity,
         neededQuantity: needed,
         availableInOtherBranches: [],
+        consumptionRates: { d30: 0, d60: 0, d90: 0, d180: 0, d365: 0 },
       });
+    }
+
+    // Tagesverbrauchsraten für alle Vorschlag-Artikel in einem Query berechnen
+    if (suggestions.length > 0) {
+      const suggestionItemIds = suggestions.map((s) => s.itemId);
+      const rateRows: Array<{
+        itemId: string;
+        qty30: string; qty60: string; qty90: string; qty180: string; qty365: string;
+      }> = await this.dataSource.query(
+        `SELECT
+          mv.itemId,
+          SUM(CASE WHEN mv.occurredAt >= DATE_SUB(NOW(), INTERVAL 30 DAY) THEN mv.quantity ELSE 0 END) AS qty30,
+          SUM(CASE WHEN mv.occurredAt >= DATE_SUB(NOW(), INTERVAL 60 DAY) THEN mv.quantity ELSE 0 END) AS qty60,
+          SUM(CASE WHEN mv.occurredAt >= DATE_SUB(NOW(), INTERVAL 90 DAY) THEN mv.quantity ELSE 0 END) AS qty90,
+          SUM(CASE WHEN mv.occurredAt >= DATE_SUB(NOW(), INTERVAL 180 DAY) THEN mv.quantity ELSE 0 END) AS qty180,
+          SUM(mv.quantity) AS qty365
+        FROM stock_movements mv
+        WHERE mv.itemId IN (?)
+          AND mv.type = 'CHECKOUT'
+          AND mv.isVoided = 0
+          AND mv.vehicleId IS NULL
+          AND mv.occurredAt >= DATE_SUB(NOW(), INTERVAL 365 DAY)
+          AND mv.source NOT LIKE '%import%'
+        GROUP BY mv.itemId`,
+        [suggestionItemIds],
+      );
+      const rateMap = new Map(rateRows.map((r) => [r.itemId, r]));
+      for (const suggestion of suggestions) {
+        const row = rateMap.get(suggestion.itemId);
+        suggestion.consumptionRates = {
+          d30: row ? Math.round((Number(row.qty30) / 30) * 1000) / 1000 : 0,
+          d60: row ? Math.round((Number(row.qty60) / 60) * 1000) / 1000 : 0,
+          d90: row ? Math.round((Number(row.qty90) / 90) * 1000) / 1000 : 0,
+          d180: row ? Math.round((Number(row.qty180) / 180) * 1000) / 1000 : 0,
+          d365: row ? Math.round((Number(row.qty365) / 365) * 1000) / 1000 : 0,
+        };
+      }
     }
 
     // Cross-Branch-Verfügbarkeit nachladen (nur wenn Benutzer einer Niederlassung angehört)
