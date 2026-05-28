@@ -1,7 +1,9 @@
 import React, { useEffect, useState } from "react";
 import { Box, Chip, Stack, useTheme } from "@mui/material";
 import { DirectionsCar, WifiOff } from "@mui/icons-material";
-import { Outlet, useNavigate } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
+import TabBar from "./TabBar";
+import KeepAliveOutlet from "./KeepAliveOutlet";
 import axios from "axios";
 
 import useAuthStore from "../store/useAuthStore";
@@ -71,6 +73,8 @@ const AppLayout = () => {
       <NavigationDrawer open={drawerOpen} onClose={toggleDrawer} />
 
       <Box component="main" sx={layoutStyles.main}>
+        <TabBar />
+
         <Stack direction="row" spacing={1} sx={{ mb: 2, flexWrap: "wrap" }}>
           {!isOnline && (
             <Chip
@@ -96,7 +100,7 @@ const AppLayout = () => {
           )}
         </Stack>
 
-        <Outlet />
+        <KeepAliveOutlet />
       </Box>
     </Box>
   );

@@ -6,29 +6,6 @@ import AppLayout from "./components/AppLayout";
 import LoginPage from "./pages/LoginPage";
 import ResetPasswordPage from "./pages/ResetPasswordPage";
 import SetupPage from "./pages/SetupPage";
-import DashboardPage from "./pages/DashboardPage";
-import InventoryPage from "./pages/InventoryPage";
-import ItemsPage from "./pages/ItemsPage";
-import MyVehiclePage from "./pages/MyVehiclePage";
-import ScannerPage from "./pages/ScannerPage";
-import QuickBookingPage from "./pages/QuickBookingPage";
-import SyncPage from "./pages/SyncPage";
-import VehiclesPage from "./pages/VehiclesPage";
-import FleetOverviewPage from "./pages/FleetOverviewPage";
-import SettingsPage from "./pages/SettingsPage";
-import BackupPage from "./pages/BackupPage";
-import LogsPage from "./pages/LogsPage";
-import LiveLogsPage from "./pages/LiveLogsPage";
-import LogsManagementPage from "./pages/LogsManagementPage";
-import WarehouseSettingsPage from "./pages/WarehouseSettingsPage";
-import EmailSettingsPage from "./pages/EmailSettingsPage";
-import MovementHistoryPage from "./pages/MovementHistoryPage";
-import AccessControlPage from "./pages/AccessControlPage";
-import BranchesPage from "./pages/BranchesPage";
-import AdminMaintenancePage from "./pages/AdminMaintenancePage";
-import LocationsPage from "./pages/LocationsPage";
-import SuppliersPage from "./pages/SuppliersPage";
-import OrdersPage from "./pages/OrdersPage";
 import createAppTheme from "./styles/createTheme";
 import useAuthStore from "./store/useAuthStore";
 import useSystemConfigStore from "./store/useSystemConfigStore";
@@ -121,56 +98,44 @@ const AppContent = () => {
             </>
           ) : (
             <Route path="/" element={<AppLayout />}>
-              <Route
-                index
-                element={hasPermission("dashboard.view") ? <DashboardPage /> : <NoAccessPage />}
-              />
-              <Route
-                path="dashboard"
-                element={hasPermission("dashboard.view") ? <DashboardPage /> : <NoAccessPage />}
-              />
-              <Route path="items" element={hasPermission("items.view") ? <ItemsPage /> : <Navigate to="/" replace />} />
-              <Route path="locations" element={hasPermission("locations.view") ? <LocationsPage /> : <Navigate to="/" replace />} />
-              <Route path="suppliers" element={hasPermission("suppliers.view") ? <SuppliersPage /> : <Navigate to="/" replace />} />
-              <Route path="orders" element={hasPermission("orders.view") ? <OrdersPage /> : <Navigate to="/" replace />} />
-              <Route path="scanner" element={hasPermission("scanner.use") ? <ScannerPage /> : <Navigate to="/" replace />} />
-              <Route path="quick-booking" element={hasPermission("quick-booking.use") ? <QuickBookingPage /> : <Navigate to="/" replace />} />
-              <Route path="vehicle" element={hasPermission("myvehicle.view") ? <MyVehiclePage /> : <Navigate to="/" replace />} />
-              <Route path="my-vehicle" element={hasPermission("myvehicle.view") ? <MyVehiclePage /> : <Navigate to="/" replace />} />
+              {/* Index + Dashboard */}
+              <Route index element={hasPermission("dashboard.view") ? <></> : <NoAccessPage />} />
+              <Route path="dashboard" element={hasPermission("dashboard.view") ? <></> : <NoAccessPage />} />
+
+              {/* Hauptseiten – KeepAliveOutlet übernimmt das Rendern */}
+              <Route path="items"         element={hasPermission("items.view")         ? <></> : <Navigate to="/" replace />} />
+              <Route path="locations"     element={hasPermission("locations.view")     ? <></> : <Navigate to="/" replace />} />
+              <Route path="suppliers"     element={hasPermission("suppliers.view")     ? <></> : <Navigate to="/" replace />} />
+              <Route path="orders"        element={hasPermission("orders.view")        ? <></> : <Navigate to="/" replace />} />
+              <Route path="scanner"       element={hasPermission("scanner.use")        ? <></> : <Navigate to="/" replace />} />
+              <Route path="quick-booking" element={hasPermission("quick-booking.use")  ? <></> : <Navigate to="/" replace />} />
+              <Route path="vehicle"       element={hasPermission("myvehicle.view")     ? <></> : <Navigate to="/" replace />} />
+              <Route path="my-vehicle"    element={hasPermission("myvehicle.view")     ? <></> : <Navigate to="/" replace />} />
               <Route
                 path="inventory"
-                element={
-                  hasPermission(["inventory.view", "inventory.manage", "inventory.execute"])
-                    ? <InventoryPage />
-                    : <Navigate to="/" replace />
-                }
+                element={hasPermission(["inventory.view", "inventory.manage", "inventory.execute"]) ? <></> : <Navigate to="/" replace />}
               />
-              <Route path="sync" element={hasPermission("sync.use") ? <SyncPage /> : <Navigate to="/" replace />} />
-              <Route path="fleet" element={hasPermission("fleet.view") ? <FleetOverviewPage /> : <Navigate to="/" replace />} />
-              {hasPermission("settings.company") && <Route path="settings" element={<SettingsPage />} />}
-              {hasPermission("settings.email") && <Route path="settings/email" element={<EmailSettingsPage />} />}
-              {hasPermission("settings.company") && <Route path="settings/maintenance" element={<AdminMaintenancePage />} />}
+              <Route path="sync"  element={hasPermission("sync.use")   ? <></> : <Navigate to="/" replace />} />
+              <Route path="fleet" element={hasPermission("fleet.view") ? <></> : <Navigate to="/" replace />} />
+
+              {/* Einstellungen */}
+              {hasPermission("settings.company") && <Route path="settings"             element={<></>} />}
+              {hasPermission("settings.email")   && <Route path="settings/email"       element={<></>} />}
+              {hasPermission("settings.company") && <Route path="settings/maintenance" element={<></>} />}
+              {hasPermission("settings.company") && <Route path="settings/warehouse"   element={<></>} />}
               {hasPermission("settings.company") && (
-                <Route
-                  path="settings/inventory-template"
-                  element={<Navigate to="/settings/warehouse?tab=inventory-template" replace />}
-                />
+                <Route path="settings/inventory-template" element={<Navigate to="/settings/warehouse?tab=inventory-template" replace />} />
               )}
               {hasPermission("settings.company") && (
-                <Route
-                  path="settings/pdf-template"
-                  element={<Navigate to="/settings/warehouse?tab=qr-template" replace />}
-                />
+                <Route path="settings/pdf-template" element={<Navigate to="/settings/warehouse?tab=qr-template" replace />} />
               )}
-              {hasPermission("settings.company") && (
-                <Route path="settings/warehouse" element={<WarehouseSettingsPage />} />
-              )}
-              {hasPermission("backup.access") && <Route path="backup" element={<BackupPage />} />}
-              {hasPermission("logs.view") && <Route path="logs" element={<LogsManagementPage />} />}
-              {hasPermission("movements.view") && <Route path="movements" element={<MovementHistoryPage />} />}
-              {hasPermission("logs.view") && <Route path="settings/logs" element={<LiveLogsPage />} />}
-              {hasPermission("access.manage") && <Route path="access-control" element={<AccessControlPage />} />}
-              {hasPermission("branches.manage") && <Route path="branches" element={<BranchesPage />} />}
+              {hasPermission("backup.access")    && <Route path="backup"          element={<></>} />}
+              {hasPermission("logs.view")        && <Route path="logs"            element={<></>} />}
+              {hasPermission("movements.view")   && <Route path="movements"       element={<></>} />}
+              {hasPermission("logs.view")        && <Route path="settings/logs"   element={<></>} />}
+              {hasPermission("access.manage")    && <Route path="access-control"  element={<></>} />}
+              {hasPermission("branches.manage")  && <Route path="branches"        element={<></>} />}
+
               <Route path="*" element={<Navigate to="/" replace />} />
             </Route>
           )}

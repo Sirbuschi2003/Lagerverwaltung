@@ -1717,6 +1717,7 @@ Import erfolgreich! Die Artikel sind jetzt verfügbar.`;
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setSubmitting] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
+  const [lightboxItemId, setLightboxItemId] = useState<string | null>(null);
   const [imageUploading, setImageUploading] = useState(false);
   const [imageKey, setImageKey] = useState(0);
   const [lastOrder, setLastOrder] = useState<LastOrderForItemDto | null | undefined>(undefined);
@@ -2674,18 +2675,28 @@ TB-FC330,Toner Schwarz,Toshiba,Toner,5,89.90,Regal 3 / Fach 1`}
                 </Box>
               </Box>
               
-              <Typography
-                variant="body1"
-                sx={{ fontWeight: 500, mb: item.descriptionSecondary ? 0.25 : 1 }}
-              >
-                {item.description}
-              </Typography>
-              {item.descriptionSecondary && (
-                <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
-                  {item.descriptionSecondary}
-                </Typography>
-              )}
-              
+              <Box sx={{ display: 'flex', gap: 1.5, alignItems: 'flex-start', mb: 1 }}>
+                <Box sx={{ flex: 1 }}>
+                  <Typography variant="body1" sx={{ fontWeight: 500, mb: item.descriptionSecondary ? 0.25 : 0 }}>
+                    {item.description}
+                  </Typography>
+                  {item.descriptionSecondary && (
+                    <Typography variant="body2" color="text.secondary">
+                      {item.descriptionSecondary}
+                    </Typography>
+                  )}
+                </Box>
+                {item.imagePath && (
+                  <Box
+                    component="img"
+                    src={getItemImageUrl(item.id)}
+                    alt=""
+                    onClick={() => setLightboxItemId(item.id)}
+                    sx={{ width: 64, height: 64, objectFit: 'cover', borderRadius: 1, cursor: 'zoom-in', flexShrink: 0 }}
+                  />
+                )}
+              </Box>
+
               <Grid container spacing={1} sx={{ mb: 1 }}>
                 <Grid item xs={6}>
                   <Typography variant="body2" color="text.secondary">
@@ -2790,7 +2801,8 @@ TB-FC330,Toner Schwarz,Toshiba,Toner,5,89.90,Regal 3 / Fach 1`}
                       component="img"
                       src={getItemImageUrl(item.id)}
                       alt=""
-                      sx={{ width: 40, height: 40, objectFit: "cover", borderRadius: 0.5, display: "block" }}
+                      onClick={(e) => { e.stopPropagation(); setLightboxItemId(item.id); }}
+                      sx={{ width: 40, height: 40, objectFit: "cover", borderRadius: 0.5, display: "block", cursor: "zoom-in" }}
                     />
                   ) : null}
                 </TableCell>
@@ -3350,6 +3362,27 @@ TB-FC330,Toner Schwarz,Toshiba,Toner,5,89.90,Regal 3 / Fach 1`}
             Löschen
           </Button>
         </DialogActions>
+      </Dialog>
+      {/* Bild-Lightbox */}
+      <Dialog
+        open={lightboxItemId !== null}
+        onClose={() => setLightboxItemId(null)}
+        maxWidth="md"
+        fullWidth
+      >
+        <DialogContent
+          sx={{ p: 0, display: 'flex', justifyContent: 'center', alignItems: 'center', bgcolor: '#000', minHeight: 200 }}
+          onClick={() => setLightboxItemId(null)}
+        >
+          {lightboxItemId && (
+            <Box
+              component="img"
+              src={getItemImageUrl(lightboxItemId)}
+              alt=""
+              sx={{ maxWidth: '100%', maxHeight: '85vh', objectFit: 'contain', display: 'block' }}
+            />
+          )}
+        </DialogContent>
       </Dialog>
     </Box>
   );

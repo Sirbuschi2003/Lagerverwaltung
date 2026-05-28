@@ -8,6 +8,7 @@ cleanupOutdatedCaches();
 const CACHE_VERSION = 'v7-workbox';
 const API_CACHE = `kfz-api-${CACHE_VERSION}`;
 const OFFLINE_DATA_CACHE = `kfz-offline-data-${CACHE_VERSION}`;
+const IMAGE_CACHE = 'kfz-item-images-v1';
 const DEFAULT_FETCH_TIMEOUT = 2500;
 
 const CACHEABLE_APIS = [
@@ -35,6 +36,7 @@ self.addEventListener('activate', (event) => {
             (name) =>
               name !== API_CACHE &&
               name !== OFFLINE_DATA_CACHE &&
+              name !== IMAGE_CACHE &&
               !name.startsWith('workbox-')
           )
           .map((name) => caches.delete(name))
@@ -47,6 +49,11 @@ self.addEventListener('activate', (event) => {
 self.addEventListener('message', async (event) => {
   if (event.data?.type === 'SKIP_WAITING') {
     self.skipWaiting();
+    return;
+  }
+
+  if (event.data?.type === 'PRECACHE_IMAGES') {
+    event.waitUntil(precacheImages(event.data.itemIds ?? []));
     return;
   }
 
@@ -95,6 +102,27 @@ self.addEventListener('fetch', (event) => {
   const url = new URL(request.url);
 
   if (url.pathname.startsWith('/api')) {
+    // Artikel-Bilder: network-first, offline-Fallback aus IMAGE_CACHE
+    if (/^\/api\/items\/[^/]+\/image$/.test(url.pathname)) {
+      event.respondWith(
+        fetchWithTimeout(request, { timeout: 4000 })
+          .then((response) => {
+            if (response.ok) {
+              const cacheCopy = response.clone();
+              caches.open(IMAGE_CACHE).then((cache) => cache.put(request, cacheCopy));
+            }
+            return response;
+          })
+          .catch(() =>
+            caches.open(IMAGE_CACHE).then((cache) => cache.match(request)).then((cached) => {
+              if (cached) return cached;
+              return new Response('', { status: 503 });
+            })
+          )
+      );
+      return;
+    }
+
     if (url.pathname === '/api/auth/login') {
       event.respondWith(
         fetchWithTimeout(request, { timeout: 4000 })
@@ -251,4 +279,22 @@ function waitForTransaction(tx) {
     tx.onabort = () => reject(tx.error);
     tx.onerror = () => reject(tx.error);
   });
+}
+
+async function precacheImages(itemIds) {
+  if (!itemIds?.length) return;
+  const cache = await caches.open(IMAGE_CACHE);
+  for (const id of itemIds) {
+    const url = `/api/items/${id}/image`;
+    try {
+      const existing = await cache.match(url);
+      if (existing) continue;
+      const response = await fetchWithTimeout(url, { timeout: 6000 });
+      if (response.ok) {
+        await cache.put(url, response);
+      }
+    } catch {
+      // Netzwerkfehler – dieses Bild beim nächsten Mal cachen
+    }
+  }
 }

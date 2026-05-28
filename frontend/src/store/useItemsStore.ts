@@ -30,6 +30,15 @@ interface ItemsStoreState {
   updateItem: (id: any, payload: any) => Promise<Item>;
   deleteItem: (id: any) => Promise<void>;
 }
+function precacheItemImages(items: Item[]): void {
+  if (typeof navigator === 'undefined' || !('serviceWorker' in navigator)) return;
+  const controller = navigator.serviceWorker.controller;
+  if (!controller) return;
+  const ids = items.filter((i) => i.imagePath).map((i) => i.id);
+  if (ids.length === 0) return;
+  controller.postMessage({ type: 'PRECACHE_IMAGES', itemIds: ids });
+}
+
 const isOfflineMode = (): boolean => {
   const browserOffline = typeof navigator !== "undefined" ? !navigator.onLine : false;
   try {
@@ -99,6 +108,7 @@ const useItemsStore = create<ItemsStoreState>((set: any, get: any) => ({
                 limit: data.limit,
                 lastLoaded: Date.now()
               });
+              precacheItemImages(data.items);
               // Cache aktualisieren
               storage.setItems(data.items).catch(() => {
                 // Nicht kritisch, Cache bleibt gültig
@@ -139,6 +149,7 @@ const useItemsStore = create<ItemsStoreState>((set: any, get: any) => ({
         isLoading: false,
         lastLoaded: now
       });
+      precacheItemImages(data.items);
     } catch (error) {
       // Fallback: Versuche aus lokalem Storage zu laden
       try {
