@@ -54,7 +54,7 @@ import {
 import VehicleMovementPanel from "../components/VehicleMovementPanel";
 import { SyncStatusIndicator } from "../components/SyncStatusIndicator";
 import { RestockRequestStatus } from "../utils/api";
-import { downloadVehicleQrCatalog } from "../utils/api";
+import { downloadVehicleQrCatalog, getItemImageUrl } from "../utils/api";
 
 const restockStatusLabelMap: Record<RestockRequestStatus, string> = {
   PENDING: "Offen",
@@ -91,6 +91,7 @@ const MyVehiclePage = () => {
   const [scanTargetSaving, setScanTargetSaving] = useState<string | null>(null);
   const [notFoundDialogOpen, setNotFoundDialogOpen] = useState(false); // Dialog für "Artikel nicht gefunden"
   const [notFoundCode, setNotFoundCode] = useState<string>(""); // Code des nicht gefundenen Artikels
+  const [lightboxItemId, setLightboxItemId] = useState<string | null>(null);
   // States für Scanner Action Dialog
   const [scanActionQuantity, setScanActionQuantity] = useState<number>(1);
   const [scanActionTargetQuantity, setScanActionTargetQuantity] = useState<number | null>(null);
@@ -1661,21 +1662,32 @@ const MyVehiclePage = () => {
               >
                 <Stack spacing={2}>
                   {/* Header: Code und Bezeichnung */}
-                  <Box>
-                    <Typography variant="h6" component="div" sx={{ fontWeight: 'bold', fontSize: '1rem' }}>
-                      {entry.item.code}
-                    </Typography>
-                    <Typography variant="body2" color="text.primary" sx={{ mt: 0.5 }}>
-                      {entry.item.description}
-                      {entry.item.descriptionSecondary && (
-                        <Typography variant="body2" color="text.secondary">
-                          {entry.item.descriptionSecondary}
-                        </Typography>
-                      )}
-                    </Typography>
-                    <Typography variant="caption" color="text.secondary">
-                      {entry.item.manufacturer || "-"} • {entry.item.productGroup || "-"}
-                    </Typography>
+                  <Box sx={{ display: 'flex', gap: 1.5, alignItems: 'flex-start' }}>
+                    <Box sx={{ flex: 1 }}>
+                      <Typography variant="h6" component="div" sx={{ fontWeight: 'bold', fontSize: '1rem' }}>
+                        {entry.item.code}
+                      </Typography>
+                      <Typography variant="body2" color="text.primary" sx={{ mt: 0.5 }}>
+                        {entry.item.description}
+                        {entry.item.descriptionSecondary && (
+                          <Typography variant="body2" color="text.secondary">
+                            {entry.item.descriptionSecondary}
+                          </Typography>
+                        )}
+                      </Typography>
+                      <Typography variant="caption" color="text.secondary">
+                        {entry.item.manufacturer || "-"} • {entry.item.productGroup || "-"}
+                      </Typography>
+                    </Box>
+                    {entry.item.imagePath && (
+                      <Box
+                        component="img"
+                        src={getItemImageUrl(entry.item.id)}
+                        alt=""
+                        onClick={() => setLightboxItemId(entry.item.id)}
+                        sx={{ width: 64, height: 64, objectFit: 'cover', borderRadius: 1, cursor: 'zoom-in', flexShrink: 0 }}
+                      />
+                    )}
                   </Box>
 
                   {/* Bestands-Informationen */}
@@ -2129,6 +2141,28 @@ const MyVehiclePage = () => {
             );
           })()}
         </DialogActions>
+      </Dialog>
+
+      {/* Bild-Lightbox */}
+      <Dialog
+        open={lightboxItemId !== null}
+        onClose={() => setLightboxItemId(null)}
+        maxWidth="md"
+        fullWidth
+      >
+        <DialogContent
+          sx={{ p: 0, display: 'flex', justifyContent: 'center', alignItems: 'center', bgcolor: '#000', minHeight: 200 }}
+          onClick={() => setLightboxItemId(null)}
+        >
+          {lightboxItemId && (
+            <Box
+              component="img"
+              src={getItemImageUrl(lightboxItemId)}
+              alt=""
+              sx={{ maxWidth: '100%', maxHeight: '85vh', objectFit: 'contain', display: 'block' }}
+            />
+          )}
+        </DialogContent>
       </Dialog>
 
       {/* Floating Action entfernt zugunsten des sticky Headers */}

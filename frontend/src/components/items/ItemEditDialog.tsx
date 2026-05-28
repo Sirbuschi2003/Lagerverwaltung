@@ -410,6 +410,7 @@ const ItemEditDialog: React.FC<ItemEditDialogProps> = ({ itemId, open, onClose, 
                       </Box>
                     )}
                     <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
+                      {/* Galerie-Upload */}
                       <Button
                         component="label"
                         variant="outlined"
@@ -417,11 +418,42 @@ const ItemEditDialog: React.FC<ItemEditDialogProps> = ({ itemId, open, onClose, 
                         startIcon={imageUploading ? <CircularProgress size={14} /> : <AddPhotoAlternateIcon />}
                         disabled={imageUploading || !itemId}
                       >
-                        {originalItem?.imagePath ? "Bild ersetzen" : "Bild hochladen"}
+                        {originalItem?.imagePath ? "Galerie (ersetzen)" : "Aus Galerie"}
                         <input
                           type="file"
                           hidden
-                          accept="image/jpeg,image/png,image/webp"
+                          accept="image/*"
+                          onChange={async (e) => {
+                            const file = e.target.files?.[0];
+                            if (!file || !itemId) return;
+                            setImageUploading(true);
+                            try {
+                              const updated = await uploadItemImage(itemId, file);
+                              setOriginalItem(updated);
+                              setImageKey((k) => k + 1);
+                            } catch {
+                              setError("Bild konnte nicht hochgeladen werden.");
+                            } finally {
+                              setImageUploading(false);
+                              e.target.value = "";
+                            }
+                          }}
+                        />
+                      </Button>
+                      {/* Kamera-Upload (öffnet direkt die Kamera auf Mobilgeräten) */}
+                      <Button
+                        component="label"
+                        variant="outlined"
+                        size="small"
+                        startIcon={imageUploading ? <CircularProgress size={14} /> : <AddPhotoAlternateIcon />}
+                        disabled={imageUploading || !itemId}
+                      >
+                        {originalItem?.imagePath ? "Kamera (ersetzen)" : "Foto aufnehmen"}
+                        <input
+                          type="file"
+                          hidden
+                          accept="image/*"
+                          capture="environment"
                           onChange={async (e) => {
                             const file = e.target.files?.[0];
                             if (!file || !itemId) return;
