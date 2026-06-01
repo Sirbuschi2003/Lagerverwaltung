@@ -33,6 +33,15 @@ import useAuthStore from "../store/useAuthStore";
 import { fetchMovementHistory, fetchWarehouses, cleanupMovements, fetchDeliveryNoteExists, openDeliveryNotePdf, MovementDto, type LocationDto } from "../utils/api";
 import ReportsPage from "./ReportsPage";
 
+// Extrahiert die Auftragsnummer aus einem QR-Code (LFS/460234/101501/400 → "101501")
+// oder gibt den Wert unverändert zurück falls er kein LFS-Format hat.
+const extractAuftragsnummer = (source: string | null | undefined): string | null => {
+  if (!source) return null;
+  const parts = source.split("/");
+  if (parts.length >= 3 && parts[0] === "LFS") return parts[2];
+  return source;
+};
+
 const MovementHistoryTab: React.FC = () => {
   const { items, loadItems } = useItemsStore();
   const { users, loadUsers } = useUsersStore();
@@ -123,7 +132,7 @@ const MovementHistoryTab: React.FC = () => {
       setTotal(res.total);
       setSummary(res.summary);
 
-      const vnrs = res.movements.map((m) => m.source).filter(Boolean) as string[];
+      const vnrs = res.movements.map((m) => extractAuftragsnummer(m.source)).filter(Boolean) as string[];
       fetchDeliveryNoteExists(vnrs).then(setDeliveryNoteVnrs).catch(() => null);
     } catch (err: any) {
       setError(err?.response?.data?.message || "Bewegungen konnten nicht geladen werden");
@@ -359,11 +368,11 @@ const MovementHistoryTab: React.FC = () => {
                     <TableCell>
                       <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
                         {m.source || "-"}
-                        {m.source && deliveryNoteVnrs.has(m.source) && (
+                        {m.source && deliveryNoteVnrs.has(extractAuftragsnummer(m.source)!) && (
                           <Tooltip title="Lieferschein öffnen">
                             <IconButton
                               size="small"
-                              onClick={() => openDeliveryNotePdf(m.source!)}
+                              onClick={() => openDeliveryNotePdf(extractAuftragsnummer(m.source)!)}
                               sx={{ color: "error.main", p: 0.25 }}
                             >
                               <PictureAsPdfIcon fontSize="small" />
