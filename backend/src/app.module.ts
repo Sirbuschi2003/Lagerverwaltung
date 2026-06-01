@@ -27,6 +27,7 @@ import { PurchasingModule } from "./modules/purchasing/purchasing.module";
 import { UpdateModule } from "./modules/update/update.module";
 import { MaintenanceModule } from "./modules/maintenance/maintenance.module";
 import { BranchesModule } from "./modules/branches/branches.module";
+import { DeliveryNotesModule } from "./modules/delivery-notes/delivery-notes.module";
 @Module({
   imports: [
     ConfigModule.forRoot({
@@ -61,6 +62,7 @@ import { BranchesModule } from "./modules/branches/branches.module";
     UpdateModule,
     MaintenanceModule,
     BranchesModule,
+    DeliveryNotesModule,
   ],
   controllers: [AppController],
   providers: [

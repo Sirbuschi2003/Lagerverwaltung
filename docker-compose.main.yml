@@ -68,11 +68,13 @@ services:
       HOST_PROJECT_PATH: ${HOST_PROJECT_PATH:-}
       ITEM_IMAGE_PATH: /app/item-images
       LOG_ARCHIVE_PATH: /app/log-archives
+      DELIVERY_NOTES_STORAGE_PATH: /app/delivery-notes
     volumes:
       - ${BACKUP_STORAGE_HOST_PATH:-backups_data}:/app/backups
       - ${PURCHASE_ORDER_STORAGE_HOST_PATH:-purchase_orders_data}:/app/purchase-orders
       - ${ITEM_IMAGE_STORAGE_HOST_PATH:-item_images_data}:/app/item-images
       - ${LOG_ARCHIVE_STORAGE_HOST_PATH:-log_archives_data}:/app/log-archives
+      - ${DELIVERY_NOTES_STORAGE_HOST_PATH:-delivery_notes_data}:/app/delivery-notes
       # Docker-Socket fuer automatisches Update (In-App Update-Funktion)
       - /var/run/docker.sock:/var/run/docker.sock
       # Compose-Datei fuer Update-Skript einbinden
@@ -140,5 +142,6 @@ volumes:
   purchase_orders_data:
   item_images_data:
   log_archives_data:
+  delivery_notes_data:
   caddy_data:
   caddy_config:

@@ -1823,6 +1823,18 @@ export const cleanupMovements = async (params: { before: string; type?: "CHECKIN
   return response.data;
 };
 
+// Delivery Notes
+export const fetchDeliveryNoteExists = async (vorgangsnummern: string[]): Promise<Set<string>> => {
+  if (!vorgangsnummern.length) return new Set();
+  const response = await api.get<{ vorgangsnummern: string[] }>(
+    `/delivery-notes/exists?vorgangsnummern=${vorgangsnummern.join(",")}`
+  );
+  return new Set(response.data.vorgangsnummern);
+};
+
+export const getDeliveryNoteDownloadUrl = (vorgangsnummer: string): string =>
+  `/api/delivery-notes/download?vorgangsnummer=${encodeURIComponent(vorgangsnummer)}`;
+
 // Access Control
 export const fetchPermissions = async (): Promise<PermissionDto[]> => {
   const response = await api.get<PermissionDto[]>("/access-control/permissions");

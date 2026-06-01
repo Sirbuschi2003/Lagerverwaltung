@@ -22,12 +22,15 @@ import {
   Autocomplete,
   FormControlLabel,
   Switch,
+  Tooltip,
+  IconButton,
 } from "@mui/material";
+import PictureAsPdfIcon from "@mui/icons-material/PictureAsPdf";
 import dayjs from "dayjs";
 import useItemsStore from "../store/useItemsStore";
 import useUsersStore from "../store/useUsersStore";
 import useAuthStore from "../store/useAuthStore";
-import { fetchMovementHistory, fetchWarehouses, cleanupMovements, MovementDto, type LocationDto } from "../utils/api";
+import { fetchMovementHistory, fetchWarehouses, cleanupMovements, fetchDeliveryNoteExists, getDeliveryNoteDownloadUrl, MovementDto, type LocationDto } from "../utils/api";
 import ReportsPage from "./ReportsPage";
 
 const MovementHistoryTab: React.FC = () => {
@@ -58,6 +61,7 @@ const MovementHistoryTab: React.FC = () => {
   const [cleanupType, setCleanupType] = useState<string>("");
   const [cleanupLoading, setCleanupLoading] = useState(false);
   const [snackbar, setSnackbar] = useState<string | null>(null);
+  const [deliveryNoteVnrs, setDeliveryNoteVnrs] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     if (items.length === 0) {
@@ -118,6 +122,9 @@ const MovementHistoryTab: React.FC = () => {
       setData(res.movements);
       setTotal(res.total);
       setSummary(res.summary);
+
+      const vnrs = res.movements.map((m) => m.source).filter(Boolean) as string[];
+      fetchDeliveryNoteExists(vnrs).then(setDeliveryNoteVnrs).catch(() => null);
     } catch (err: any) {
       setError(err?.response?.data?.message || "Bewegungen konnten nicht geladen werden");
     } finally {
@@ -349,7 +356,25 @@ const MovementHistoryTab: React.FC = () => {
                     <TableCell>{m.item?.code} - {m.item?.description}</TableCell>
                     <TableCell>{m.vehicle?.licensePlate || m.vehicle?.description || "-"}</TableCell>
                     <TableCell>{m.user?.displayName || "-"}</TableCell>
-                    <TableCell>{m.source || "-"}</TableCell>
+                    <TableCell>
+                      <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
+                        {m.source || "-"}
+                        {m.source && deliveryNoteVnrs.has(m.source) && (
+                          <Tooltip title="Lieferschein öffnen">
+                            <IconButton
+                              size="small"
+                              component="a"
+                              href={getDeliveryNoteDownloadUrl(m.source)}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              sx={{ color: "error.main", p: 0.25 }}
+                            >
+                              <PictureAsPdfIcon fontSize="small" />
+                            </IconButton>
+                          </Tooltip>
+                        )}
+                      </Box>
+                    </TableCell>
                     <TableCell>{m.note || "-"}</TableCell>
                   </TableRow>
                 ))}
