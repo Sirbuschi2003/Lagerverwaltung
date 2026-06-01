@@ -1,6 +1,6 @@
 # Lagerverwaltung – Benutzerhandbuch
 
-> **Version:** 3.5.1
+> **Version:** 3.9.0
 > **Zielgruppe:** Lageristen, Techniker, Manager, Administratoren
 > **Sprache:** Deutsch
 
@@ -421,8 +421,24 @@ Jede Zeile zeigt:
 - Buchungsart (Einbuchung / Ausbuchung)
 - Menge
 - Benutzer, der gebucht hat
-- Vorgangsnummer / Quelle (wenn angegeben)
+- Vorgangsnummer / Quelle (wenn angegeben) – mit PDF-Icon wenn ein Lieferschein hinterlegt ist
 - Notiz (wenn vorhanden)
+
+### 10.5 Lieferschein öffnen
+
+Ist zu einer Buchung ein Lieferschein hinterlegt, erscheint neben der Vorgangsnummer ein rotes **PDF-Symbol**. Ein Klick öffnet das Dokument direkt im Browser.
+
+**Voraussetzung:** Der Lieferschein muss als PDF im konfigurierten Lieferschein-Ordner abgelegt sein:
+
+```
+{NL-CODE}_{NL-Name}/{JAHR}/{MONAT}/{Auftragsnummer}.pdf
+```
+
+Beispiel: `400_Hannover/2026/06/101501.pdf`
+
+Das System erkennt neue Dateien automatisch (Scan jede Minute). Der Dateiname muss exakt der Auftragsnummer entsprechen, die beim Scannen des Lieferschein-QR-Codes (`LFS/.../101501/400`) automatisch extrahiert wird.
+
+> **Kopierer-Einrichtung:** Scan-Ziel auf den Niederlassungs-Unterordner konfigurieren. Der Kopierer erstellt Jahres- und Monatsordner automatisch.
 
 ---
 

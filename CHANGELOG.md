@@ -1,5 +1,17 @@
 # Changelog
 
+## [3.9.0] – 2026-06-01
+
+### Feature: Lieferschein-Zuordnung per Ordner-Watcher
+
+- PDFs vom Kopierer werden automatisch erkannt: Ablage in `{NL-CODE}_{Name}/{YYYY}/{MM}/{Auftragsnummer}.pdf`
+- Backend scannt den Ordner jede Minute und legt DB-Einträge an
+- In der Bewegungshistorie erscheint ein PDF-Icon bei Buchungen mit vorhandenem Lieferschein
+- Klick öffnet das PDF direkt im Browser-Tab
+- Strenge Niederlassungs-Trennung: NL A sieht keine Lieferscheine von NL B
+- Neue Env-Variable: `DELIVERY_NOTES_STORAGE_HOST_PATH` (z.B. `/volume1/docker/Lagerverwaltung/lieferscheine`)
+- Neues Docker-Volume: `delivery_notes_data`
+
 ## [3.8.0] – 2026-05-21
 
 ### Feature: Custom Scan-Töne
