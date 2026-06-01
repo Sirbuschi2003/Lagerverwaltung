@@ -12,16 +12,17 @@ import fs from "node:fs";
 import { JwtAuthGuard } from "../auth/guards/jwt-auth.guard";
 import { DeliveryNotesService } from "./delivery-notes.service";
 
-@UseGuards(JwtAuthGuard)
 @Controller("delivery-notes")
 export class DeliveryNotesController {
   constructor(private readonly service: DeliveryNotesService) {}
 
+  /** Temporärer Diagnose-Endpoint – kein Auth */
   @Get("debug")
   async debug() {
     return this.service.debugInfo();
   }
 
+  @UseGuards(JwtAuthGuard)
   @Get("exists")
   async exists(@Query("vorgangsnummern") raw: string, @Req() req: Request) {
     const vnrs = (raw ?? "")
@@ -33,6 +34,7 @@ export class DeliveryNotesController {
     return { vorgangsnummern: Array.from(found) };
   }
 
+  @UseGuards(JwtAuthGuard)
   @Get("download")
   async download(
     @Query("vorgangsnummer") vorgangsnummer: string,
