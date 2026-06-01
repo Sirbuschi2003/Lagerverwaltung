@@ -16,12 +16,6 @@ import { DeliveryNotesService } from "./delivery-notes.service";
 export class DeliveryNotesController {
   constructor(private readonly service: DeliveryNotesService) {}
 
-  /** Temporärer Diagnose-Endpoint – kein Auth */
-  @Get("debug")
-  async debug() {
-    return this.service.debugInfo();
-  }
-
   @UseGuards(JwtAuthGuard)
   @Get("exists")
   async exists(@Query("vorgangsnummern") raw: string, @Req() req: Request) {
