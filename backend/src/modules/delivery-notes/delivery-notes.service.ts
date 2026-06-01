@@ -105,6 +105,41 @@ export class DeliveryNotesService implements OnApplicationBootstrap {
     return path.join(this.getStoragePath(), relPath);
   }
 
+  async debugInfo() {
+    const root = this.getStoragePath();
+    let rootExists = false;
+    let folders: string[] = [];
+    let allFiles: string[] = [];
+
+    try {
+      await fs.access(root);
+      rootExists = true;
+      folders = await this.listDirs(root);
+      for (const f of folders) {
+        const years = await this.listDirs(path.join(root, f));
+        for (const y of years) {
+          const months = await this.listDirs(path.join(root, f, y));
+          for (const m of months) {
+            const files = await this.listFiles(path.join(root, f, y, m), ".pdf");
+            allFiles.push(...files.map((file) => `${f}/${y}/${m}/${file}`));
+          }
+        }
+      }
+    } catch {
+      // ignore
+    }
+
+    const dbEntries = await this.repo.find({ take: 50 });
+
+    return {
+      storagePath: root,
+      rootExists,
+      branchFolders: folders,
+      filesFound: allFiles,
+      dbEntries: dbEntries.map((e) => ({ vorgangsnummer: e.vorgangsnummer, branchId: e.branchId, filePath: e.filePath })),
+    };
+  }
+
   private async resolveBranchId(folderName: string): Promise<string | null> {
     // Ordnername-Format: {CODE}_{Name} oder nur {Name}
     const codePart = folderName.split("_")[0]?.toUpperCase();
