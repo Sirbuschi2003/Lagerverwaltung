@@ -30,7 +30,7 @@ import dayjs from "dayjs";
 import useItemsStore from "../store/useItemsStore";
 import useUsersStore from "../store/useUsersStore";
 import useAuthStore from "../store/useAuthStore";
-import { fetchMovementHistory, fetchWarehouses, cleanupMovements, fetchDeliveryNoteExists, getDeliveryNoteDownloadUrl, MovementDto, type LocationDto } from "../utils/api";
+import { fetchMovementHistory, fetchWarehouses, cleanupMovements, fetchDeliveryNoteExists, openDeliveryNotePdf, MovementDto, type LocationDto } from "../utils/api";
 import ReportsPage from "./ReportsPage";
 
 const MovementHistoryTab: React.FC = () => {
@@ -363,10 +363,7 @@ const MovementHistoryTab: React.FC = () => {
                           <Tooltip title="Lieferschein öffnen">
                             <IconButton
                               size="small"
-                              component="a"
-                              href={getDeliveryNoteDownloadUrl(m.source)}
-                              target="_blank"
-                              rel="noopener noreferrer"
+                              onClick={() => openDeliveryNotePdf(m.source!)}
                               sx={{ color: "error.main", p: 0.25 }}
                             >
                               <PictureAsPdfIcon fontSize="small" />

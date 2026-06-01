@@ -80,17 +80,24 @@ export class DeliveryNotesService implements OnApplicationBootstrap {
     }
   }
 
-  async findByVorgangsnummer(vorgangsnummer: string): Promise<DeliveryNote | null> {
-    return this.repo.findOne({ where: { vorgangsnummer } });
+  async findByVorgangsnummer(vorgangsnummer: string, branchId: string | null): Promise<DeliveryNote | null> {
+    const qb = this.repo.createQueryBuilder("dn").where("dn.vorgangsnummer = :v", { v: vorgangsnummer });
+    if (branchId) {
+      qb.andWhere("(dn.branchId = :b OR dn.branchId IS NULL)", { b: branchId });
+    }
+    return qb.getOne();
   }
 
-  async existsForVorgangsnummern(vorgangsnummern: string[]): Promise<Set<string>> {
+  async existsForVorgangsnummern(vorgangsnummern: string[], branchId: string | null): Promise<Set<string>> {
     if (!vorgangsnummern.length) return new Set();
-    const rows = await this.repo
+    const qb = this.repo
       .createQueryBuilder("dn")
       .select("dn.vorgangsnummer")
-      .where("dn.vorgangsnummer IN (:...vnrs)", { vnrs: vorgangsnummern })
-      .getMany();
+      .where("dn.vorgangsnummer IN (:...vnrs)", { vnrs: vorgangsnummern });
+    if (branchId) {
+      qb.andWhere("(dn.branchId = :b OR dn.branchId IS NULL)", { b: branchId });
+    }
+    const rows = await qb.getMany();
     return new Set(rows.map((r) => r.vorgangsnummer));
   }
 

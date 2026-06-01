@@ -1832,8 +1832,14 @@ export const fetchDeliveryNoteExists = async (vorgangsnummern: string[]): Promis
   return new Set(response.data.vorgangsnummern);
 };
 
-export const getDeliveryNoteDownloadUrl = (vorgangsnummer: string): string =>
-  `/api/delivery-notes/download?vorgangsnummer=${encodeURIComponent(vorgangsnummer)}`;
+export const openDeliveryNotePdf = async (vorgangsnummer: string): Promise<void> => {
+  const response = await api.get(`/delivery-notes/download?vorgangsnummer=${encodeURIComponent(vorgangsnummer)}`, {
+    responseType: "blob",
+  });
+  const url = URL.createObjectURL(new Blob([response.data], { type: "application/pdf" }));
+  window.open(url, "_blank");
+  setTimeout(() => URL.revokeObjectURL(url), 60000);
+};
 
 // Access Control
 export const fetchPermissions = async (): Promise<PermissionDto[]> => {

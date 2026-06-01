@@ -3,39 +3,41 @@ import {
   Get,
   NotFoundException,
   Query,
+  Req,
   Res,
   UseGuards,
 } from "@nestjs/common";
-import { Response } from "express";
+import { Response, Request } from "express";
 import fs from "node:fs";
 import { JwtAuthGuard } from "../auth/guards/jwt-auth.guard";
 import { DeliveryNotesService } from "./delivery-notes.service";
 
+@UseGuards(JwtAuthGuard)
 @Controller("delivery-notes")
 export class DeliveryNotesController {
   constructor(private readonly service: DeliveryNotesService) {}
 
-  /** Gibt zurück welche Vorgangsnummern einen Lieferschein haben */
-  @UseGuards(JwtAuthGuard)
   @Get("exists")
-  async exists(@Query("vorgangsnummern") raw: string) {
+  async exists(@Query("vorgangsnummern") raw: string, @Req() req: Request) {
     const vnrs = (raw ?? "")
       .split(",")
       .map((s) => s.trim())
       .filter(Boolean);
-    const found = await this.service.existsForVorgangsnummern(vnrs);
+    const branchId = (req.user as any)?.branchId ?? null;
+    const found = await this.service.existsForVorgangsnummern(vnrs, branchId);
     return { vorgangsnummern: Array.from(found) };
   }
 
-  /** Streamt das PDF für eine Vorgangsnummer – kein Auth-Guard nötig da Token per Query übergeben */
   @Get("download")
   async download(
     @Query("vorgangsnummer") vorgangsnummer: string,
+    @Req() req: Request,
     @Res() res: Response,
   ) {
     if (!vorgangsnummer) throw new NotFoundException();
 
-    const note = await this.service.findByVorgangsnummer(vorgangsnummer);
+    const branchId = (req.user as any)?.branchId ?? null;
+    const note = await this.service.findByVorgangsnummer(vorgangsnummer, branchId);
     if (!note) throw new NotFoundException("Kein Lieferschein gefunden");
 
     const absPath = this.service.getAbsolutePath(note.filePath);
