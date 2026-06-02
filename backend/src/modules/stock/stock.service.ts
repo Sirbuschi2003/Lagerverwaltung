@@ -900,7 +900,7 @@ export class StockService {
         quantity: delta,
         occurredAt: new Date().toISOString(),
         note: `Bereitgestellt fuer ${request.vehicle.licensePlate || request.vehicle.description}`,
-        source: `restock-prepare:${request.id}`,
+        source: "Bereitstellung",
       });
       return;
     }
@@ -913,7 +913,7 @@ export class StockService {
       quantity: Math.abs(delta),
       occurredAt: new Date().toISOString(),
       note: `Bereitstellung reduziert/storniert (${request.vehicle.licensePlate || request.vehicle.description})`,
-      source: `restock-release:${request.id}`,
+      source: "Bereitstellung-Ruecknahme",
     });
   }
 
