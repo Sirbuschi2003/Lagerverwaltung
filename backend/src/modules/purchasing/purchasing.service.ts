@@ -811,6 +811,7 @@ export class PurchasingService {
         minimumStock: item.minimumStock != null ? Number(item.minimumStock) : null,
         reorderPoint,
         currentQuantity,
+        incomingQuantity,
         neededQuantity: needed,
         availableInOtherBranches: [],
         consumptionRates: { d30: 0, d60: 0, d90: 0, d180: 0, d365: 0 },

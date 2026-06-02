@@ -201,7 +201,7 @@ const OrderSuggestionsTab: React.FC = () => {
   const formatReachability = (suggestion: PurchaseOrderSuggestionDto, orderQty: number) => {
     const rate = getDailyRate(suggestion);
     if (!rate || rate <= 0) return null;
-    const totalStock = suggestion.currentQuantity + orderQty;
+    const totalStock = suggestion.currentQuantity + (suggestion.incomingQuantity ?? 0) + orderQty;
     const days = Math.round(totalStock / rate);
     if (days >= 365) return `~${Math.round(days / 30)} Mo.`;
     if (days >= 60) return `~${Math.round(days / 7)} Wo.`;
@@ -819,7 +819,16 @@ const OrderSuggestionsTab: React.FC = () => {
                 <TableCell>Lagerort</TableCell>
                 <TableCell align="right">Aktuell</TableCell>
                 <TableCell align="right">Soll</TableCell>
-                <TableCell align="right">Benötigt</TableCell>
+                <TableCell align="right">
+                  <Tooltip title="Menge aus offenen Bestellungen (DRAFT oder ORDERED), die noch nicht eingegangen ist">
+                    <span>Zulauf</span>
+                  </Tooltip>
+                </TableCell>
+                <TableCell align="right">
+                  <Tooltip title="Fehlmenge zum Sollbestand (Soll − Aktuell). Die Bestellmenge berücksichtigt bereits den Zulauf.">
+                    <span>Benötigt</span>
+                  </Tooltip>
+                </TableCell>
                 <TableCell align="right">Menge bestellen</TableCell>
                 <TableCell align="right">
                   <Tooltip title="Hochgerechnete Reichweite nach Eingang der Bestellmenge, basierend auf dem Verbrauch im gewählten Zeitraum (nur Lagerabgänge, ohne Fahrzeuge)">
@@ -893,6 +902,11 @@ const OrderSuggestionsTab: React.FC = () => {
                       <TableCell align="right">
                         <Typography variant="caption" sx={{ fontWeight: 700, color: "text.secondary" }}>
                           Soll
+                        </Typography>
+                      </TableCell>
+                      <TableCell align="right">
+                        <Typography variant="caption" sx={{ fontWeight: 700, color: "text.secondary" }}>
+                          Zulauf
                         </Typography>
                       </TableCell>
                       <TableCell align="right">
@@ -1023,12 +1037,27 @@ const OrderSuggestionsTab: React.FC = () => {
                           </Typography>
                         </TableCell>
                         <TableCell align="right">
+                          {(suggestion.incomingQuantity ?? 0) > 0 ? (
+                            <Tooltip title={`${suggestion.incomingQuantity} Stk. bereits bestellt (offen/DRAFT)`}>
+                              <Chip
+                                label={`+${suggestion.incomingQuantity}`}
+                                size="small"
+                                color="info"
+                                variant="outlined"
+                                sx={{ fontSize: "0.75rem", height: 22 }}
+                              />
+                            </Tooltip>
+                          ) : (
+                            <Typography variant="caption" color="text.disabled">–</Typography>
+                          )}
+                        </TableCell>
+                        <TableCell align="right">
                           <Typography
                             variant="body2"
                             fontWeight="bold"
                             color="error"
                           >
-                            {suggestion.neededQuantity}
+                            {Math.max(0, suggestion.targetStock - suggestion.currentQuantity)}
                           </Typography>
                         </TableCell>
                         <TableCell align="right">
@@ -1053,7 +1082,7 @@ const OrderSuggestionsTab: React.FC = () => {
                             const label = formatReachability(suggestion, qty);
                             if (!label) return <Typography variant="caption" color="text.disabled">–</Typography>;
                             const rate = getDailyRate(suggestion);
-                            const days = rate && rate > 0 ? Math.round((suggestion.currentQuantity + qty) / rate) : 0;
+                            const days = rate && rate > 0 ? Math.round((suggestion.currentQuantity + (suggestion.incomingQuantity ?? 0) + qty) / rate) : 0;
                             const color = days < 30 ? "error" : days < 90 ? "warning.main" : "success.main";
                             return (
                               <Typography variant="caption" fontWeight="bold" color={color}>
