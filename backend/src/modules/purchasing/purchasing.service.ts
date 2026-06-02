@@ -427,7 +427,7 @@ export class PurchasingService {
           type: "CHECKIN",
           quantity: toReceive,
           occurredAt: new Date().toISOString(),
-          note: `Wareneingang Bestellung ${order.orderNumber ?? order.id}`,
+          note: `Wareneingang ${order.orderNumber ?? order.id}${payload.deliveryNoteNumber?.trim() ? ` · LS: ${payload.deliveryNoteNumber.trim()}` : ""}`,
           source: order.orderNumber ?? `purchase-order:${order.id}`,
         });
       }

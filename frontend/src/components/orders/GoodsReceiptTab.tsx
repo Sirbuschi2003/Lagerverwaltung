@@ -655,7 +655,11 @@ const GoodsReceiptTab: React.FC = () => {
                 </TableRow>
               </TableHead>
               <TableBody>
-                {selectedOrder?.lines.map((line) => {
+                {[...(selectedOrder?.lines ?? [])].sort((a, b) => {
+                  const aComplete = getRemainingQuantity(a.quantity, a.receivedQuantity) <= 0 ? 1 : 0;
+                  const bComplete = getRemainingQuantity(b.quantity, b.receivedQuantity) <= 0 ? 1 : 0;
+                  return aComplete - bComplete;
+                }).map((line) => {
                   const remaining = getRemainingQuantity(line.quantity, line.receivedQuantity);
                   const value = Math.max(0, Math.min(remaining, receivedQuantities[line.id] || 0));
                   const lineState = getLineDeliveryState(line, value);

@@ -1057,7 +1057,7 @@ const OrderSuggestionsTab: React.FC = () => {
                             fontWeight="bold"
                             color="error"
                           >
-                            {Math.max(0, suggestion.targetStock - suggestion.currentQuantity)}
+                            {suggestion.neededQuantity}
                           </Typography>
                         </TableCell>
                         <TableCell align="right">

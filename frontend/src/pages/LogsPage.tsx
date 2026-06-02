@@ -105,7 +105,7 @@ function formatActivity(log: LogEntry, theme: any): ActivityInfo {
         avatarBg: theme.palette.success.main,
         icon: <ArrowUpwardIcon fontSize="small" />,
         primary: `${who} hat ${qty} ${item}${code} eingebucht`,
-        secondary: vehicle ? `Fahrzeug: ${vehicle}` : undefined,
+        secondary: vehicle ? `Fahrzeug: ${vehicle}` : (m.note || undefined),
       };
     }
     if (action.includes('ADJUST')) {
