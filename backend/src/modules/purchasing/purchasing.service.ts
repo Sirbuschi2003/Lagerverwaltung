@@ -381,8 +381,11 @@ export class PurchasingService {
     branchId?: string | null,
   ) {
     const order = await this.findOne(id, branchId);
-    if (order.status === "CANCELLED" || order.status === "ARCHIVED") {
-      throw new BadRequestException("Cancelled orders cannot be received");
+    if (order.status !== "ORDERED" && order.status !== "DRAFT") {
+      throw new BadRequestException("Only active orders can receive goods");
+    }
+    if (order.status === "DRAFT") {
+      throw new BadRequestException("Eine Bestellung muss erst aufgegeben werden (Status: ORDERED), bevor Waren eingehen können.");
     }
 
     const warehouseLocations = await this.locationsService.findAll({ type: "WAREHOUSE", includeVehicles: true });

@@ -56,6 +56,7 @@ export class RecordMovementDto {
   note?: string;
 
   @IsString()
+  @IsNotEmpty()
   @MaxLength(64)
   source!: string;
 }

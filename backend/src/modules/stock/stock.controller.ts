@@ -120,6 +120,7 @@ export class StockController {
 
   @Post("movement")
   @SkipThrottle()
+  @Permissions("stock.write")
   async recordMovement(@Body() dto: RecordMovementDto) {
     this.logger.log(`recordMovement vehicleId=${dto.vehicleId} itemId=${dto.itemId} type=${dto.type} qty=${dto.quantity}`);
     const result = await this.stockService.recordMovement(dto);
@@ -228,6 +229,7 @@ export class StockController {
   }
 
   @Post("sync")
+  @Permissions("stock.write")
   syncMovements(@Body() dto: SyncPayloadDto) {
     this.logger.log(`syncMovements count=${dto.movements?.length ?? 0}`);
     return this.stockService.syncMovements(dto);

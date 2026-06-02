@@ -289,7 +289,13 @@ export class StockService {
     });
 
     await this.movementsRepository.save(movement);
-    await this.applyMovementToStock(movement);
+    try {
+      await this.applyMovementToStock(movement);
+    } catch (err) {
+      // Bewegung rückgängig machen damit Audit-Trail nicht inkonsistent wird
+      await this.movementsRepository.remove(movement);
+      throw err;
+    }
 
     // Erweiterte Protokollierung fuer alle Stock-Bewegungen
     await this.logStockMovement(movement, user);

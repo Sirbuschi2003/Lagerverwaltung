@@ -774,17 +774,9 @@ export class InventoryService {
       checksumMatch = clientChecksum === serverChecksum;
     }
 
-    session.status = InventorySessionStatus.FINALIZED;
-    session.finalizedBy = username;
-    session.finalizedAt = new Date();
-    session.completedAt = new Date(); // Auch completedAt setzen (backwards-compat)
-    session.clientChecksum = clientChecksum || session.clientChecksum;
-    session.serverChecksum = serverChecksum;
-
-    const saved = await this.sessionsRepository.save(session);
-
+    // Differenz-Buchungen ZUERST — Session wird erst nach erfolgreichen Buchungen
+    // auf FINALIZED gesetzt, damit bei Fehler kein inkonsistenter Zustand entsteht.
     if (applyAdjustments && hasDifferences) {
-      // Lade Fahrzeug-Statusse für Doppelbuchungs-Schutz pro Fahrzeug
       const vehicleStatuses = await this.vehicleStatusRepository.find({
         where: { session: { id: sessionId } },
         relations: ["vehicle"],
@@ -793,7 +785,6 @@ export class InventoryService {
       for (const diff of differenceResult.differences) {
         const vs = vehicleStatuses.find((v) => v.vehicle?.id === diff.vehicleId);
         if (vs?.adjustmentsApplied) {
-          // Bereits gebucht auf Fahrzeugebene -> überspringen
           continue;
         }
 
@@ -816,10 +807,19 @@ export class InventoryService {
           await this.vehicleStatusRepository.save(vs);
         }
       }
-      // Session-Flag für Legacy-Kompatibilität setzen
-      saved.adjustmentsApplied = true;
-      await this.sessionsRepository.save(saved);
+
+      session.adjustmentsApplied = true;
     }
+
+    // Erst jetzt als FINALIZED speichern — alle Buchungen sind erfolgreich abgeschlossen
+    session.status = InventorySessionStatus.FINALIZED;
+    session.finalizedBy = username;
+    session.finalizedAt = new Date();
+    session.completedAt = new Date();
+    session.clientChecksum = clientChecksum || session.clientChecksum;
+    session.serverChecksum = serverChecksum;
+
+    const saved = await this.sessionsRepository.save(session);
 
     // User für Logging holen
     const user = await this.usersRepository.findOne({ where: { username } });
