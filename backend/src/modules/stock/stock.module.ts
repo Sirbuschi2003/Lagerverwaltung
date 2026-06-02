@@ -17,6 +17,8 @@ import { StockAdminController } from "./stock-admin.controller";
 import { StockController } from "./stock.controller";
 import { StockGateway } from "./stock.gateway";
 import { StockService } from "./stock.service";
+import { StockDiagnosticsService } from "./stock-diagnostics.service";
+import { MovementQueryService } from "./movement-query.service";
 
 @Module({
   imports: [
@@ -30,7 +32,7 @@ import { StockService } from "./stock.service";
     LocationsModule,
   ],
   controllers: [StockController, StockAdminController],
-  providers: [StockService, StockGateway],
-  exports: [StockService],
+  providers: [StockService, StockGateway, StockDiagnosticsService, MovementQueryService],
+  exports: [StockService, StockDiagnosticsService, MovementQueryService],
 })
 export class StockModule {}

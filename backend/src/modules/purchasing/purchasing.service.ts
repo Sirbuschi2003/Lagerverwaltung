@@ -1,4 +1,5 @@
-import { BadRequestException, Injectable, NotFoundException } from "@nestjs/common";
+﻿import { BadRequestException, Injectable, NotFoundException } from "@nestjs/common";
+import { PurchaseSuggestionService } from "./purchase-suggestion.service";
 import { promises as fs, Dirent } from "node:fs";
 import path from "node:path";
 import puppeteer from "puppeteer";
@@ -50,11 +51,6 @@ export interface StoredOrderDocumentEntry {
 
 @Injectable()
 export class PurchasingService {
-  // 10-Sekunden-Cache für Bestellvorschläge (kurz, damit Artikel-Änderungen schnell sichtbar sind)
-  // Schlüssel: branchId oder "ALL" für SUPER_ADMIN
-  private suggestionsCacheMap = new Map<string, { data: unknown[]; timestamp: number }>();
-  private readonly SUGGESTIONS_CACHE_TTL = 10_000;
-
   constructor(
     @InjectRepository(PurchaseOrder)
     private readonly ordersRepository: Repository<PurchaseOrder>,
@@ -77,11 +73,11 @@ export class PurchasingService {
     private readonly systemConfigService: SystemConfigService,
     private readonly loggingService: LoggingService,
     private readonly dataSource: DataSource,
+    private readonly suggestionService: PurchaseSuggestionService,
   ) {}
 
-  /** Cache für Bestellvorschläge invalidieren (nach Bestandsbuchungen, Bestellungen) */
   invalidateSuggestionsCache() {
-    this.suggestionsCacheMap.clear();
+    this.suggestionService.invalidateSuggestionsCache();
   }
 
   async findAll(params?: PurchaseOrderQueryParams & { branchId?: string | null; locationIds?: string[] }) {
@@ -265,12 +261,12 @@ export class PurchasingService {
         order.receivedAt = null;
       }
       
-      // Log: Status-Änderung
+      // Log: Status-Ã„nderung
       if (oldStatus !== payload.status) {
         await this.loggingService.logInfo(
           LogCategory.PURCHASE,
           'purchase_order_status_changed',
-          `Bestellung ${order.orderNumber || order.id} Status geändert: ${oldStatus} → ${payload.status}`,
+          `Bestellung ${order.orderNumber || order.id} Status geÃ¤ndert: ${oldStatus} â†’ ${payload.status}`,
           {
             metadata: {
               orderId: order.id,
@@ -320,7 +316,7 @@ export class PurchasingService {
   ): Promise<PurchaseOrder> {
     const order = await this.findOne(orderId, branchId);
     if (order.status !== "DRAFT") {
-      throw new BadRequestException("Artikel können nur zu Entwürfen hinzugefügt werden");
+      throw new BadRequestException("Artikel kÃ¶nnen nur zu EntwÃ¼rfen hinzugefÃ¼gt werden");
     }
     const item = await this.itemsService.findOne(payload.itemId);
     if (!item) throw new NotFoundException("Artikel nicht gefunden");
@@ -345,7 +341,7 @@ export class PurchasingService {
   ): Promise<PurchaseOrder> {
     const order = await this.findOne(orderId, branchId);
     if (order.status !== "DRAFT") {
-      throw new BadRequestException("Positionen können nur bei Entwürfen bearbeitet werden");
+      throw new BadRequestException("Positionen kÃ¶nnen nur bei EntwÃ¼rfen bearbeitet werden");
     }
     const line = order.lines?.find((l) => l.id === lineId);
     if (!line) throw new NotFoundException("Position nicht gefunden");
@@ -362,7 +358,7 @@ export class PurchasingService {
   ): Promise<PurchaseOrder> {
     const order = await this.findOne(orderId, branchId);
     if (order.status !== "DRAFT") {
-      throw new BadRequestException("Positionen können nur bei Entwürfen entfernt werden");
+      throw new BadRequestException("Positionen kÃ¶nnen nur bei EntwÃ¼rfen entfernt werden");
     }
     if (!order.lines?.length || order.lines.length <= 1) {
       throw new BadRequestException("Die Bestellung muss mindestens eine Position behalten");
@@ -385,7 +381,7 @@ export class PurchasingService {
       throw new BadRequestException("Only active orders can receive goods");
     }
     if (order.status === "DRAFT") {
-      throw new BadRequestException("Eine Bestellung muss erst aufgegeben werden (Status: ORDERED), bevor Waren eingehen können.");
+      throw new BadRequestException("Eine Bestellung muss erst aufgegeben werden (Status: ORDERED), bevor Waren eingehen kÃ¶nnen.");
     }
 
     const warehouseLocations = await this.locationsService.findAll({ type: "WAREHOUSE", includeVehicles: true });
@@ -430,7 +426,7 @@ export class PurchasingService {
           type: "CHECKIN",
           quantity: toReceive,
           occurredAt: new Date().toISOString(),
-          note: `Wareneingang ${order.orderNumber ?? order.id}${payload.deliveryNoteNumber?.trim() ? ` · LS: ${payload.deliveryNoteNumber.trim()}` : ""}`,
+          note: `Wareneingang ${order.orderNumber ?? order.id}${payload.deliveryNoteNumber?.trim() ? ` Â· LS: ${payload.deliveryNoteNumber.trim()}` : ""}`,
           source: order.orderNumber ?? `purchase-order:${order.id}`,
         });
       }
@@ -514,7 +510,7 @@ export class PurchasingService {
 
     if (orders.length === 0) return { deleted: 0 };
 
-    // PDFs vom Dateisystem löschen
+    // PDFs vom Dateisystem lÃ¶schen
     for (const order of orders) {
       await this.deleteOrderPdfFromStorage(order);
     }
@@ -525,7 +521,7 @@ export class PurchasingService {
     await this.loggingService.logInfo(
       LogCategory.PURCHASE,
       'purchase_orders_purged',
-      `Bestellarchiv bereinigt: ${orders.length} Bestellungen älter als ${years} Jahre gelöscht`,
+      `Bestellarchiv bereinigt: ${orders.length} Bestellungen Ã¤lter als ${years} Jahre gelÃ¶scht`,
       { metadata: { deletedCount: orders.length, years, cutoffDate: cutoff.toISOString() } },
     );
 
@@ -552,7 +548,7 @@ export class PurchasingService {
     await this.loggingService.logInfo(
       LogCategory.EMAIL,
       'purchase_order_email_start',
-      `E-Mail-Versand für Bestellung ${order.orderNumber || order.id} gestartet`,
+      `E-Mail-Versand fÃ¼r Bestellung ${order.orderNumber || order.id} gestartet`,
       {
         metadata: {
           orderId: order.id,
@@ -569,7 +565,7 @@ export class PurchasingService {
       await this.loggingService.logError(
         LogCategory.EMAIL,
         'purchase_order_email_failed',
-        `E-Mail-Versand fehlgeschlagen: Kein Empfänger für Bestellung ${order.orderNumber || order.id}`,
+        `E-Mail-Versand fehlgeschlagen: Kein EmpfÃ¤nger fÃ¼r Bestellung ${order.orderNumber || order.id}`,
         {
           metadata: {
             orderId: order.id,
@@ -641,7 +637,7 @@ export class PurchasingService {
       await this.loggingService.logError(
         LogCategory.EMAIL,
         'purchase_order_email_failed',
-        `E-Mail-Versand für Bestellung ${order.orderNumber || order.id} fehlgeschlagen: ${err.message}`,
+        `E-Mail-Versand fÃ¼r Bestellung ${order.orderNumber || order.id} fehlgeschlagen: ${err.message}`,
         {
           metadata: {
             orderId: order.id,
@@ -659,364 +655,11 @@ export class PurchasingService {
     }
   }
 
-  async getSuggestions(branchId: string | null | undefined, refresh = false, locationIds?: string[], warehouseId?: string) {
-    // warehouseId überschreibt locationIds — strikte Lager-Isolation
-    const effectiveLocationIds = warehouseId ? [warehouseId] : locationIds;
-    // Cache-Key inkludiert warehouseId für strikte Trennung
-    const cacheKey = (branchId ?? "ALL") + (warehouseId ? `_w:${warehouseId}` : effectiveLocationIds?.length ? `_${effectiveLocationIds.sort().join(",")}` : "");
-    const now = Date.now();
-    const cached = this.suggestionsCacheMap.get(cacheKey);
-    if (!refresh && cached && (now - cached.timestamp) < this.SUGGESTIONS_CACHE_TTL) {
-      return cached.data;
-    }
-
-    // Offene Bestellmengen (nur Bestellungen dieser Niederlassung berücksichtigen)
-    const openLinesQb = this.linesRepository
-      .createQueryBuilder("line")
-      .innerJoin("line.order", "order")
-      .innerJoin("line.item", "item")
-      .select("item.id", "itemId")
-      .addSelect("SUM(line.quantity - line.receivedQuantity)", "openQuantity")
-      .where("order.status IN (:...statuses)", { statuses: ["DRAFT", "ORDERED"] })
-      .andWhere("line.quantity > line.receivedQuantity");
-
-    if (branchId) {
-      openLinesQb.andWhere("order.branchId = :branchId", { branchId });
-    }
-
-    const openLines = await openLinesQb.groupBy("item.id").getRawMany();
-
-    const incomingByItem = new Map<string, number>();
-    openLines.forEach((row) => {
-      const qty = Number(row.openQuantity ?? 0);
-      if (!Number.isNaN(qty)) {
-        incomingByItem.set(row.itemId, qty);
-      }
-    });
-
-    // Nur Artikel dieser Niederlassung laden (+ Lager-Filter falls vorhanden)
-    let itemEntities: Item[];
-    if (effectiveLocationIds?.length) {
-      const qb = this.itemsRepository
-        .createQueryBuilder("item")
-        .leftJoinAndSelect("item.storageLocation", "storageLocation")
-        .leftJoin("storageLocation.parent", "slParent")
-        .leftJoin("slParent.parent", "slGrandparent")
-        .leftJoinAndSelect("item.supplier", "supplier")
-        .where("item.targetStock > 0");
-      if (branchId) qb.andWhere("item.branchId = :branchId", { branchId });
-      qb.andWhere(
-        "(storageLocation.id IN (:...locationIds) OR slParent.id IN (:...locationIds) OR slGrandparent.id IN (:...locationIds))",
-        { locationIds: effectiveLocationIds },
-      );
-      itemEntities = await qb.getMany();
-    } else {
-      // No warehouse filter: only return items that have a storageLocation assigned.
-      // Items without a storageLocation belong to no specific warehouse and should not
-      // pollute cross-warehouse suggestion views.
-      const qb = this.itemsRepository
-        .createQueryBuilder("item")
-        .innerJoinAndSelect("item.storageLocation", "storageLocation")
-        .leftJoin("storageLocation.parent", "slParent")
-        .leftJoinAndSelect("item.supplier", "supplier")
-        .where("item.targetStock > 0");
-      if (branchId) qb.andWhere("item.branchId = :branchId", { branchId });
-      itemEntities = await qb.getMany();
-    }
-    const allLocations = await this.locationsService.findAll({ includeVehicles: true, branchId: branchId ?? undefined });
-    const defaultWarehouse = allLocations.find((location) => location.type === "WAREHOUSE") ?? null;
-    const locationById = new Map<string, Location>();
-    allLocations.forEach((location) => {
-      locationById.set(location.id, location);
-    });
-
-    const itemIds = itemEntities.map((item) => item.id);
-    // Only warehouse stock (vehicleId IS NULL); vehicle stock must not inflate warehouse availability
-    const stockLevelsQb = itemIds.length
-      ? this.stockLevelsRepository
-          .createQueryBuilder("sl")
-          .leftJoinAndSelect("sl.item", "item")
-          .leftJoinAndSelect("sl.location", "location")
-          .leftJoin("location.parent", "locParent")
-          .leftJoin("locParent.parent", "locGrandparent")
-          .where("sl.itemId IN (:...itemIds)", { itemIds })
-          .andWhere("sl.vehicleId IS NULL")
-      : null;
-    // Note: no location.branchId filter — stock_levels may have locationId=NULL (unassigned warehouse
-    // stock). Items are already branch-scoped via itemIds, so no cross-branch leakage.
-    if (stockLevelsQb && effectiveLocationIds?.length) {
-      // Include stock_levels with no location (legacy unassigned) so their quantity is not lost.
-      stockLevelsQb.andWhere(
-        "(location.id IS NULL OR location.id IN (:...locationIds) OR locParent.id IN (:...locationIds) OR locGrandparent.id IN (:...locationIds))",
-        { locationIds: effectiveLocationIds },
-      );
-    }
-    const stockLevels = stockLevelsQb ? await stockLevelsQb.getMany() : [];
-    const stockLevelsByItem = new Map<string, StockLevel[]>();
-    stockLevels.forEach((level) => {
-      const itemId = level.item?.id;
-      if (!itemId) return;
-      const existing = stockLevelsByItem.get(itemId);
-      if (existing) {
-        existing.push(level);
-      } else {
-        stockLevelsByItem.set(itemId, [level]);
-      }
-    });
-
-    const suggestions: Array<{
-      itemId: string;
-      code: string;
-      description: string;
-      descriptionSecondary: string | null;
-      supplierId: string | null;
-      supplierName: string | null;
-      storageLocationId: string | null;
-      targetStock: number;
-      minimumStock: number | null;
-      reorderPoint: number | null;
-      currentQuantity: number;
-      incomingQuantity: number;
-      neededQuantity: number;
-      availableInOtherBranches: Array<{ branchId: string; branchName: string; quantity: number }>;
-      consumptionRates: { d30: number; d60: number; d90: number; d180: number; d365: number };
-    }> = [];
-
-    for (const item of itemEntities) {
-      const target = Number(item.targetStock ?? 0);
-      const itemStockLevels = stockLevelsByItem.get(item.id) ?? [];
-      const locationId = this.resolveSuggestionLocationId(
-        item.storageLocation ?? null,
-        itemStockLevels,
-        locationById,
-        defaultWarehouse?.id ?? null,
-      );
-      if (!locationId) continue;
-
-      const level = itemStockLevels.find((entry) => entry.location?.id === locationId);
-      const legacyUnassignedLevel = itemStockLevels.find(
-        (entry) => !entry.location?.id && !entry.vehicle?.id,
-      );
-      const currentQuantity = Number(level?.quantity ?? legacyUnassignedLevel?.quantity ?? 0);
-      const incomingQuantity = incomingByItem.get(item.id) ?? 0;
-
-      // Meldebestand-Logik: Bestellung auslösen wenn Bestand <= Meldebestand (falls gesetzt),
-      // sonst klassisch wenn Bestand < Sollbestand
-      const reorderPoint = item.reorderPoint != null ? Number(item.reorderPoint) : null;
-      const triggerOrder =
-        reorderPoint != null
-          ? currentQuantity + incomingQuantity <= reorderPoint
-          : currentQuantity + incomingQuantity < target;
-      if (!triggerOrder) continue;
-
-      const needed = Math.max(0, target - currentQuantity - incomingQuantity);
-      if (needed <= 0) continue;
-
-      suggestions.push({
-        itemId: item.id,
-        code: item.code,
-        description: item.description,
-        descriptionSecondary: item.descriptionSecondary ?? null,
-        supplierId: item.supplier?.id ?? null,
-        supplierName: item.supplier?.name ?? null,
-        storageLocationId: locationId,
-        targetStock: target,
-        minimumStock: item.minimumStock != null ? Number(item.minimumStock) : null,
-        reorderPoint,
-        currentQuantity,
-        incomingQuantity,
-        neededQuantity: needed,
-        availableInOtherBranches: [],
-        consumptionRates: { d30: 0, d60: 0, d90: 0, d180: 0, d365: 0 },
-      });
-    }
-
-    // Tagesverbrauchsraten für alle Vorschlag-Artikel in einem Query berechnen
-    if (suggestions.length > 0) {
-      const suggestionItemIds = suggestions.map((s) => s.itemId);
-      const rateRows: Array<{
-        itemId: string;
-        qty30: string; qty60: string; qty90: string; qty180: string; qty365: string;
-      }> = await this.dataSource.query(
-        `SELECT
-          mv.itemId,
-          SUM(CASE WHEN mv.occurredAt >= DATE_SUB(NOW(), INTERVAL 30 DAY) THEN mv.quantity ELSE 0 END) AS qty30,
-          SUM(CASE WHEN mv.occurredAt >= DATE_SUB(NOW(), INTERVAL 60 DAY) THEN mv.quantity ELSE 0 END) AS qty60,
-          SUM(CASE WHEN mv.occurredAt >= DATE_SUB(NOW(), INTERVAL 90 DAY) THEN mv.quantity ELSE 0 END) AS qty90,
-          SUM(CASE WHEN mv.occurredAt >= DATE_SUB(NOW(), INTERVAL 180 DAY) THEN mv.quantity ELSE 0 END) AS qty180,
-          SUM(mv.quantity) AS qty365
-        FROM stock_movements mv
-        WHERE mv.itemId IN (?)
-          AND mv.type = 'CHECKOUT'
-          AND mv.isVoided = 0
-          AND mv.vehicleId IS NULL
-          AND mv.occurredAt >= DATE_SUB(NOW(), INTERVAL 365 DAY)
-          AND mv.source NOT LIKE '%import%'
-        GROUP BY mv.itemId`,
-        [suggestionItemIds],
-      );
-      const rateMap = new Map(rateRows.map((r) => [r.itemId, r]));
-      for (const suggestion of suggestions) {
-        const row = rateMap.get(suggestion.itemId);
-        suggestion.consumptionRates = {
-          d30: row ? Math.round((Number(row.qty30) / 30) * 1000) / 1000 : 0,
-          d60: row ? Math.round((Number(row.qty60) / 60) * 1000) / 1000 : 0,
-          d90: row ? Math.round((Number(row.qty90) / 90) * 1000) / 1000 : 0,
-          d180: row ? Math.round((Number(row.qty180) / 180) * 1000) / 1000 : 0,
-          d365: row ? Math.round((Number(row.qty365) / 365) * 1000) / 1000 : 0,
-        };
-      }
-    }
-
-    // Cross-Branch-Verfügbarkeit nachladen (nur wenn Benutzer einer Niederlassung angehört)
-    if (branchId && suggestions.length > 0) {
-      const codes = suggestions.map((s) => s.code);
-      const crossBranchMap = await this.getCrossBranchAvailability(codes, branchId);
-      for (const suggestion of suggestions) {
-        suggestion.availableInOtherBranches = crossBranchMap.get(suggestion.code) ?? [];
-      }
-    }
-
-    // Ergebnis cachen
-    this.suggestionsCacheMap.set(cacheKey, { data: suggestions, timestamp: Date.now() });
-    return suggestions;
+  getSuggestions(branchId: string | null | undefined, refresh = false, locationIds?: string[], warehouseId?: string) {
+    return this.suggestionService.getSuggestions(branchId, refresh, locationIds, warehouseId);
   }
 
-  private resolveSuggestionLocationId(
-    storageLocation: Location | null | undefined,
-    itemStockLevels: StockLevel[],
-    locationById: Map<string, Location>,
-    defaultWarehouseId: string | null,
-  ): string | null {
-    const explicitLocation = storageLocation
-      ? (locationById.get(storageLocation.id) ?? storageLocation)
-      : null;
-
-    if (explicitLocation && explicitLocation.type !== "WAREHOUSE") {
-      return explicitLocation.id;
-    }
-
-    const stockLocationId = this.pickBestStockLocationId(
-      itemStockLevels,
-      locationById,
-      explicitLocation?.id ?? null,
-    );
-    if (stockLocationId) {
-      return stockLocationId;
-    }
-
-    return explicitLocation?.id ?? defaultWarehouseId;
-  }
-
-  private pickBestStockLocationId(
-    itemStockLevels: StockLevel[],
-    locationById: Map<string, Location>,
-    rootLocationId: string | null,
-  ): string | null {
-    const candidates = itemStockLevels
-      .map((level) => {
-        const locationId = level.location?.id ?? null;
-        if (!locationId) return null;
-        const location = locationById.get(locationId) ?? level.location ?? null;
-        if (!location || location.type === "VEHICLE") return null;
-        if (rootLocationId && !this.isDescendantLocation(location.id, rootLocationId, locationById)) {
-          return null;
-        }
-        return {
-          locationId: location.id,
-          quantity: Number(level.quantity ?? 0),
-          depth: this.getLocationDepth(location.id, locationById),
-        };
-      })
-      .filter((entry): entry is { locationId: string; quantity: number; depth: number } => Boolean(entry));
-
-    if (candidates.length === 0) return null;
-
-    const withStock = candidates.filter((entry) => entry.quantity > 0);
-    const pool = withStock.length > 0 ? withStock : candidates;
-    pool.sort((a, b) => {
-      const depthDiff = b.depth - a.depth;
-      if (depthDiff !== 0) return depthDiff;
-      return b.quantity - a.quantity;
-    });
-
-    return pool[0]?.locationId ?? null;
-  }
-
-  private isDescendantLocation(
-    candidateLocationId: string,
-    parentLocationId: string,
-    locationById: Map<string, Location>,
-  ): boolean {
-    if (candidateLocationId === parentLocationId) {
-      return true;
-    }
-
-    const seen = new Set<string>();
-    let current = locationById.get(candidateLocationId) ?? null;
-    while (current && !seen.has(current.id)) {
-      seen.add(current.id);
-      const currentParentId = current.parent?.id ?? null;
-      if (!currentParentId) return false;
-      if (currentParentId === parentLocationId) return true;
-      current = locationById.get(currentParentId) ?? current.parent ?? null;
-    }
-
-    return false;
-  }
-
-  private getLocationDepth(locationId: string, locationById: Map<string, Location>): number {
-    const seen = new Set<string>();
-    let current = locationById.get(locationId) ?? null;
-    let depth = 0;
-    while (current && !seen.has(current.id)) {
-      seen.add(current.id);
-      depth += 1;
-      const parentId = current.parent?.id ?? null;
-      current = parentId ? (locationById.get(parentId) ?? current.parent ?? null) : null;
-    }
-    return depth;
-  }
-
-  /** Findet Artikel-Bestände (Lager, keine Fahrzeuge) in ANDEREN Niederlassungen anhand des Artikel-Codes. */
-  private async getCrossBranchAvailability(
-    codes: string[],
-    currentBranchId: string,
-  ): Promise<Map<string, Array<{ branchId: string; branchName: string; quantity: number }>>> {
-    const result = new Map<string, Array<{ branchId: string; branchName: string; quantity: number }>>();
-    if (codes.length === 0) return result;
-
-    const rows = await this.itemsRepository
-      .createQueryBuilder("item")
-      .innerJoin("item.branch", "branch")
-      .leftJoin(
-        "stock_levels",
-        "sl",
-        "sl.itemId = item.id AND sl.vehicleId IS NULL",
-      )
-      .select("item.code", "code")
-      .addSelect("item.branchId", "branchId")
-      .addSelect("branch.name", "branchName")
-      .addSelect("COALESCE(SUM(sl.quantity), 0)", "quantity")
-      .where("item.code IN (:...codes)", { codes })
-      .andWhere("item.branchId != :currentBranchId", { currentBranchId })
-      .andWhere("branch.active = :active", { active: true })
-      .groupBy("item.code, item.branchId, branch.name")
-      .having("COALESCE(SUM(sl.quantity), 0) > 0")
-      .getRawMany<{ code: string; branchId: string; branchName: string; quantity: string }>();
-
-    for (const row of rows) {
-      const entry = { branchId: row.branchId, branchName: row.branchName, quantity: Number(row.quantity) };
-      const existing = result.get(row.code);
-      if (existing) {
-        existing.push(entry);
-      } else {
-        result.set(row.code, [entry]);
-      }
-    }
-
-    return result;
-  }
+  /** @deprecated internal â€” kept only until full block removal below */
 
   async listOrderDocuments(params?: OrderDocumentQueryParams, branchId?: string | null): Promise<StoredOrderDocumentEntry[]> {
     const storagePath = this.getPurchaseOrderStoragePath();
@@ -1027,11 +670,11 @@ export class PurchasingService {
     }
 
     try {
-      // Lookup-Map: relPath → Supplier-Info (neue, mittlere und alte Pfade)
+      // Lookup-Map: relPath â†’ Supplier-Info (neue, mittlere und alte Pfade)
       const fileToSupplier = new Map<string, { supplierId: string | null; supplierName: string | null }>();
       const allOrders = await this.ordersRepository.find({ where: branchId ? { branchId } : undefined, relations: ["supplier"] });
 
-      // Cache folder names to avoid N×2 DB queries per order
+      // Cache folder names to avoid NÃ—2 DB queries per order
       const branchFolderCache = new Map<string | null, string>();
       const locationFolderCache = new Map<string | null, string>();
       const getBranchFolderCached = (bid: string | null | undefined) => {
@@ -1069,7 +712,7 @@ export class PurchasingService {
         fileToSupplier.set(`${branchFolder}/${locationFolder}/${year}/${month}/${filename}`, entry);
         // Mittlere Struktur (ohne Lager): branchFolder/YYYY/MM/filename.pdf
         fileToSupplier.set(`${branchFolder}/${year}/${month}/${filename}`, entry);
-        // Älteste Struktur: YYYY/filename.pdf
+        // Ã„lteste Struktur: YYYY/filename.pdf
         fileToSupplier.set(`${year}/${filename}`, entry);
       }
 
@@ -1205,7 +848,7 @@ export class PurchasingService {
       throw new BadRequestException("Ungueltiger Dateiname.");
     }
 
-    // Niederlassungs-Isolation: Token aus Dateinamen direkt in der DB prüfen (kein Full-Load)
+    // Niederlassungs-Isolation: Token aus Dateinamen direkt in der DB prÃ¼fen (kein Full-Load)
     if (branchId) {
       const token = filename.replace(/\.pdf$/i, "");
       const owned = await this.ordersRepository.findOne({
@@ -1425,7 +1068,7 @@ export class PurchasingService {
       company.email ? `E-Mail: ${company.email}` : "",
     ]
       .filter(Boolean)
-      .join(" · ");
+      .join(" Â· ");
     const footerTemplate = `
 <div style="width:100%;padding:0 18px;font-size:8px;color:#555;box-sizing:border-box;display:flex;align-items:center;justify-content:space-between;">
   <div>${escapeFooterHtml(footerCompanyText)}</div>
@@ -1578,7 +1221,7 @@ export class PurchasingService {
     return `${prefix}-${suffix}-${manufacturerPrefix}`;
   }
 
-  /** Ordnername für eine Niederlassung (sicher für Dateisystem) */
+  /** Ordnername fÃ¼r eine Niederlassung (sicher fÃ¼r Dateisystem) */
   private async getBranchFolder(branchId: string | null | undefined): Promise<string> {
     if (!branchId) return '_ALLGEMEIN';
     const branch = await this.branchesRepository.findOne({ where: { id: branchId } });
@@ -1589,7 +1232,7 @@ export class PurchasingService {
     return code || name || '_ALLGEMEIN';
   }
 
-  /** Ordnername für ein Lager (sicher für Dateisystem), z.B. "002_Tonerlager" */
+  /** Ordnername fÃ¼r ein Lager (sicher fÃ¼r Dateisystem), z.B. "002_Tonerlager" */
   private async getLocationFolder(locationId: string | null | undefined): Promise<string> {
     if (!locationId) return '_ALLE_LAGER';
     const loc = await this.locationsRepository.findOne({ where: { id: locationId } });
@@ -1651,13 +1294,13 @@ export class PurchasingService {
       const candidates = [
         path.join(storagePath, branchFolder, locationFolder, year, month, filename), // aktuelle Struktur
         path.join(storagePath, branchFolder, year, month, filename),                 // alte Struktur (ohne Lager)
-        path.join(storagePath, year, filename),                                      // älteste Struktur
+        path.join(storagePath, year, filename),                                      // Ã¤lteste Struktur
       ];
       for (const fullPath of candidates) {
-        try { await fs.unlink(fullPath); } catch { /* nicht vorhanden – ok */ }
+        try { await fs.unlink(fullPath); } catch { /* nicht vorhanden â€“ ok */ }
       }
     } catch (error) {
-      /* PDF nicht gefunden – ok */
+      /* PDF nicht gefunden â€“ ok */
     }
   }
 
@@ -1677,7 +1320,7 @@ export class PurchasingService {
       const fullPath = path.join(targetDir, filename);
       await fs.writeFile(fullPath, pdfBuffer);
     } catch (error) {
-      /* PDF-Ablage fehlgeschlagen – kein fataler Fehler */
+      /* PDF-Ablage fehlgeschlagen â€“ kein fataler Fehler */
     }
   }
 }

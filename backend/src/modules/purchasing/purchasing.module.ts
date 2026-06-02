@@ -14,6 +14,7 @@ import { PurchaseOrder } from "./entities/purchase-order.entity";
 import { PurchaseOrderLine } from "./entities/purchase-order-line.entity";
 import { PurchasingController } from "./purchasing.controller";
 import { PurchasingService } from "./purchasing.service";
+import { PurchaseSuggestionService } from "./purchase-suggestion.service";
 import { AccessControlModule } from "../access-control/access-control.module";
 import { EmailModule } from "../email/email.module";
 import { SystemConfigModule } from "../system-config/system-config.module";
@@ -32,6 +33,6 @@ import { LoggingModule } from "../logging/logging.module";
     LoggingModule,
   ],
   controllers: [PurchasingController],
-  providers: [PurchasingService],
+  providers: [PurchasingService, PurchaseSuggestionService],
 })
 export class PurchasingModule {}

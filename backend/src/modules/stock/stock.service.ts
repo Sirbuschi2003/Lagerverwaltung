@@ -14,6 +14,8 @@ import { User } from "../users/entities/user.entity";
 import { UsersService } from "../users/users.service";
 import { VehiclesService } from "../vehicles/vehicles.service";
 
+import { MovementQueryService } from "./movement-query.service";
+import { StockDiagnosticsService, RepairResult } from "./stock-diagnostics.service";
 import { CloneVehicleStockDto } from "./dto/clone-vehicle-stock.dto";
 import { RecordMovementDto } from "./dto/record-movement.dto";
 import { SyncPayloadDto } from "./dto/sync-payload.dto";
@@ -93,39 +95,6 @@ interface RestockActorContext {
 
 type VehicleStockLevel = StockLevel & { vehicle: NonNullable<StockLevel["vehicle"]> };
 
-interface DuplicateStockLevelInfo {
-  id: string;
-  quantity: number;
-  targetQuantity: number;
-  item: StockLevel["item"];
-  vehicle: NonNullable<StockLevel["vehicle"]>;
-}
-
-interface DuplicateStockGroup {
-  key: string;
-  item: string;
-  vehicle: string;
-  count: number;
-  stockLevels: DuplicateStockLevelInfo[];
-}
-
-export interface RepairResult {
-  itemCode: string;
-  vehiclesConsolidated: string[];
-  finalStockLevel: {
-    vehicleId: string;
-    vehicleLicensePlate: string;
-    currentStock: number;
-    targetStock: number;
-  };
-}
-
-interface MovementSummaryRow {
-  type: StockMovementType;
-  qty: string | number | null;
-  cnt: string | number | null;
-}
-
 @Injectable()
 export class StockService {
   private readonly logger = new Logger(StockService.name);
@@ -155,6 +124,8 @@ export class StockService {
     private readonly notificationsService: NotificationsService,
     private readonly loggingService: LoggingService,
     private readonly dataSource: DataSource,
+    private readonly movementQueryService: MovementQueryService,
+    private readonly diagnosticsService: StockDiagnosticsService,
   ) {}
 
   /**
@@ -226,41 +197,12 @@ export class StockService {
 
 
 
-  async findMovements(limit = 100, branchId?: string | null) {
-    try {
-      if (!branchId) {
-        return this.movementsRepository.find({
-          order: { occurredAt: "DESC" },
-          take: limit,
-          relations: ["item", "vehicle", "user"],
-        });
-      }
-      return this.movementsRepository
-        .createQueryBuilder("movement")
-        .leftJoinAndSelect("movement.item", "item")
-        .leftJoinAndSelect("movement.vehicle", "vehicle")
-        .leftJoinAndSelect("movement.user", "user")
-        .where("item.branchId = :branchId", { branchId })
-        .orderBy("movement.occurredAt", "DESC")
-        .take(limit)
-        .getMany();
-    } catch (error) {
-      this.logger.error("Fehler beim Laden der Bewegungen:", error);
-      throw error;
-    }
+  findMovements(limit = 100, branchId?: string | null) {
+    return this.movementQueryService.findMovements(limit, branchId);
   }
 
-  async findMovementsBySource(source: string): Promise<StockMovement[]> {
-    try {
-      return await this.movementsRepository.find({
-        where: { source },
-        relations: ["item", "vehicle", "user"],
-        order: { occurredAt: "ASC" },
-      });
-    } catch (error) {
-      this.logger.error(`Fehler beim Laden der Bewegungen fuer Quelle '${source}':`, error);
-      throw error;
-    }
+  findMovementsBySource(source: string) {
+    return this.movementQueryService.findMovementsBySource(source);
   }
 
   async recordMovement(dto: RecordMovementDto) {
@@ -1505,424 +1447,29 @@ export class StockService {
   }
 
   // ADMIN: Diagnose und Reparatur von doppelten StockLevels
-  async diagnoseStockLevels(branchId?: string | null) {
-    this.logger.debug('=== STOCKLEVEL DIAGNOSE GESTARTET ===');
 
-    const qb = this.stockLevelsRepository
-      .createQueryBuilder("sl")
-      .innerJoinAndSelect("sl.item", "item")
-      .leftJoinAndSelect("sl.vehicle", "vehicle");
-    if (branchId) {
-      qb.andWhere("(item.branchId = :branchId OR vehicle.branchId = :branchId)", { branchId });
-    }
-    const allStockLevels = await qb.getMany();
-    
-    this.logger.debug(`Total StockLevels: ${allStockLevels.length}`);
-    
-    // 2. Gruppiere nach Item+Vehicle Kombination
-    const combinations = new Map<string, VehicleStockLevel[]>();
-    
-    allStockLevels.forEach((stockLevel) => {
-      if (!stockLevel.vehicle) {
-        return;
-      }
-      const level = stockLevel as VehicleStockLevel;
-      const key = `${level.item.id}_${level.vehicle.id}`;
-      if (!combinations.has(key)) {
-        combinations.set(key, []);
-      }
-      combinations.get(key)!.push(level);
-    });
-    
-    // 3. Finde Duplikate
-    const duplicates: DuplicateStockGroup[] = [];
-    for (const [key, stockLevels] of combinations.entries()) {
-      if (stockLevels.length > 1) {
-        const first = stockLevels[0];
-        if (!first) {
-          continue;
-        }
-        duplicates.push({
-          key,
-          item: first.item.code,
-          vehicle: first.vehicle.licensePlate,
-          count: stockLevels.length,
-          stockLevels: stockLevels.map((level) => ({
-            id: level.id,
-            quantity: level.quantity,
-            targetQuantity: level.targetQuantity,
-            item: level.item,
-            vehicle: level.vehicle,
-          }))
-        });
-      }
-    }
-    
-    this.logger.debug('=== DUPLIKATE GEFUNDEN ===');
-    duplicates.forEach((duplicate) => {
-      if (duplicate.stockLevels.length === 0) {
-        return;
-      }
-      this.logger.debug(`Duplikat: ${duplicate.item} auf ${duplicate.vehicle} - ${duplicate.count} StockLevels:`);
-      duplicate.stockLevels.forEach((stockLevel) => {
-        this.logger.debug(`  - ID: ${stockLevel.id}, Ist: ${stockLevel.quantity}, Soll: ${stockLevel.targetQuantity}`);
-      });
-    });
-    
-    // Format fÃ¼r Frontend anpassen
-    const duplicateGroups = duplicates.map((duplicate) => ({
-      itemCode: duplicate.item,
-      itemDescription: duplicate.stockLevels[0]?.item?.description || 'Unbekannt',
-      duplicateStockLevels: duplicate.stockLevels.map((stockLevel) => ({
-        id: stockLevel.id,
-        vehicleId: stockLevel.vehicle.id,
-        vehicleLicensePlate: stockLevel.vehicle.licensePlate || duplicate.vehicle,
-        currentStock: stockLevel.quantity,
-        targetStock: stockLevel.targetQuantity,
-      }))
-    }));
-
-    return {
-      duplicateGroups,
-      totalDuplicateGroups: duplicates.length,
-      totalAffectedStockLevels: duplicates.reduce((sum, duplicate) => sum + duplicate.count, 0),
-      summary: `${duplicates.length} Duplikat-Probleme gefunden`
-    };
+  diagnoseStockLevels(branchId?: string | null) {
+    return this.diagnosticsService.diagnoseStockLevels(branchId);
   }
 
-  async repairDuplicateStockLevels(branchId?: string | null) {
-    this.logger.debug('=== STOCKLEVEL REPARATUR GESTARTET ===');
-
-    const qb = this.stockLevelsRepository
-      .createQueryBuilder("sl")
-      .innerJoinAndSelect("sl.item", "item")
-      .leftJoinAndSelect("sl.vehicle", "vehicle");
-    if (branchId) {
-      qb.andWhere("(item.branchId = :branchId OR vehicle.branchId = :branchId)", { branchId });
-    }
-    const allStockLevels = await qb.getMany();
-    
-    // Gruppiere nach Item+Vehicle Kombination
-    const combinations = new Map<string, VehicleStockLevel[]>();
-    
-    allStockLevels.forEach((stockLevel) => {
-      if (!stockLevel.vehicle) {
-        return;
-      }
-      const level = stockLevel as VehicleStockLevel;
-      const key = `${level.item.id}_${level.vehicle.id}`;
-      if (!combinations.has(key)) {
-        combinations.set(key, []);
-      }
-      combinations.get(key)!.push(level);
-    });
-    
-    // Finde Duplikate
-    const duplicates: Array<{
-      key: string;
-      item: string;
-      vehicle: string;
-      count: number;
-      stockLevels: VehicleStockLevel[];
-    }> = [];
-    for (const [key, stockLevels] of combinations.entries()) {
-      if (stockLevels.length > 1) {
-        const first = stockLevels[0];
-        if (!first) {
-          continue;
-        }
-        duplicates.push({
-          key,
-          item: first.item.code,
-          vehicle: first.vehicle.licensePlate,
-          count: stockLevels.length,
-          stockLevels,
-        });
-      }
-    }
-    
-    if (duplicates.length === 0) {
-      return { 
-        totalGroupsRepaired: 0,
-        totalStockLevelsRemoved: 0,
-        details: [],
-        message: 'Keine Duplikate gefunden - keine Reparatur nÃ¶tig' 
-      };
-    }
-    
-    const repairResults: RepairResult[] = [];
-    let totalRemoved = 0;
-    
-    for (const duplicate of duplicates) {
-      this.logger.debug(`Repariere Duplikat: ${duplicate.item} auf ${duplicate.vehicle}`);
-      
-      const stockLevels = duplicate.stockLevels;
-      
-      if (stockLevels.length <= 1) {
-        continue;
-      }
-      
-      // Behalte das erste StockLevel, kombiniere die Werte
-      const primaryStockLevel = stockLevels[0];
-      const duplicateStockLevels = stockLevels.slice(1);
-      
-      // Kombiniere Mengen (nehme Maximum)
-      let maxQuantity = primaryStockLevel.quantity;
-      let maxTargetQuantity = primaryStockLevel.targetQuantity;
-      
-      duplicateStockLevels.forEach((stockLevel) => {
-        maxQuantity = Math.max(maxQuantity, stockLevel.quantity);
-        maxTargetQuantity = Math.max(maxTargetQuantity, stockLevel.targetQuantity);
-      });
-      
-      // Update primÃ¤res StockLevel
-      primaryStockLevel.quantity = maxQuantity;
-      primaryStockLevel.targetQuantity = maxTargetQuantity;
-      await this.stockLevelsRepository.save(primaryStockLevel);
-      
-      // Verschiebe alle RestockRequests zum primÃ¤ren StockLevel
-      for (const duplicateSL of duplicateStockLevels) {
-        const requests = await this.restockRepository.find({
-          where: { stockLevel: { id: duplicateSL.id } }
-        });
-        
-        for (const request of requests) {
-          request.stockLevel = primaryStockLevel;
-          request.stockLevelId = primaryStockLevel.id;
-          await this.restockRepository.save(request);
-        }
-        
-        // LÃ¶sche doppeltes StockLevel
-        await this.stockLevelsRepository.remove(duplicateSL);
-      }
-      
-      totalRemoved += duplicateStockLevels.length;
-      
-      repairResults.push({
-        itemCode: duplicate.item,
-        vehiclesConsolidated: [duplicate.vehicle],
-        finalStockLevel: {
-          vehicleId: primaryStockLevel.vehicle.id,
-          vehicleLicensePlate: duplicate.vehicle,
-          currentStock: maxQuantity,
-          targetStock: maxTargetQuantity
-        }
-      });
-    }
-    
-    this.logger.debug('=== REPARATUR ABGESCHLOSSEN ===');
-    return {
-      totalGroupsRepaired: duplicates.length,
-      totalStockLevelsRemoved: totalRemoved,
-      details: repairResults,
-    };
+  repairDuplicateStockLevels(branchId?: string | null) {
+    return this.diagnosticsService.repairDuplicateStockLevels(branchId);
   }
 
-  async getMovements(params: {
-    itemId?: string;
-    vehicleId?: string;
-    userId?: string;
-    from?: Date;
-    to?: Date;
-    type?: StockMovementType;
-    limit?: number;
-    offset?: number;
-    branchId?: string | null;
-    locationIds?: string[];
-    warehouseId?: string;
-    source?: string;
-    includeVehicleMovements?: boolean;
-  }): Promise<{ movements: StockMovement[]; total: number; summary: { totalCheckinQty: number; totalCheckoutQty: number; totalCheckinCount: number; totalCheckoutCount: number } }> {
-    const effectiveLocationIds = params.warehouseId
-      ? await this.locationsService.getDescendantLocationIds(params.warehouseId, params.branchId)
-      : params.locationIds;
-
-    const excludeVehicles = effectiveLocationIds?.length && !params.includeVehicleMovements;
-
-    const qb = this.movementsRepository
-      .createQueryBuilder('movement')
-      .leftJoinAndSelect('movement.item', 'item')
-      .leftJoin('item.storageLocation', 'storageLocation')
-      .leftJoin('storageLocation.parent', 'slParent')
-      .leftJoinAndSelect('movement.vehicle', 'vehicle')
-      .leftJoinAndSelect('movement.user', 'user')
-      .orderBy('movement.occurredAt', 'DESC');
-
-    if (params.branchId) qb.andWhere('item.branchId = :branchId', { branchId: params.branchId });
-    if (effectiveLocationIds?.length) {
-      qb.andWhere(
-        '(storageLocation.id IN (:...locationIds) OR slParent.id IN (:...locationIds))',
-        { locationIds: effectiveLocationIds },
-      );
-    }
-    if (excludeVehicles) qb.andWhere('movement.vehicleId IS NULL');
-    if (params.itemId) qb.andWhere('item.id = :itemId', { itemId: params.itemId });
-    if (params.vehicleId) qb.andWhere('vehicle.id = :vehicleId', { vehicleId: params.vehicleId });
-    if (params.userId) qb.andWhere('user.id = :userId', { userId: params.userId });
-    if (params.type) qb.andWhere('movement.type = :type', { type: params.type });
-    if (params.from) qb.andWhere('movement.occurredAt >= :from', { from: params.from });
-    if (params.to) qb.andWhere('movement.occurredAt <= :to', { to: params.to });
-    qb.andWhere('movement.source NOT LIKE :importPattern', { importPattern: '%import%' });
-    if (params.source) qb.andWhere('movement.source LIKE :source', { source: `%${params.source}%` });
-
-    const limit = Math.min(params.limit || 50, 500);
-    const offset = params.offset || 0;
-    qb.take(limit).skip(offset);
-
-    const [movements, total] = await qb.getManyAndCount();
-
-    const summaryQb = this.movementsRepository
-      .createQueryBuilder('movement')
-      .leftJoin('movement.item', 'item')
-      .leftJoin('item.storageLocation', 'storageLocation')
-      .leftJoin('storageLocation.parent', 'slParent')
-      .select('movement.type', 'type')
-      .addSelect('SUM(movement.quantity)', 'qty')
-      .addSelect('COUNT(*)', 'cnt');
-
-    if (params.branchId) summaryQb.andWhere('item.branchId = :branchId', { branchId: params.branchId });
-    if (effectiveLocationIds?.length) {
-      summaryQb.andWhere(
-        '(storageLocation.id IN (:...locationIds) OR slParent.id IN (:...locationIds))',
-        { locationIds: effectiveLocationIds },
-      );
-    }
-    if (excludeVehicles) summaryQb.andWhere('movement.vehicleId IS NULL');
-    if (params.itemId) summaryQb.andWhere('movement.itemId = :itemId', { itemId: params.itemId });
-    if (params.vehicleId) summaryQb.andWhere('movement.vehicleId = :vehicleId', { vehicleId: params.vehicleId });
-    if (params.userId) summaryQb.andWhere('movement.userId = :userId', { userId: params.userId });
-    if (params.type) summaryQb.andWhere('movement.type = :type', { type: params.type });
-    if (params.from) summaryQb.andWhere('movement.occurredAt >= :from', { from: params.from });
-    if (params.to) summaryQb.andWhere('movement.occurredAt <= :to', { to: params.to });
-    summaryQb.andWhere('movement.source NOT LIKE :importPattern', { importPattern: '%import%' });
-
-    const raw = await summaryQb.groupBy('movement.type').getRawMany<MovementSummaryRow>();
-    const summary = {
-      totalCheckinQty: 0,
-      totalCheckoutQty: 0,
-      totalCheckinCount: 0,
-      totalCheckoutCount: 0,
-    };
-    raw.forEach((row) => {
-      if (row.type === 'CHECKIN') {
-        summary.totalCheckinQty = Number(row.qty) || 0;
-        summary.totalCheckinCount = Number(row.cnt) || 0;
-      } else if (row.type === 'CHECKOUT') {
-        summary.totalCheckoutQty = Number(row.qty) || 0;
-        summary.totalCheckoutCount = Number(row.cnt) || 0;
-      }
-    });
-
-    return { movements, total, summary };
+  getMovements(params: Parameters<MovementQueryService['getMovements']>[0]) {
+    return this.movementQueryService.getMovements(params);
   }
 
-  /**
-   * GoBD-konforme Stornierung: Lagerbewegungen werden NICHT gelöscht, sondern als
-   * storniert markiert (isVoided=true). Originaldatensatz bleibt dauerhaft erhalten.
-   * Für echte Korrekturen eine neue ADJUSTMENT-Buchung anlegen.
-   */
-  async cleanupMovements(before: Date, type?: StockMovementType, voidedBy?: string): Promise<number> {
-    const formatMySqlDate = (d: Date) => d.toISOString().slice(0, 19).replace('T', ' ');
-    const formatted = formatMySqlDate(before);
-    const now = new Date();
-
-    const qb = this.movementsRepository.createQueryBuilder()
-      .update(StockMovement)
-      .set({
-        isVoided: true,
-        voidedAt: now,
-        voidedBy: voidedBy ?? "system",
-        voidReason: `Massen-Stornierung vor ${before.toISOString().slice(0, 10)}`,
-      })
-      .where("occurredAt < :before", { before: formatted })
-      .andWhere("isVoided = :notVoided", { notVoided: false });
-
-    if (type) {
-      qb.andWhere("type = :type", { type });
-    }
-
-    const res = await qb.execute();
-    return res.affected || 0;
+  cleanupMovements(before: Date, type?: StockMovementType, voidedBy?: string) {
+    return this.movementQueryService.cleanupMovements(before, type, voidedBy);
   }
 
-  /**
-   * Einzelne Lagerbewegung stornieren (GoBD-konform: kein Hard-Delete).
-   */
-  async voidMovement(id: string, voidedBy: string, voidReason: string): Promise<StockMovement> {
-    const movement = await this.movementsRepository.findOne({ where: { id } });
-    if (!movement) {
-      throw new NotFoundException(`Lagerbewegung ${id} nicht gefunden`);
-    }
-    if (movement.isVoided) {
-      throw new BadRequestException(`Lagerbewegung ${id} ist bereits storniert`);
-    }
-    movement.isVoided = true;
-    movement.voidedAt = new Date();
-    movement.voidedBy = voidedBy;
-    movement.voidReason = voidReason;
-    return this.movementsRepository.save(movement);
+  voidMovement(id: string, voidedBy: string, voidReason: string) {
+    return this.movementQueryService.voidMovement(id, voidedBy, voidReason);
   }
 
-  /**
-   * Bereinigt alle duplicate RestockRequests fÃ¼r dieselbe stockLevelId
-   * BehÃ¤lt nur den Ã¤ltesten Request pro StockLevel, lÃ¶scht alle neueren
-   */
-  async cleanupRestockRequestDuplicates(): Promise<{
-    totalDuplicatesFound: number;
-    totalDuplicatesRemoved: number;
-    affectedStockLevels: string[];
-  }> {
-    this.logger.debug('=== RESTOCK REQUEST DUPLIKATE CLEANUP GESTARTET ===');
-    
-    // Alle RestockRequests laden
-    const allRequests = await this.restockRepository.find({
-      order: { createdAt: 'ASC' }
-    });
-    
-    // Gruppieren nach stockLevelId
-    const grouped = new Map<string, typeof allRequests>();
-    for (const req of allRequests) {
-      const key = req.stockLevelId;
-      if (!grouped.has(key)) {
-        grouped.set(key, []);
-      }
-      grouped.get(key)!.push(req);
-    }
-    
-    // Finde Duplikate
-    const duplicateGroups = Array.from(grouped.entries())
-      .filter(([, requests]) => requests.length > 1);
-    
-    this.logger.debug(`Gefunden: ${duplicateGroups.length} StockLevels mit Duplikaten`);
-    
-    let totalRemoved = 0;
-    const affectedStockLevels: string[] = [];
-    
-    for (const [stockLevelId, requests] of duplicateGroups) {
-      this.logger.debug(`StockLevel ${stockLevelId}: ${requests.length} RestockRequests`);
-      
-      // Behalte den Ã¤ltesten (ersten), lÃ¶sche den Rest
-      const primary = requests[0];
-      const duplicates = requests.slice(1);
-      
-      this.logger.debug(`  - Behalte: ${primary.id} (erstellt: ${primary.createdAt.toISOString()})`);
-      
-      for (const dup of duplicates) {
-        this.logger.debug(`  - LÃ¶sche: ${dup.id} (erstellt: ${dup.createdAt.toISOString()})`);
-        await this.restockRepository.remove(dup);
-        totalRemoved++;
-      }
-      
-      affectedStockLevels.push(stockLevelId);
-    }
-    
-    this.logger.debug(`=== CLEANUP ABGESCHLOSSEN: ${totalRemoved} Duplikate entfernt ===`);
-    
-    return {
-      totalDuplicatesFound: duplicateGroups.reduce((sum, [, reqs]) => sum + (reqs.length - 1), 0),
-      totalDuplicatesRemoved: totalRemoved,
-      affectedStockLevels
-    };
+  cleanupRestockRequestDuplicates() {
+    return this.diagnosticsService.cleanupRestockRequestDuplicates();
   }
 
   private async getTechnicianMap(branchId: string | null | undefined): Promise<Map<string, string>> {
