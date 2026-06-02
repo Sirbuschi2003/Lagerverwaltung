@@ -448,7 +448,16 @@ export class PurchasingService {
       }
 
       if (payload.deliveryNoteNumber !== undefined) {
-        order.deliveryNoteNumber = payload.deliveryNoteNumber.trim() || null;
+        const newNote = payload.deliveryNoteNumber.trim();
+        if (newNote) {
+          const existing = order.deliveryNoteNumber
+            ? order.deliveryNoteNumber.split(",").map((s) => s.trim()).filter(Boolean)
+            : [];
+          if (!existing.includes(newNote)) {
+            existing.push(newNote);
+          }
+          order.deliveryNoteNumber = existing.join(", ");
+        }
       }
 
       return manager.save(order);
