@@ -284,7 +284,7 @@ export class StockService {
       type: dto.type,
       quantity: dto.quantity,
       note: dto.note ?? null,
-      source: dto.source,
+      source: dto.source?.trim() || "manual",
       occurredAt: new Date(dto.occurredAt),
     });
 
