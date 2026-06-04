@@ -89,7 +89,6 @@ export class ReportsService {
 
   async slowMoverReport(thresholdDays: number, branchId?: string | null, locationIds?: string[], warehouseId?: string, includeVehicleMovements = false): Promise<SlowMoverRow[]> {
     const effectiveLocationIds = await this.resolveLocationIds(warehouseId, locationIds, branchId);
-    const excludeVehicles = effectiveLocationIds?.length && !includeVehicleMovements;
     const levelsQb = this.stockLevelsRepository
       .createQueryBuilder("level")
       .select("level.itemId", "itemId")
@@ -108,7 +107,13 @@ export class ReportsService {
         { locationIds: effectiveLocationIds },
       );
     }
-    if (excludeVehicles) levelsQb.andWhere("level.vehicleId IS NULL");
+
+    if (!includeVehicleMovements) {
+      levelsQb.andWhere("level.vehicleId IS NULL");
+    } else if (branchId) {
+      levelsQb.leftJoin("level.vehicle", "vehicle")
+        .andWhere("(level.vehicleId IS NULL OR vehicle.branchId = :branchId)", { branchId });
+    }
 
     levelsQb.groupBy("level.itemId").having("SUM(level.quantity) >= 0");
 
@@ -202,13 +207,17 @@ export class ReportsService {
         { locationIds: effectiveLocationIds },
       );
     }
-    if (excludeVehicles) qb.andWhere("movement.vehicleId IS NULL");
+    if (excludeVehicles) {
+      qb.andWhere("movement.vehicleId IS NULL");
+    } else if (branchId) {
+      qb.leftJoin("movement.vehicle", "moveVehicle")
+        .andWhere("(movement.vehicleId IS NULL OR moveVehicle.branchId = :branchId)", { branchId });
+    }
 
     return qb.getMany();
   }
 
   async stockStatusSummary(branchId?: string | null, locationIds?: string[], includeVehicleMovements = false) {
-    const excludeVehicles = locationIds?.length && !includeVehicleMovements;
     const qb = this.stockLevelsRepository
       .createQueryBuilder("level")
       .leftJoin("level.item", "item")
@@ -226,7 +235,13 @@ export class ReportsService {
         { locationIds },
       );
     }
-    if (excludeVehicles) qb.andWhere("level.vehicleId IS NULL");
+
+    if (!includeVehicleMovements) {
+      qb.andWhere("level.vehicleId IS NULL");
+    } else if (branchId) {
+      qb.leftJoin("level.vehicle", "vehicle")
+        .andWhere("(level.vehicleId IS NULL OR vehicle.branchId = :branchId)", { branchId });
+    }
 
     return qb.getMany();
   }
@@ -255,7 +270,12 @@ export class ReportsService {
       .groupBy("month")
       .orderBy("month", "ASC");
 
-    if (excludeVehicles) qb.andWhere("mv.vehicleId IS NULL");
+    if (excludeVehicles) {
+      qb.andWhere("mv.vehicleId IS NULL");
+    } else if (branchId) {
+      qb.leftJoin("mv.vehicle", "trendVehicle")
+        .andWhere("(mv.vehicleId IS NULL OR trendVehicle.branchId = :branchId)", { branchId });
+    }
 
     if (branchId || itemId || effectiveLocationIds?.length) {
       qb.leftJoin("mv.item", "item");
@@ -323,7 +343,12 @@ export class ReportsService {
         { locationIds: effectiveLocationIds },
       );
     }
-    if (excludeVehicles) qb.andWhere("mv.vehicleId IS NULL");
+    if (excludeVehicles) {
+      qb.andWhere("mv.vehicleId IS NULL");
+    } else if (branchId) {
+      qb.leftJoin("mv.vehicle", "actVehicle")
+        .andWhere("(mv.vehicleId IS NULL OR actVehicle.branchId = :branchId)", { branchId });
+    }
 
     const raw: Array<{
       itemId: string;
@@ -381,7 +406,6 @@ export class ReportsService {
     includeVehicleMovements = false,
   ): Promise<ForecastRow[]> {
     const effectiveLocationIds = await this.resolveLocationIds(warehouseId, locationIds, branchId);
-    const excludeVehicles = effectiveLocationIds?.length && !includeVehicleMovements;
     const now = new Date();
     const analysisFrom = new Date(now.getTime() - forecastDays * 24 * 60 * 60 * 1000);
 
@@ -406,11 +430,17 @@ export class ReportsService {
         { locationIds: effectiveLocationIds },
       );
     }
-    if (excludeVehicles) consumptionQb.andWhere("mv.vehicleId IS NULL");
+    if (!includeVehicleMovements) {
+      consumptionQb.andWhere("mv.vehicleId IS NULL");
+    } else if (branchId) {
+      consumptionQb.leftJoin("mv.vehicle", "mvVehicle")
+        .andWhere("(mv.vehicleId IS NULL OR mvVehicle.branchId = :branchId)", { branchId });
+    }
 
     const consumptionRaw: Array<{ itemId: string; totalConsumed: string }> = await consumptionQb.getRawMany();
 
-    // Aktueller Bestand pro Artikel
+    // Aktueller Bestand pro Artikel — nur Lagerbestand (vehicleId IS NULL), damit er mit der Artikelseite übereinstimmt.
+    // Bei includeVehicleMovements=true wird Fahrzeugbestand einbezogen, jedoch nur von Fahrzeugen der eigenen Niederlassung.
     const stockQb = this.stockLevelsRepository
       .createQueryBuilder("level")
       .select("level.itemId", "itemId")
@@ -426,7 +456,12 @@ export class ReportsService {
         { locationIds: effectiveLocationIds },
       );
     }
-    if (excludeVehicles) stockQb.andWhere("level.vehicleId IS NULL");
+    if (!includeVehicleMovements) {
+      stockQb.andWhere("level.vehicleId IS NULL");
+    } else if (branchId) {
+      stockQb.leftJoin("level.vehicle", "vehicle")
+        .andWhere("(level.vehicleId IS NULL OR vehicle.branchId = :branchId)", { branchId });
+    }
     stockQb.groupBy("level.itemId");
 
     const stockRaw: Array<{ itemId: string; currentStock: string }> = await stockQb.getRawMany();
