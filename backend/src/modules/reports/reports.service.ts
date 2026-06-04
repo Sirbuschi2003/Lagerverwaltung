@@ -109,11 +109,12 @@ export class ReportsService {
     }
 
     if (!includeVehicleMovements) {
-      levelsQb.andWhere("level.vehicleId IS NULL").andWhere("level.locationId IS NOT NULL");
+      levelsQb.andWhere("level.vehicleId IS NULL")
+        .andWhere("level.locationId = item.storageLocationId");
     } else if (branchId) {
       levelsQb.leftJoin("level.vehicle", "vehicle")
         .andWhere("(level.vehicleId IS NULL OR vehicle.branchId = :branchId)", { branchId })
-        .andWhere("(level.vehicleId IS NOT NULL OR level.locationId IS NOT NULL)");
+        .andWhere("(level.vehicleId IS NOT NULL OR level.locationId = item.storageLocationId)");
     }
 
     levelsQb.groupBy("level.itemId").having("SUM(level.quantity) >= 0");
@@ -238,11 +239,12 @@ export class ReportsService {
     }
 
     if (!includeVehicleMovements) {
-      qb.andWhere("level.vehicleId IS NULL").andWhere("level.locationId IS NOT NULL");
+      qb.andWhere("level.vehicleId IS NULL")
+        .andWhere("level.locationId = item.storageLocationId");
     } else if (branchId) {
       qb.leftJoin("level.vehicle", "vehicle")
         .andWhere("(level.vehicleId IS NULL OR vehicle.branchId = :branchId)", { branchId })
-        .andWhere("(level.vehicleId IS NOT NULL OR level.locationId IS NOT NULL)");
+        .andWhere("(level.vehicleId IS NOT NULL OR level.locationId = item.storageLocationId)");
     }
 
     return qb.getMany();
@@ -459,13 +461,15 @@ export class ReportsService {
       );
     }
     if (!includeVehicleMovements) {
-      // Nur echte Lagerort-Bestände — vehicleId=null UND locationId IS NOT NULL schließt
-      // Geister-Datensätze aus (MySQL erlaubt mehrere (itemId, NULL)-Einträge in UNIQUE-Constraints)
-      stockQb.andWhere("level.vehicleId IS NULL").andWhere("level.locationId IS NOT NULL");
+      // Nur den Stock-Level an der zugewiesenen Primär-Position des Artikels zählen —
+      // identisch zur Artikelseite (stock.locationId = item.storageLocationId).
+      // Verhindert Doppelzählung bei Artikeln mit veralteten Stock-Levels an alten Positionen.
+      stockQb.andWhere("level.vehicleId IS NULL")
+        .andWhere("level.locationId = item.storageLocationId");
     } else if (branchId) {
       stockQb.leftJoin("level.vehicle", "vehicle")
         .andWhere("(level.vehicleId IS NULL OR vehicle.branchId = :branchId)", { branchId })
-        .andWhere("(level.vehicleId IS NOT NULL OR level.locationId IS NOT NULL)");
+        .andWhere("(level.vehicleId IS NOT NULL OR level.locationId = item.storageLocationId)");
     }
     stockQb.groupBy("level.itemId");
 
