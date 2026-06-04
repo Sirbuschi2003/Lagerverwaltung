@@ -1023,11 +1023,86 @@ export class SetupService {
   async deleteAutoBackup(filename: string): Promise<void> {
     const filepath = await this.getAutoBackupPath(filename);
     fs.unlinkSync(filepath);
-    
+
     await this.loggingService.logInfo(
       'SYSTEM' as any,
       'AUTO_BACKUP_DELETED',
       `Backup-Datei manuell gelöscht: ${filename}`
     );
+  }
+
+  async createSqlDump(): Promise<string> {
+    const qr = this.dataSource.createQueryRunner();
+    await qr.connect();
+    try {
+      const lines: string[] = [];
+      const ts = new Date().toISOString();
+
+      lines.push(`-- Lagerverwaltung MySQL Dump`);
+      lines.push(`-- Erstellt: ${ts}`);
+      lines.push(`-- Server: ${this.dataSource.options.database}`);
+      lines.push(``);
+      lines.push(`SET FOREIGN_KEY_CHECKS=0;`);
+      lines.push(`SET SQL_MODE='NO_AUTO_VALUE_ON_ZERO';`);
+      lines.push(`SET NAMES utf8mb4;`);
+      lines.push(``);
+
+      const tableRows: Array<{ Tables_in_db: string }> = await qr.query(`SHOW TABLES`);
+      const dbName = this.dataSource.options.database as string;
+      const tableNames = tableRows.map(r => Object.values(r)[0] as string);
+
+      for (const table of tableNames) {
+        lines.push(`-- ----------------------------`);
+        lines.push(`-- Tabelle: ${table}`);
+        lines.push(`-- ----------------------------`);
+        lines.push(`DROP TABLE IF EXISTS \`${table}\`;`);
+
+        const [createResult]: Array<Record<string, string>> = await qr.query(`SHOW CREATE TABLE \`${table}\``);
+        const createSql = createResult['Create Table'];
+        lines.push(`${createSql};`);
+        lines.push(``);
+
+        const rows: Record<string, unknown>[] = await qr.query(`SELECT * FROM \`${table}\``);
+        if (rows.length === 0) {
+          lines.push(`-- (keine Datensätze)`);
+          lines.push(``);
+          continue;
+        }
+
+        const cols = Object.keys(rows[0]).map(c => `\`${c}\``).join(', ');
+        const BATCH = 200;
+        for (let i = 0; i < rows.length; i += BATCH) {
+          const batch = rows.slice(i, i + BATCH);
+          const values = batch.map(row =>
+            `(${Object.values(row).map(v => this.escapeSqlValue(v)).join(', ')})`
+          ).join(',\n  ');
+          lines.push(`INSERT INTO \`${table}\` (${cols}) VALUES`);
+          lines.push(`  ${values};`);
+        }
+        lines.push(``);
+      }
+
+      lines.push(`SET FOREIGN_KEY_CHECKS=1;`);
+      lines.push(`-- Dump Ende: ${new Date().toISOString()}`);
+
+      return lines.join('\n');
+    } finally {
+      await qr.release();
+    }
+  }
+
+  private escapeSqlValue(value: unknown): string {
+    if (value === null || value === undefined) return 'NULL';
+    if (typeof value === 'number' || typeof value === 'bigint') return String(value);
+    if (typeof value === 'boolean') return value ? '1' : '0';
+    if (value instanceof Date) return `'${value.toISOString().slice(0, 19).replace('T', ' ')}'`;
+    if (Buffer.isBuffer(value)) return `0x${value.toString('hex')}`;
+    const str = String(value)
+      .replace(/\\/g, '\\\\')
+      .replace(/'/g, "\\'")
+      .replace(/\n/g, '\\n')
+      .replace(/\r/g, '\\r')
+      .replace(/\0/g, '\\0');
+    return `'${str}'`;
   }
 }

@@ -20,10 +20,11 @@ import {
   DirectionsCar as VehicleIcon,
   Warehouse as WarehouseIcon,
   Business as BranchIcon,
+  Storage as SqlIcon,
 } from '@mui/icons-material';
 import api, {
   getAutoBackupConfig, setAutoBackupConfig, getLastAutoBackup,
-  listAutoBackups, downloadAutoBackup, deleteAutoBackup,
+  listAutoBackups, downloadAutoBackup, deleteAutoBackup, downloadSqlDump,
   restoreSelective, restoreFullBackup, loadBackupFromServer,
   type AutoBackupConfig, type AutoBackupFile, type RestoreFilters,
 } from '../utils/api';
@@ -116,6 +117,7 @@ const BackupPage = () => {
 
   // Backup erstellen
   const [backupLoading, setBackupLoading] = useState(false);
+  const [sqlDumpLoading, setSqlDumpLoading] = useState(false);
   const [backupMessage, setBackupMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
   // Auto-Backup
@@ -278,6 +280,27 @@ const BackupPage = () => {
     }
   };
 
+  // ── SQL-Dump herunterladen ────────────────────────────────────────────────
+
+  const handleDownloadSqlDump = async () => {
+    setSqlDumpLoading(true);
+    setBackupMessage(null);
+    try {
+      const blob = await downloadSqlDump();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `lagerverwaltung-dump-${new Date().toISOString().split('T')[0]}.sql`;
+      document.body.appendChild(a); a.click(); document.body.removeChild(a);
+      window.URL.revokeObjectURL(url);
+      setBackupMessage({ type: 'success', text: 'MySQL-Dump erfolgreich heruntergeladen.' });
+    } catch {
+      setBackupMessage({ type: 'error', text: 'MySQL-Dump fehlgeschlagen.' });
+    } finally {
+      setSqlDumpLoading(false);
+    }
+  };
+
   // ── Backup herunterladen ───────────────────────────────────────────────────
 
   const handleDownloadBackup = async () => {
@@ -332,14 +355,27 @@ const BackupPage = () => {
         <Typography variant="body2" color="text.secondary" paragraph>
           Lädt ein vollständiges Backup aller Daten herunter (Artikel, Fahrzeuge, Benutzer, Bestände, Buchungen, Lagerorte, Niederlassungen …).
         </Typography>
-        <Button
-          variant="contained"
-          onClick={handleDownloadBackup}
-          disabled={backupLoading}
-          startIcon={backupLoading ? <CircularProgress size={20} /> : <BackupIcon />}
-        >
-          {backupLoading ? 'Erstelle…' : 'Backup herunterladen'}
-        </Button>
+        <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
+          <Button
+            variant="contained"
+            onClick={handleDownloadBackup}
+            disabled={backupLoading || sqlDumpLoading}
+            startIcon={backupLoading ? <CircularProgress size={20} /> : <BackupIcon />}
+          >
+            {backupLoading ? 'Erstelle…' : 'JSON-Backup herunterladen'}
+          </Button>
+          <Button
+            variant="outlined"
+            onClick={handleDownloadSqlDump}
+            disabled={backupLoading || sqlDumpLoading}
+            startIcon={sqlDumpLoading ? <CircularProgress size={20} /> : <SqlIcon />}
+          >
+            {sqlDumpLoading ? 'Erstelle SQL-Dump…' : 'MySQL-Dump (.sql)'}
+          </Button>
+        </Box>
+        <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 1 }}>
+          MySQL-Dump enthält die rohen SQL-Tabellendaten – nützlich für Diagnose und direkte Datenbankwiederherstellung.
+        </Typography>
       </Paper>
 
       {/* ── Wiederherstellung ────────────────────────────────────────────── */}

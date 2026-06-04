@@ -1,4 +1,5 @@
-import { Body, ConflictException, Controller, Delete, Get, Param, Post, Res, UseGuards } from "@nestjs/common";
+import { Body, ConflictException, Controller, Delete, Get, Param, Post, Res, StreamableFile, UseGuards } from "@nestjs/common";
+import { Readable } from "stream";
 import { Throttle } from "@nestjs/throttler";
 import { Response } from 'express';
 import { JwtAuthGuard } from "../auth/guards/jwt-auth.guard";
@@ -81,6 +82,25 @@ export class SetupController {
   }) {
     await this.setupService.restoreSelective(body.backup, body.sections, body.filters);
     return { success: true, message: 'Ausgewählte Bereiche wiederhergestellt' };
+  }
+
+  /**
+   * MySQL SQL-Dump herunterladen
+   */
+  @Get("backup/sql")
+  @UseGuards(JwtAuthGuard, RolesGuard, PermissionsGuard)
+  @Roles("MANAGER")
+  @Permissions("backup.access")
+  async downloadSqlDump(@Res({ passthrough: true }) res: Response) {
+    const sql = await this.setupService.createSqlDump();
+    const filename = `lagerverwaltung-dump-${new Date().toISOString().slice(0, 10)}.sql`;
+    const buffer = Buffer.from(sql, 'utf-8');
+    (res as any).set({
+      'Content-Type': 'application/sql',
+      'Content-Disposition': `attachment; filename="${filename}"`,
+      'Content-Length': buffer.length,
+    });
+    return new StreamableFile(Readable.from(buffer));
   }
 
   /**

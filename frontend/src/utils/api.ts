@@ -1742,6 +1742,11 @@ export const downloadAutoBackup = async (filename: string): Promise<Blob> => {
   return response.data;
 };
 
+export const downloadSqlDump = async (): Promise<Blob> => {
+  const response = await api.get('/setup/backup/sql', { responseType: 'blob', timeout: 180000 });
+  return response.data;
+};
+
 export const deleteAutoBackup = async (filename: string): Promise<{ success: boolean; message: string }> => {
   const response = await api.delete<{ success: boolean; message: string }>(`/setup/backup/delete/${encodeURIComponent(filename)}`);
   return response.data;
