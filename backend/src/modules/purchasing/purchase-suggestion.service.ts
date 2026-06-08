@@ -161,8 +161,11 @@ export class PurchaseSuggestionService {
           : currentQuantity + incomingQuantity < target;
       if (!triggerOrder) continue;
 
-      const needed = Math.max(0, target - currentQuantity - incomingQuantity);
-      if (needed <= 0) continue;
+      const rawNeeded = Math.max(0, target - currentQuantity - incomingQuantity);
+      if (rawNeeded <= 0) continue;
+
+      const packSize = item.packSize != null && item.packSize > 1 ? item.packSize : 1;
+      const needed = Math.ceil(rawNeeded / packSize) * packSize;
 
       suggestions.push({
         itemId: item.id,
