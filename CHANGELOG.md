@@ -1,5 +1,42 @@
 # Changelog
 
+## [Unreleased] – seit 2026-06-01
+
+### Feature: Duplikat-Warnung in der Schnellbuchung
+
+- Beim Scannen eines Artikels wird geprüft, ob derselbe Artikel innerhalb des konfigurierbaren Zeitraums bereits an denselben Kunden ausgebucht wurde
+- Kundennummer wird automatisch aus dem LFS-Format der Vorgangsnummer extrahiert (`LFS/461101/101574/400` → `461101`)
+- Warnung erscheint **nicht-blockierend** auf der Seite – Scanner läuft weiter, Buchung kann normal abgeschlossen werden
+- Die Warnung zeigt: Artikelcode, Kundennummer, Datum, ursprüngliche Vorgangsnummer und Menge
+- Einzelne Warnungen können per ✕ geschlossen werden; alle Warnungen werden beim Übernehmen/Löschen automatisch geleert
+- **Konfigurierbar pro Benutzer:** Toggle zum Ein-/Ausschalten + Zeitraum wählbar (1 / 2 / 3 / 6 / 12 Monate)
+- Einstellungen werden serverseitig in der Datenbank gespeichert und gelten geräteübergreifend
+
+### Feature: MySQL SQL-Dump über die Backup-Seite
+
+- Direkter Download eines vollständigen SQL-Dumps (`.sql.gz`) von der Backup-Seite im Admin-Bereich
+- Nützlich für manuelle Sicherungen oder Datenbankmigrationen
+
+### Bugfix
+
+- **Doppelte Offline-Ausbuchungen auf Mobilgeräten:** Doppel-Tap auf dem Touchscreen erzeugte zwei identische Buchungen – debounce im Offline-Queue-Handler ergänzt
+- **Bestellvorschläge:** Verpackungseinheit (`packSize`) wird bei der Berechnung der Bestellmenge korrekt berücksichtigt
+- **Report-Bestand:** Bestand zählt jetzt ausschließlich den primären Lagerort des Artikels (= gleicher Wert wie auf der Artikelseite)
+- **Geister-StockLevels:** Einträge ohne Fahrzeug und ohne Lagerort (`vehicleId=null AND locationId=null`) werden aus dem Report-Bestand ausgeschlossen; Repair-Migration bereinigt bestehende Einträge
+- **Verbrauchsprognose:** Bestand mischt nicht mehr Fahrzeug- und Fremdniederlassungs-Bestand
+- **Bewegungshistorie:** Quelle `restock-prepare:{UUID}` wird jetzt als lesbare Bezeichnung dargestellt
+- **Vorgangsnummer optional:** Buchungen ohne Vorgangsnummer erhalten Fallback `manual` im Audit-Trail
+- **Bestellvorschläge – Zulauf:** Bereits bestellte aber noch nicht eingegangene Mengen werden in der „Benötigt"-Berechnung abgezogen und sichtbar angezeigt
+- **Bestellvorschläge – Sortierung Wareneingang:** Sortierung nach Artikel-Nr. korrigiert
+- **Lieferscheinnummern bei Teillieferungen:** Nummern werden jetzt angehängt statt überschrieben
+
+### Security & Integrity
+
+- 5 kritische Buchungs- und Bestell-Fixes: doppelte Buchungsverhinderung, Mengen-Validierung, Branch-Isolation bei Bestellzeilen, Transaktionssicherheit
+- Refactor: 3 fokussierte Sub-Services aus den Monolithen `StockService` und `PurchasingService` extrahiert (SRP)
+
+---
+
 ## [3.9.0] – 2026-06-01
 
 ### Feature: Lieferschein-Zuordnung per Ordner-Watcher
@@ -11,6 +48,41 @@
 - Strenge Niederlassungs-Trennung: NL A sieht keine Lieferscheine von NL B
 - Neue Env-Variable: `DELIVERY_NOTES_STORAGE_HOST_PATH` (z.B. `/volume1/docker/Lagerverwaltung/lieferscheine`)
 - Neues Docker-Volume: `delivery_notes_data`
+
+### Feature: Verbrauchsprognose in Berichte & Analysen
+
+- Neuer Tab „Verbrauchsprognose" in Berichte & Analysen
+- Zeiträume wählbar: 7 / 30 / 60 / 90 / 180 / 365 Tage
+- Zeigt: Verbrauch, Verbrauch pro Tag, Reichweite in Tagen, Datenqualitäts-Warnung bei wenig Datenbasis
+- Formel-Box erklärt die Berechnungsgrundlage; Spalten-Tooltips erläutern die Werte
+
+### Feature: Reichweiten-Prognose in Bestellvorschlägen
+
+- Bestellvorschläge zeigen jetzt die voraussichtliche Reichweite je Artikel in Tagen
+- Basiert auf dem durchschnittlichen Verbrauch der letzten 90 Tage
+
+### Feature: Fahrzeugbuchungen aus Berichten ausblenden
+
+- Buchungen aus Fahrzeugen (Monteur-Entnahmen) werden in Berichten & Bewegungshistorie standardmäßig ausgeblendet
+- Filteroption zum Einblenden bleibt vorhanden
+
+### Feature: Tab-Leiste mit Keep-Alive + Artikel-Bilder Lightbox
+
+- Haupt-Navigation als permanente Tab-Leiste: geöffnete Seiten bleiben im Speicher (kein Neu-Laden beim Tab-Wechsel)
+- Artikel-Bilder können in einer Lightbox-Vollansicht betrachtet werden
+- Bilder werden im Offline-Cache gespeichert
+
+### Feature: Kamera-Upload & Artikel-Bilder in Fahrzeugkarten
+
+- Im Artikeldialog können Fotos direkt per Kamera oder Datei-Upload hinzugefügt werden
+- Artikel-Bilder erscheinen auf den Fahrzeugkarten in der mobilen Ansicht
+
+### Bugfix
+
+- Lieferschein-Auftragsnummer aus QR-Code (`LFS/.../101501/400`) wird korrekt für den Lieferschein-Lookup extrahiert
+- Lieferscheine sind strikt niederlassungsisoliert; PDF-Öffnung erfordert Authentifizierung
+- Ist-Bestand in Artikeldetails wird nach Schnellbuchung sofort aktualisiert (kein Refresh nötig)
+- Fokus in der Schnellbuchung nach Löschen eines Listeneintrags korrigiert (`refocusBarcode` auf doppeltes `requestAnimationFrame` umgestellt)
 
 ## [3.8.0] – 2026-05-21
 
