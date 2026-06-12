@@ -6,6 +6,7 @@
 
 ## Inhaltsverzeichnis
 
+0. [Installation & Ersteinrichtung](#0-installation--ersteinrichtung)
 1. [Überblick](#1-überblick)
 2. [Benutzerrollen](#2-benutzerrollen)
 3. [Schnellbuchung](#3-schnellbuchung)
@@ -22,6 +23,144 @@
 14. [Einstellungen & Konfiguration](#14-einstellungen--konfiguration)
 15. [Offline-Betrieb](#15-offline-betrieb)
 16. [Häufige Fragen (FAQ)](#16-häufige-fragen-faq)
+
+---
+
+## 0. Installation & Ersteinrichtung
+
+### Voraussetzungen
+
+| Komponente | Mindestversion | Hinweis |
+|------------|----------------|---------|
+| Docker | 24+ | inkl. Docker Compose v2 |
+| RAM | 2 GB | 4 GB empfohlen für NAS-Betrieb |
+| Speicher | 5 GB | für Images, DB und Dateiablage |
+| Netzwerk | LAN | HTTPS über selbstsigniertes Zertifikat (Caddy) |
+
+> **Windows/Mac lokal:** Docker Desktop installieren. **Synology NAS:** Paket „Container Manager" im Paketcenter installieren.
+
+---
+
+### 0.1 Erstinstallation auf dem NAS (Synology)
+
+1. **Projektdateien auf die NAS kopieren**
+
+   Lade das Repository als ZIP von GitHub herunter und entpacke es auf der NAS, z.B. nach:
+   ```
+   /volume1/docker/Lagerverwaltung/
+   ```
+
+2. **Konfigurationsdatei anlegen**
+
+   Im Projektverzeichnis liegt `.env.example`. Diese Datei kopieren und umbenennen:
+   ```bash
+   cp .env.example .env
+   ```
+
+3. **`.env` anpassen** – alle Werte mit `AENDERN_` **müssen** geändert werden:
+
+   | Variable | Beschreibung | Beispiel |
+   |----------|-------------|---------|
+   | `MYSQL_ROOT_PASSWORD` | Root-Passwort MySQL (min. 20 Zeichen) | zufälliger String |
+   | `MYSQL_USER` | DB-Benutzer | `lagerverwaltung` |
+   | `MYSQL_PASSWORD` | DB-Passwort (min. 20 Zeichen) | zufälliger String |
+   | `BACKEND_JWT_SECRET` | JWT-Signierungsschlüssel (min. 32 Zeichen) | `openssl rand -hex 32` |
+   | `INVENTORY_HMAC_SECRET` | Inventur-Checksummen (min. 32 Zeichen) | `openssl rand -hex 32` |
+   | `CADDY_HTTPS_PORT` | HTTPS-Port der App | `8443` |
+   | `CADDY_HTTP_PORT` | HTTP-Port (Weiterleitung auf HTTPS) | `8080` |
+
+   **Dateiablage-Pfade** (optional, aber empfohlen für NAS-Zugriff per SMB):
+   ```env
+   BACKUP_STORAGE_HOST_PATH=/volume1/docker/Lagerverwaltung/backups
+   PURCHASE_ORDER_STORAGE_HOST_PATH=/volume1/docker/Lagerverwaltung/purchase-orders
+   DELIVERY_NOTES_STORAGE_HOST_PATH=/volume1/docker/Lagerverwaltung/lieferscheine
+   ITEM_IMAGE_STORAGE_HOST_PATH=/volume1/docker/Lagerverwaltung/item-images
+   LOG_ARCHIVE_STORAGE_HOST_PATH=/volume1/docker/Lagerverwaltung/log-archives
+   ```
+   Wenn diese Pfade leer bleiben, verwendet Docker interne Named Volumes (Daten bleiben erhalten, aber nicht per SMB sichtbar).
+
+4. **System starten**
+
+   Per SSH auf der NAS:
+   ```bash
+   cd /volume1/docker/Lagerverwaltung
+   sudo ./deploy/start.sh
+   ```
+   Das Skript startet alle Container, wartet auf MySQL und richtet die Datenbankstruktur automatisch ein.
+
+5. **App aufrufen**
+
+   Browser öffnen und die NAS-IP mit dem konfigurierten Port aufrufen:
+   ```
+   https://192.168.1.100:8443
+   ```
+   Beim ersten Aufruf erscheint eine Browser-Warnung wegen des selbstsignierten Zertifikats → „Erweitert → Trotzdem fortfahren" klicken.
+
+6. **Erstkonfiguration im Browser**
+
+   Beim allerersten Start erscheint der **Einrichtungsassistent**:
+   - Administrator-Konto anlegen (Benutzername + sicheres Passwort)
+   - Erste Niederlassung anlegen (Name, Standort-Code z.B. `HAN`)
+   - Grundeinstellungen (Firmenname, E-Mail)
+
+---
+
+### 0.2 Lokale Installation (Entwicklung / Test)
+
+```bash
+git clone https://github.com/Sirbuschi2003/Lagerverwaltung.git
+cd Lagerverwaltung
+cp .env.example .env
+# .env nach Bedarf anpassen (Standard-Werte funktionieren lokal)
+docker compose up -d --build
+```
+
+App erreichbar unter: `https://localhost:8443`
+
+---
+
+### 0.3 Update auf eine neue Version
+
+1. Neue Dateien auf die NAS kopieren (ZIP von GitHub herunterladen und entpacken)
+2. **`.env` beibehalten** – die bestehende Datei wird nicht überschrieben
+3. Update-Skript ausführen:
+   ```bash
+   sudo ./deploy/start.sh
+   ```
+   Das Skript baut neue Images, führt Datenbankmigrationen aus und startet die Container neu. Vor jeder Migration wird **automatisch ein Backup** erstellt.
+
+Alternativ kann das Update direkt über die Web-Oberfläche ausgelöst werden:  
+**Administration → Wartung & Update → System aktualisieren**
+
+---
+
+### 0.4 Container-Übersicht
+
+| Container | Aufgabe | Port (intern) |
+|-----------|---------|---------------|
+| `caddy` | Reverse-Proxy, HTTPS-Termination | 80 / 443 |
+| `backend` | NestJS API | 3000 |
+| `frontend` | React App (nginx) | 80 |
+| `mysql` | Datenbank | 3306 |
+
+```bash
+# Status prüfen
+sudo docker compose ps
+
+# Logs anzeigen
+sudo docker compose logs -f backend
+
+# Neustart (löst die meisten Probleme)
+sudo ./deploy/start.sh
+```
+
+---
+
+### 0.5 Datensicherung der Volumes
+
+Alle persistenten Daten liegen in den konfigurierten Host-Pfaden (siehe Schritt 3) oder in Docker Named Volumes. Für ein vollständiges NAS-Backup reicht es, das Verzeichnis `/volume1/docker/Lagerverwaltung/` zu sichern.
+
+Zusätzlich steht in der App unter **Administration → Backup** ein Datenbank-Backup als JSON oder SQL-Dump zur Verfügung.
 
 ---
 
