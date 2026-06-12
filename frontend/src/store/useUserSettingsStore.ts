@@ -27,6 +27,8 @@ export interface UserSettings {
   quickActions: QuickActions;
   privacyAcceptedVersion?: string;
   quickBookingWorkflow: boolean;
+  quickBookingDuplicateCheck: boolean;
+  quickBookingDuplicateCheckMonths: number;
   themeMode: string;
   themePreset: string;
 }
@@ -49,6 +51,8 @@ const DEFAULT_SETTINGS: UserSettings = {
     mobile: [DEFAULT_QUICK_ACTION],
   },
   quickBookingWorkflow: true,
+  quickBookingDuplicateCheck: true,
+  quickBookingDuplicateCheckMonths: 2,
   themeMode: "",
   themePreset: "",
 };
@@ -99,6 +103,8 @@ function mergeWithDefaults(raw: Record<string, unknown>): UserSettings {
     quickActions,
     privacyAcceptedVersion: typeof raw.privacyAcceptedVersion === "string" ? raw.privacyAcceptedVersion : undefined,
     quickBookingWorkflow: typeof raw.quickBookingWorkflow === "boolean" ? raw.quickBookingWorkflow : DEFAULT_SETTINGS.quickBookingWorkflow,
+    quickBookingDuplicateCheck: typeof raw.quickBookingDuplicateCheck === "boolean" ? raw.quickBookingDuplicateCheck : DEFAULT_SETTINGS.quickBookingDuplicateCheck,
+    quickBookingDuplicateCheckMonths: typeof raw.quickBookingDuplicateCheckMonths === "number" && raw.quickBookingDuplicateCheckMonths >= 1 ? raw.quickBookingDuplicateCheckMonths : DEFAULT_SETTINGS.quickBookingDuplicateCheckMonths,
     themeMode: typeof raw.themeMode === "string" ? raw.themeMode : "",
     themePreset: typeof raw.themePreset === "string" ? raw.themePreset : "",
   };
@@ -113,6 +119,7 @@ interface UserSettingsState {
   updateDashboardWidgets: (visibleWidgets: DashboardWidgetId[], widgetOrder: DashboardWidgetId[]) => Promise<void>;
   updateQuickActions: (quickActions: QuickActions) => Promise<void>;
   updateQuickBookingWorkflow: (value: boolean) => Promise<void>;
+  updateQuickBookingDuplicateCheck: (enabled: boolean, months: number) => Promise<void>;
   updateTheme: (mode: string, preset: string) => Promise<void>;
   acceptPrivacy: (version: string) => Promise<void>;
   reset: () => void;
@@ -169,6 +176,10 @@ export const useUserSettingsStore = create<UserSettingsState>((set, get) => ({
 
   updateQuickBookingWorkflow: async (value: boolean) => {
     await get().saveSettings({ ...get().settings, quickBookingWorkflow: value });
+  },
+
+  updateQuickBookingDuplicateCheck: async (enabled: boolean, months: number) => {
+    await get().saveSettings({ ...get().settings, quickBookingDuplicateCheck: enabled, quickBookingDuplicateCheckMonths: months });
   },
 
   updateTheme: async (mode: string, preset: string) => {

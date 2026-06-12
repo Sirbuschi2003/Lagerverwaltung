@@ -165,6 +165,25 @@ export class MovementQueryService {
     return { movements, total, summary };
   }
 
+  async checkRecentCheckouts(itemId: string, customerNumber: string, months = 2): Promise<{ occurredAt: Date; source: string; quantity: number }[]> {
+    const since = new Date();
+    since.setMonth(since.getMonth() - months);
+
+    const rows = await this.movementsRepository
+      .createQueryBuilder("movement")
+      .select(["movement.occurredAt", "movement.source", "movement.quantity"])
+      .where("movement.itemId = :itemId", { itemId })
+      .andWhere("movement.type = :type", { type: "CHECKOUT" })
+      .andWhere("movement.isVoided = false")
+      .andWhere("movement.occurredAt >= :since", { since })
+      .andWhere("movement.source LIKE :pattern", { pattern: `%/${customerNumber}/%` })
+      .orderBy("movement.occurredAt", "DESC")
+      .take(5)
+      .getMany();
+
+    return rows.map((r) => ({ occurredAt: r.occurredAt, source: r.source, quantity: r.quantity }));
+  }
+
   async cleanupMovements(before: Date, type?: StockMovementType, voidedBy?: string): Promise<number> {
     const formatMySqlDate = (d: Date) => d.toISOString().slice(0, 19).replace("T", " ");
     const formatted = formatMySqlDate(before);

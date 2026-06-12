@@ -2235,3 +2235,24 @@ export const fetchArticleActivity = async (from: string, to: string, warehouseId
 export const fetchWarehouses = async (): Promise<LocationDto[]> => {
   return fetchLocations({ type: "WAREHOUSE" });
 };
+
+export interface CheckoutHistoryHit {
+  occurredAt: string;
+  source: string;
+  quantity: number;
+}
+
+export const checkRecentCheckouts = async (
+  itemId: string,
+  customerNumber: string,
+  months = 2,
+): Promise<CheckoutHistoryHit[]> => {
+  try {
+    const response = await api.get<{ hits: CheckoutHistoryHit[] }>("/stock/checkout-history", {
+      params: { itemId, customerNumber, months },
+    });
+    return response.data.hits;
+  } catch {
+    return [];
+  }
+};

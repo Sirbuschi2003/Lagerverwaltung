@@ -14,6 +14,7 @@ import { SyncPayloadDto } from "./dto/sync-payload.dto";
 import { UpdateRestockStatusDto } from "./dto/update-restock-status.dto";
 import { UpdateTargetDto } from "./dto/update-target.dto";
 import type { RestockRequestStatus } from "./entities/restock-request.entity";
+import { MovementQueryService } from "./movement-query.service";
 import { StockGateway } from "./stock.gateway";
 import { FleetOverviewResult, StockService } from "./stock.service";
 
@@ -39,6 +40,7 @@ export class StockController {
   constructor(
     private readonly stockService: StockService,
     private readonly stockGateway: StockGateway,
+    private readonly movementQueryService: MovementQueryService,
   ) {}
 
   @Get("dashboard")
@@ -50,6 +52,20 @@ export class StockController {
   findMovements(@Req() req: StockRequest, @Query("limit") limit?: string) {
     const parsed = limit ? Number(limit) : undefined;
     return this.stockService.findMovements(parsed, req.user?.branchId);
+  }
+
+  @Get("checkout-history")
+  async getCheckoutHistory(
+    @Query("itemId") itemId?: string,
+    @Query("customerNumber") customerNumber?: string,
+    @Query("months") months?: string,
+  ) {
+    if (!itemId || !customerNumber) {
+      throw new BadRequestException("itemId und customerNumber sind erforderlich");
+    }
+    const parsedMonths = months ? Math.min(Math.max(parseInt(months, 10) || 2, 1), 12) : 2;
+    const hits = await this.movementQueryService.checkRecentCheckouts(itemId, customerNumber, parsedMonths);
+    return { hits };
   }
 
   @Get("location-stock")

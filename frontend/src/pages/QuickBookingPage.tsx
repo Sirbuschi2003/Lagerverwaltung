@@ -36,11 +36,12 @@ import CheckIcon from "@mui/icons-material/Check";
 import InfoOutlinedIcon from "@mui/icons-material/InfoOutlined";
 import QrCodeScannerIcon from "@mui/icons-material/QrCodeScanner";
 import CloseIcon from "@mui/icons-material/Close";
+import WarningAmberIcon from "@mui/icons-material/WarningAmber";
 import { io, type Socket } from "socket.io-client";
 import useItemsStore from "../store/useItemsStore";
 import useAuthStore from "../store/useAuthStore";
 import { useUserSettingsStore } from "../store/useUserSettingsStore";
-import { findItemByAnyCode, recordMovement, type ItemDto } from "../utils/api";
+import { checkRecentCheckouts, findItemByAnyCode, recordMovement, type CheckoutHistoryHit, type ItemDto } from "../utils/api";
 import useScanSound from "../hooks/useScanSound";
 import { findItemByCode } from "../utils/itemLookup";
 import useBarcodeScanner from "../hooks/useBarcodeScanner";
@@ -64,6 +65,20 @@ interface CameraScanFeedback {
   text: string;
 }
 
+interface DuplicateWarning {
+  itemCode: string;
+  itemName: string;
+  customerNumber: string;
+  hits: CheckoutHistoryHit[];
+}
+
+/** Extrahiert die Kundennummer aus dem LFS-Format: "LFS/461101/101574/400" → "461101" */
+const extractCustomerNumber = (reference: string): string | null => {
+  const parts = reference.split("/");
+  if (parts.length >= 3 && /^\d+$/.test(parts[1])) return parts[1];
+  return null;
+};
+
 const QuickBookingPage: React.FC = () => {
   const { items, loadItems } = useItemsStore();
   const { user } = useAuthStore();
@@ -82,12 +97,17 @@ const QuickBookingPage: React.FC = () => {
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [cameraOpen, setCameraOpen] = useState(false);
   const [cameraScanFeedback, setCameraScanFeedback] = useState<CameraScanFeedback | null>(null);
+  const [duplicateWarnings, setDuplicateWarnings] = useState<DuplicateWarning[]>([]);
   const [cameraScanTarget, setCameraScanTarget] = useState<"barcode" | "source">("barcode");
   const [syncConnected, setSyncConnected] = useState(false);
-  const { settings: userSettings, loaded: settingsLoaded, loadSettings, updateQuickBookingWorkflow } = useUserSettingsStore();
+  const { settings: userSettings, loaded: settingsLoaded, loadSettings, updateQuickBookingWorkflow, updateQuickBookingDuplicateCheck } = useUserSettingsStore();
   const vorgangsnummerFirst = userSettings.quickBookingWorkflow;
+  const duplicateCheckEnabled = userSettings.quickBookingDuplicateCheck;
+  const duplicateCheckMonths = userSettings.quickBookingDuplicateCheckMonths ?? 2;
 
   const toggleWorkflow = () => { void updateQuickBookingWorkflow(!vorgangsnummerFirst); };
+  const toggleDuplicateCheck = () => { void updateQuickBookingDuplicateCheck(!duplicateCheckEnabled, duplicateCheckMonths); };
+  const setDuplicateCheckMonths = (months: number) => { void updateQuickBookingDuplicateCheck(duplicateCheckEnabled, months); };
 
   const barcodeWrapperRef = useRef<HTMLDivElement>(null);
   const referenceRef = useRef<HTMLInputElement>(null);
@@ -101,6 +121,10 @@ const QuickBookingPage: React.FC = () => {
   useEffect(() => { userIdRef.current = user?.id; }, [user?.id]);
   // Verhindert gleichzeitige Scan-Verarbeitungen (z.B. schnelle Folge-Scans)
   const busyRef = useRef(false);
+  const duplicateCheckEnabledRef = useRef(duplicateCheckEnabled);
+  useEffect(() => { duplicateCheckEnabledRef.current = duplicateCheckEnabled; }, [duplicateCheckEnabled]);
+  const duplicateCheckMonthsRef = useRef(duplicateCheckMonths);
+  useEffect(() => { duplicateCheckMonthsRef.current = duplicateCheckMonths; }, [duplicateCheckMonths]);
   // Socket-Ref für Echtzeit-Sync
   const socketRef = useRef<Socket | null>(null);
   // Wenn true, kommt die nächste Listenänderung vom Remote → nicht zurücksenden
@@ -322,6 +346,22 @@ const QuickBookingPage: React.FC = () => {
       });
     }
 
+    // Duplikat-Prüfung: nur bei CHECKOUT mit gültiger Kundennummer, nicht-blockierend
+    if (duplicateCheckEnabledRef.current && mode === "CHECKOUT" && reference) {
+      const customerNumber = extractCustomerNumber(reference);
+      if (customerNumber) {
+        checkRecentCheckouts(found.id, customerNumber, duplicateCheckMonthsRef.current).then((hits) => {
+          if (hits.length > 0) {
+            setDuplicateWarnings((prev) => {
+              const exists = prev.some((w) => w.itemCode === found.code && w.customerNumber === customerNumber);
+              if (exists) return prev;
+              return [...prev, { itemCode: found.code, itemName: found.description, customerNumber, hits }];
+            });
+          }
+        });
+      }
+    }
+
     busyRef.current = false;
     setBusy(false);
     refocusBarcode();
@@ -416,6 +456,7 @@ const QuickBookingPage: React.FC = () => {
       remoteUpdateRef.current = true;
       setBookingList([]);
       setCurrentItem(null);
+      setDuplicateWarnings([]);
       setReference("");
       setTimeout(() => {
         if (referenceRef.current) {
@@ -440,6 +481,7 @@ const QuickBookingPage: React.FC = () => {
     remoteUpdateRef.current = true; // eigene Listenänderung nicht nochmal senden
     setBookingList([]);
     setCurrentItem(null);
+    setDuplicateWarnings([]);
     setBarcodeInput("");
     setReference("");
     setItemNotFound(false);
@@ -622,15 +664,37 @@ const QuickBookingPage: React.FC = () => {
           </Box>
         </Stack>
 
-        {/* Workflow-Einstellung */}
+        {/* Workflow-Einstellungen */}
         <Divider sx={{ mt: 1.5 }} />
-        <Stack direction="row" spacing={1} alignItems="center" sx={{ mt: 1 }}>
-          <Switch size="small" checked={vorgangsnummerFirst} onChange={toggleWorkflow} />
-          <Typography variant="caption" color="text.secondary">
-            {vorgangsnummerFirst
-              ? "Workflow: Vorgangsnummer → Artikel (z.B. Tonerlager)"
-              : "Workflow: Direkt Artikel (z.B. Teilelager)"}
-          </Typography>
+        <Stack spacing={0.5} sx={{ mt: 1 }}>
+          <Stack direction="row" spacing={1} alignItems="center">
+            <Switch size="small" checked={vorgangsnummerFirst} onChange={toggleWorkflow} />
+            <Typography variant="caption" color="text.secondary">
+              {vorgangsnummerFirst
+                ? "Workflow: Vorgangsnummer → Artikel (z.B. Tonerlager)"
+                : "Workflow: Direkt Artikel (z.B. Teilelager)"}
+            </Typography>
+          </Stack>
+          <Stack direction="row" spacing={1} alignItems="center">
+            <Switch size="small" checked={duplicateCheckEnabled} onChange={toggleDuplicateCheck} />
+            <Typography variant="caption" color="text.secondary">
+              Duplikat-Warnung: gleicher Artikel an gleichen Kunden innerhalb von
+            </Typography>
+            <TextField
+              select
+              size="small"
+              value={duplicateCheckMonths}
+              onChange={(e) => setDuplicateCheckMonths(Number(e.target.value))}
+              disabled={!duplicateCheckEnabled}
+              sx={{ width: 90 }}
+              SelectProps={{ native: true }}
+              inputProps={{ style: { padding: "2px 4px", fontSize: "0.75rem" } }}
+            >
+              {[1, 2, 3, 6, 12].map((m) => (
+                <option key={m} value={m}>{m} {m === 1 ? "Monat" : "Monate"}</option>
+              ))}
+            </TextField>
+          </Stack>
         </Stack>
 
         {/* Kamera-Scanner-Button für Mobile (prominent) */}
@@ -724,6 +788,28 @@ const QuickBookingPage: React.FC = () => {
           </Typography>
         )}
       </Paper>
+
+      {/* Duplikat-Warnungen */}
+      {duplicateWarnings.map((w, idx) => (
+        <Alert
+          key={`${w.itemCode}-${w.customerNumber}-${idx}`}
+          severity="warning"
+          icon={<WarningAmberIcon fontSize="inherit" />}
+          onClose={() => setDuplicateWarnings((prev) => prev.filter((_, i) => i !== idx))}
+          sx={{ mb: 1 }}
+        >
+          <Typography variant="body2" sx={{ fontWeight: 700 }}>
+            {w.itemCode} – bereits an Kunde {w.customerNumber} ausgebucht
+          </Typography>
+          {w.hits.map((h, hi) => (
+            <Typography key={hi} variant="caption" display="block" color="text.secondary">
+              {new Date(h.occurredAt).toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit", year: "numeric" })}
+              {" · "}Vorgang: {h.source}
+              {" · "}{h.quantity} Stk.
+            </Typography>
+          ))}
+        </Alert>
+      ))}
 
       {/* Status */}
       {successMsg && (
