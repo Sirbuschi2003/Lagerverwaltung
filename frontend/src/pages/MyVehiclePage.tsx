@@ -1,4 +1,4 @@
-﻿import React, { useEffect, useMemo, useState, type KeyboardEvent } from "react";
+﻿import React, { useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
 import axios from "axios";
 import { Autocomplete } from "@mui/material";
 import { findItemByCode } from "../utils/itemLookup";
@@ -474,6 +474,9 @@ const MyVehiclePage = () => {
   const [targetDrafts, setTargetDrafts] = useState<Record<string, string>>({});
   const [savingTarget, setSavingTarget] = useState<string | null>(null);
   const [isProcessing, setProcessing] = useState(false);
+  // Synchronous guard prevents double-tap submitting two identical offline movements
+  // React state (isProcessing) is async — both taps can pass before React re-renders
+  const movementProcessingRef = useRef(false);
   const [error, setError] = useState<string | null>(null);
   const [targetError, setTargetError] = useState<string | null>(null);
 
@@ -580,6 +583,10 @@ const MyVehiclePage = () => {
       return false;
     }
 
+    // Synchronous guard: prevents double-tap creating duplicate offline movements.
+    // setProcessing(true) alone is insufficient because React batches state updates.
+    if (movementProcessingRef.current) return false;
+    movementProcessingRef.current = true;
     setProcessing(true);
     try {
       if (isOnline) {
@@ -616,11 +623,10 @@ const MyVehiclePage = () => {
             
             if (currentQuantity < qty) {
               setError(`? Ausbuchung nicht möglich! Nur ${currentQuantity} Stück auf dem Fahrzeug (${qty} angefordert).`);
-              setProcessing(false);
               return false;
             }
           }
-          
+
           await enqueueMovement({
             itemId,
             code: currentItem.code,
@@ -662,11 +668,9 @@ const MyVehiclePage = () => {
           });
           
           setError("? Offline: Buchung vorgemerkt und wird später synchronisiert.");
-          setProcessing(false);
           return true;
         } else {
           setError("Artikel nicht gefunden für Offline-Buchung.");
-          setProcessing(false);
           return false;
         }
       }
@@ -736,12 +740,15 @@ const MyVehiclePage = () => {
       }
       return false;
     } finally {
+      movementProcessingRef.current = false;
       setProcessing(false);
     }
   };
 
   // Spezielle Funktion für bereitgestellte Mengen einbuchen
   const handleCheckinProvidedQuantity = async (_itemId: string, restockRequestId: string, quantity: number) => {
+    if (movementProcessingRef.current) return;
+    movementProcessingRef.current = true;
     try {
       setProcessing(true);
 
@@ -763,6 +770,7 @@ const MyVehiclePage = () => {
       console.error("Fehler beim Einbuchen bereitgestellter Menge:", err);
       setError("Fehler beim Einbuchen: " + (err?.response?.data?.message || err.message));
     } finally {
+      movementProcessingRef.current = false;
       setProcessing(false);
     }
   };
