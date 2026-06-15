@@ -863,12 +863,11 @@ const ItemsPage = () => {
         const currentQuantity = parseOptionalIntFromCsv(
           readByHeader(cols, ["lagerbesta", "lagerbestand", "bestand", "verfuegb", "verfgbar"]),
         );
-        // MINDESTBES = Bestellauslöser (Hyreka bestellt wenn Bestand < MINDESTBES) → reorderPoint
-        // ALARMBES = Sicherheitsbestand (untere Grenze, tiefer als MINDESTBES) → minimumStock
-        const reorderPoint = parseOptionalIntFromCsv(readByHeader(cols, ["mindestbes", "meldebestand"]));
-        const minimumStock = parseOptionalIntFromCsv(readByHeader(cols, ["alarmbes"]));
+        // "Meldebestand" → "meldebestand" (entspricht MINDESTBES im alten Format)
+        const minimumStock = parseOptionalIntFromCsv(readByHeader(cols, ["mindestbes", "meldebestand"]));
+        const reorderPoint = parseOptionalIntFromCsv(readByHeader(cols, ["alarmbes"]));
         const dauerSoll = parseOptionalIntFromCsv(readByHeader(cols, ["dauersoll"]));
-        // Sollbestand: dauersoll bevorzugt, Fallback auf mindestbes (Bestellauslöser)
+        // Sollbestand: dauersoll bevorzugt, Fallback auf alarmbes oder mindestbes
         let targetStock = dauerSoll;
         if (targetStock === undefined || targetStock === 0) {
           targetStock = reorderPoint ?? minimumStock;
