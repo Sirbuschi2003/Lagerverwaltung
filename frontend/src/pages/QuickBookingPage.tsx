@@ -789,25 +789,21 @@ const QuickBookingPage: React.FC = () => {
         )}
       </Paper>
 
-      {/* Duplikat-Dialog – nicht-blockierend: kein Backdrop, kein Fokus-Steal */}
-      <Dialog
-        open={duplicateWarnings.length > 0}
-        hideBackdrop
-        disableEnforceFocus
-        disableAutoFocus
-        disableRestoreFocus
-        disableScrollLock
-        PaperProps={{
-          sx: {
+      {/* Duplikat-Warnung – fixed Paper, blockiert keine Interaktion */}
+      {duplicateWarnings.length > 0 && (
+        <Paper
+          elevation={12}
+          sx={{
             position: "fixed",
             top: 80,
             left: "50%",
             transform: "translateX(-50%)",
-            m: 0,
             width: { xs: "calc(100vw - 32px)", sm: 460 },
+            zIndex: 1300,
             border: "3px solid",
             borderColor: "warning.dark",
-            boxShadow: 12,
+            overflow: "hidden",
+            pointerEvents: "auto",
             "@keyframes dupeShake": {
               "0%, 100%": { transform: "translateX(-50%)" },
               "20%": { transform: "translateX(calc(-50% - 6px))" },
@@ -816,53 +812,53 @@ const QuickBookingPage: React.FC = () => {
               "80%": { transform: "translateX(calc(-50% + 4px))" },
             },
             animation: "dupeShake 0.45s ease-in-out",
-          },
-        }}
-      >
-        <DialogTitle
-          sx={{
-            bgcolor: "warning.main",
-            color: "warning.contrastText",
-            py: 1,
-            px: 2,
-            display: "flex",
-            alignItems: "center",
-            gap: 1,
           }}
         >
-          <WarningAmberIcon sx={{ fontSize: 26 }} />
-          <Typography variant="h6" fontWeight={800} sx={{ flex: 1 }}>
-            Duplikat-Warnung
-          </Typography>
-          <IconButton
-            size="small"
-            onClick={() => setDuplicateWarnings([])}
-            sx={{ color: "warning.contrastText" }}
+          <Box
+            sx={{
+              bgcolor: "warning.main",
+              color: "warning.contrastText",
+              py: 1,
+              px: 2,
+              display: "flex",
+              alignItems: "center",
+              gap: 1,
+            }}
           >
-            <CloseIcon fontSize="small" />
-          </IconButton>
-        </DialogTitle>
-        <DialogContent sx={{ pt: 1.5, pb: 2 }}>
-          {duplicateWarnings.map((w, idx) => (
-            <Box key={`${w.itemCode}-${w.customerNumber}-${idx}`} sx={{ mb: idx < duplicateWarnings.length - 1 ? 2 : 0 }}>
-              <Typography variant="body1" fontWeight={800}>
-                {w.itemCode} – bereits an Kunde {w.customerNumber} ausgebucht!
-              </Typography>
-              {w.hits.map((h, hi) => (
-                <Typography key={hi} variant="body2" display="block" color="text.secondary" sx={{ mt: 0.25 }}>
-                  {new Date(h.occurredAt).toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit", year: "numeric" })}
-                  {" · "}Vorgang: {h.source}
-                  {" · "}{h.quantity} Stk.
+            <WarningAmberIcon sx={{ fontSize: 26 }} />
+            <Typography variant="h6" fontWeight={800} sx={{ flex: 1 }}>
+              Duplikat-Warnung
+            </Typography>
+            <IconButton
+              size="small"
+              onClick={() => setDuplicateWarnings([])}
+              sx={{ color: "warning.contrastText" }}
+            >
+              <CloseIcon fontSize="small" />
+            </IconButton>
+          </Box>
+          <Box sx={{ px: 2, pt: 1.5, pb: 2 }}>
+            {duplicateWarnings.map((w, idx) => (
+              <Box key={`${w.itemCode}-${w.customerNumber}-${idx}`} sx={{ mb: idx < duplicateWarnings.length - 1 ? 2 : 0 }}>
+                <Typography variant="body1" fontWeight={800}>
+                  {w.itemCode} – bereits an Kunde {w.customerNumber} ausgebucht!
                 </Typography>
-              ))}
-              {idx < duplicateWarnings.length - 1 && <Divider sx={{ mt: 1.5 }} />}
-            </Box>
-          ))}
-          <Typography variant="caption" color="text.secondary" sx={{ display: "block", mt: 1.5 }}>
-            Schließt sich nach „Übernehmen" oder manuell per ✕.
-          </Typography>
-        </DialogContent>
-      </Dialog>
+                {w.hits.map((h, hi) => (
+                  <Typography key={hi} variant="body2" display="block" color="text.secondary" sx={{ mt: 0.25 }}>
+                    {new Date(h.occurredAt).toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit", year: "numeric" })}
+                    {" · "}Vorgang: {h.source}
+                    {" · "}{h.quantity} Stk.
+                  </Typography>
+                ))}
+                {idx < duplicateWarnings.length - 1 && <Divider sx={{ mt: 1.5 }} />}
+              </Box>
+            ))}
+            <Typography variant="caption" color="text.secondary" sx={{ display: "block", mt: 1.5 }}>
+              Schließt sich nach „Übernehmen" oder manuell per ✕.
+            </Typography>
+          </Box>
+        </Paper>
+      )}
 
       {/* Status */}
       {successMsg && (
