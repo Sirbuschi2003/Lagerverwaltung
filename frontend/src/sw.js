@@ -1,4 +1,4 @@
-import { precacheAndRoute, cleanupOutdatedCaches } from 'workbox-precaching';
+import { precacheAndRoute, cleanupOutdatedCaches, matchPrecache } from 'workbox-precaching';
 
 // Alle Build-Artefakte (JS-Chunks, CSS, Assets) werden von Workbox automatisch
 // versioniert und precached. self.__WB_MANIFEST wird vom vite-plugin-pwa injiziert.
@@ -93,6 +93,21 @@ self.addEventListener('message', async (event) => {
   }
 });
 
+const OFFLINE_FALLBACK_HTML = `<!DOCTYPE html>
+<html lang="de">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Offline – KFZ Lagerverwaltung</title>
+<style>body{font-family:sans-serif;display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;margin:0;background:#f5f5f5;color:#333;padding:2rem;text-align:center}
+.icon{font-size:4rem;margin-bottom:1rem}.title{font-size:1.5rem;font-weight:bold;margin-bottom:.5rem}
+.msg{color:#666;margin-bottom:1.5rem}.btn{padding:.75rem 1.5rem;background:#e65100;color:#fff;border:none;border-radius:8px;font-size:1rem;cursor:pointer}</style>
+</head>
+<body>
+<div class="icon">📵</div>
+<div class="title">Kein Netzwerk</div>
+<div class="msg">Die App ist außerhalb des Firmennetzwerks nicht erreichbar.<br>Bitte verbinden Sie sich mit dem WLAN und versuchen Sie es erneut.</div>
+<button class="btn" onclick="location.reload()">Erneut versuchen</button>
+</body></html>`;
+
 self.addEventListener('fetch', (event) => {
   const { request } = event;
   if (request.method !== 'GET') {
@@ -175,7 +190,9 @@ self.addEventListener('fetch', (event) => {
   if (request.mode === 'navigate') {
     event.respondWith(
       fetch(request).catch(() =>
-        caches.match('/index.html').then((cached) => cached || caches.match('/'))
+        matchPrecache('/index.html').then(
+          (cached) => cached || new Response(OFFLINE_FALLBACK_HTML, { headers: { 'Content-Type': 'text/html; charset=utf-8' } })
+        )
       )
     );
     return;

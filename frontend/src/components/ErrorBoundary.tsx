@@ -1,14 +1,14 @@
 import React, { Component, ErrorInfo, ReactNode } from 'react';
-import { 
-  Box, 
-  Alert, 
-  AlertTitle, 
-  Button, 
-  Typography, 
+import {
+  Box,
+  Alert,
+  AlertTitle,
+  Button,
+  Typography,
   Paper,
   Container
 } from '@mui/material';
-import { Refresh, Home, BugReport } from '@mui/icons-material';
+import { Refresh, Home, BugReport, WifiOff } from '@mui/icons-material';
 
 interface Props {
   children?: ReactNode;
@@ -48,6 +48,15 @@ class ErrorBoundary extends Component<Props, State> {
     }
   }
 
+  private isChunkLoadError(error?: Error): boolean {
+    if (!error) return false;
+    return (
+      error.message.includes('Failed to fetch dynamically imported module') ||
+      error.message.includes('Importing a module script failed') ||
+      error.name === 'ChunkLoadError'
+    );
+  }
+
   private handleReload = () => {
     window.location.reload();
   };
@@ -62,12 +71,40 @@ class ErrorBoundary extends Component<Props, State> {
 
   public render() {
     if (this.state.hasError) {
-      // Custom fallback UI
       if (this.props.fallback) {
         return this.props.fallback;
       }
 
-      // Default error UI
+      if (this.isChunkLoadError(this.state.error)) {
+        return (
+          <Container maxWidth="sm" sx={{ mt: 8 }}>
+            <Paper elevation={3} sx={{ p: 4, textAlign: 'center' }}>
+              <Box display="flex" flexDirection="column" alignItems="center" gap={2}>
+                <WifiOff color="warning" sx={{ fontSize: 56 }} />
+                <Typography variant="h5" component="h1">
+                  Seite nicht verfügbar
+                </Typography>
+                <Typography variant="body1" color="text.secondary">
+                  Diese Seite konnte nicht geladen werden, weil die App außerhalb des
+                  Firmennetzwerks ist oder keine Verbindung besteht.
+                </Typography>
+                <Typography variant="body2" color="text.secondary">
+                  Offlinefunktionen (Ausbuchen, Sync) sind weiterhin nutzbar.
+                </Typography>
+                <Box display="flex" gap={2} flexWrap="wrap" justifyContent="center" sx={{ mt: 1 }}>
+                  <Button variant="contained" startIcon={<Refresh />} onClick={this.handleReload}>
+                    Erneut versuchen
+                  </Button>
+                  <Button variant="outlined" startIcon={<Home />} onClick={this.handleGoHome}>
+                    Zur Startseite
+                  </Button>
+                </Box>
+              </Box>
+            </Paper>
+          </Container>
+        );
+      }
+
       return (
         <Container maxWidth="md" sx={{ mt: 4 }}>
           <Paper elevation={3} sx={{ p: 4, textAlign: 'center' }}>
