@@ -18,6 +18,7 @@ import {
   Radio,
   RadioGroup,
   Stack,
+  Snackbar,
   Switch,
   Table,
   TableBody,
@@ -789,51 +790,35 @@ const QuickBookingPage: React.FC = () => {
         )}
       </Paper>
 
-      {/* Duplikat-Warnung – fixed Paper, blockiert keine Interaktion */}
-      {duplicateWarnings.length > 0 && (
+      {/* Duplikat-Warnung – Snackbar ist von MUI explizit nicht-blockierend */}
+      <Snackbar
+        open={duplicateWarnings.length > 0}
+        anchorOrigin={{ vertical: "top", horizontal: "center" }}
+        sx={{ mt: 8, maxWidth: { xs: "calc(100vw - 32px)", sm: 480 }, width: "100%" }}
+      >
         <Paper
           elevation={12}
           sx={{
-            position: "fixed",
-            top: 80,
-            left: "50%",
-            transform: "translateX(-50%)",
-            width: { xs: "calc(100vw - 32px)", sm: 460 },
-            zIndex: 1300,
+            width: "100%",
             border: "3px solid",
             borderColor: "warning.dark",
             overflow: "hidden",
-            pointerEvents: "auto",
             "@keyframes dupeShake": {
-              "0%, 100%": { transform: "translateX(-50%)" },
-              "20%": { transform: "translateX(calc(-50% - 6px))" },
-              "40%": { transform: "translateX(calc(-50% + 6px))" },
-              "60%": { transform: "translateX(calc(-50% - 4px))" },
-              "80%": { transform: "translateX(calc(-50% + 4px))" },
+              "0%, 100%": { transform: "translateX(0)" },
+              "20%": { transform: "translateX(-6px)" },
+              "40%": { transform: "translateX(6px)" },
+              "60%": { transform: "translateX(-4px)" },
+              "80%": { transform: "translateX(4px)" },
             },
             animation: "dupeShake 0.45s ease-in-out",
           }}
         >
-          <Box
-            sx={{
-              bgcolor: "warning.main",
-              color: "warning.contrastText",
-              py: 1,
-              px: 2,
-              display: "flex",
-              alignItems: "center",
-              gap: 1,
-            }}
-          >
+          <Box sx={{ bgcolor: "warning.main", color: "warning.contrastText", py: 1, px: 2, display: "flex", alignItems: "center", gap: 1 }}>
             <WarningAmberIcon sx={{ fontSize: 26 }} />
             <Typography variant="h6" fontWeight={800} sx={{ flex: 1 }}>
               Duplikat-Warnung
             </Typography>
-            <IconButton
-              size="small"
-              onClick={() => setDuplicateWarnings([])}
-              sx={{ color: "warning.contrastText" }}
-            >
+            <IconButton size="small" onClick={() => setDuplicateWarnings([])} sx={{ color: "warning.contrastText" }}>
               <CloseIcon fontSize="small" />
             </IconButton>
           </Box>
@@ -858,7 +843,7 @@ const QuickBookingPage: React.FC = () => {
             </Typography>
           </Box>
         </Paper>
-      )}
+      </Snackbar>
 
       {/* Status */}
       {successMsg && (
