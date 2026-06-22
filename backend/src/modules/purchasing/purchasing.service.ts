@@ -456,6 +456,13 @@ export class PurchasingService {
             existing.push(newNote);
           }
           order.deliveryNoteNumber = existing.join(", ");
+
+          const history = Array.isArray(order.deliveryNoteHistory) ? order.deliveryNoteHistory : [];
+          const alreadyInHistory = history.some((entry) => entry.number === newNote);
+          if (!alreadyInHistory) {
+            history.push({ number: newNote, date: new Date().toISOString() });
+          }
+          order.deliveryNoteHistory = history;
         }
       }
 

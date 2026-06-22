@@ -835,6 +835,7 @@ export interface PurchaseOrderDto {
   receivedAt?: string | null;
   note?: string | null;
   deliveryNoteNumber?: string | null;
+  deliveryNoteHistory?: Array<{ number: string; date: string }> | null;
   lines: PurchaseOrderLineDto[];
   createdAt: string;
   updatedAt: string;

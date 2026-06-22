@@ -43,6 +43,9 @@ export class PurchaseOrder {
   @Column({ type: "varchar", length: 128, nullable: true })
   deliveryNoteNumber!: string | null;
 
+  @Column({ type: "json", nullable: true })
+  deliveryNoteHistory!: Array<{ number: string; date: string }> | null;
+
   @OneToMany(() => PurchaseOrderLine, (line) => line.order, { cascade: true, eager: false })
   lines!: PurchaseOrderLine[];
 

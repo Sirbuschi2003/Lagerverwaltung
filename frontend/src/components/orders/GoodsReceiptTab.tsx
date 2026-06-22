@@ -11,8 +11,12 @@ import {
   DialogActions,
   DialogContent,
   DialogTitle,
+  Divider,
   FormControl,
   InputLabel,
+  List,
+  ListItem,
+  ListItemText,
   MenuItem,
   Paper,
   Select,
@@ -271,7 +275,7 @@ const GoodsReceiptTab: React.FC = () => {
       quantities[line.id] = 0;
     });
     setReceivedQuantities(quantities);
-    setDeliveryNoteNumber(order.deliveryNoteNumber ?? "");
+    setDeliveryNoteNumber("");
     setBarcodeInput("");
     setScanCandidate(null);
     setScanFeedback(null);
@@ -543,15 +547,47 @@ const GoodsReceiptTab: React.FC = () => {
             Ablauf: Artikel scannen, Vorschlagsmenge prüfen, mit "OK übernehmen" bestätigen und am Ende Wareneingang buchen.
           </Alert>
 
-          <TextField
-            label="Lieferschein-Nr. (optional)"
-            value={deliveryNoteNumber}
-            onChange={(event) => setDeliveryNoteNumber(event.target.value)}
-            size="small"
-            inputProps={{ maxLength: 128 }}
-            sx={{ mb: 2, width: { xs: "100%", sm: 320 } }}
-            autoComplete="off"
-          />
+          <Box sx={{ mb: 2 }}>
+            <TextField
+              label="Lieferschein-Nr. (optional)"
+              value={deliveryNoteNumber}
+              onChange={(event) => setDeliveryNoteNumber(event.target.value)}
+              size="small"
+              inputProps={{ maxLength: 128 }}
+              sx={{ width: { xs: "100%", sm: 320 } }}
+              autoComplete="off"
+            />
+            {selectedOrder?.deliveryNoteHistory && selectedOrder.deliveryNoteHistory.length > 0 && (
+              <Box sx={{ mt: 1, width: { xs: "100%", sm: 320 } }}>
+                <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600 }}>
+                  Bisherige Lieferscheinnummern:
+                </Typography>
+                <Paper variant="outlined" sx={{ mt: 0.5 }}>
+                  <List dense disablePadding>
+                    {selectedOrder.deliveryNoteHistory.map((entry, index) => (
+                      <React.Fragment key={entry.number + entry.date}>
+                        {index > 0 && <Divider />}
+                        <ListItem sx={{ py: 0.5, px: 1.5 }}>
+                          <ListItemText
+                            primary={entry.number}
+                            secondary={new Date(entry.date).toLocaleString("de-DE", {
+                              day: "2-digit",
+                              month: "2-digit",
+                              year: "numeric",
+                              hour: "2-digit",
+                              minute: "2-digit",
+                            })}
+                            primaryTypographyProps={{ variant: "body2", fontWeight: 600 }}
+                            secondaryTypographyProps={{ variant: "caption" }}
+                          />
+                        </ListItem>
+                      </React.Fragment>
+                    ))}
+                  </List>
+                </Paper>
+              </Box>
+            )}
+          </Box>
 
           <Stack direction={{ xs: "column", md: "row" }} spacing={1} sx={{ mb: 2 }}>
             <TextField
