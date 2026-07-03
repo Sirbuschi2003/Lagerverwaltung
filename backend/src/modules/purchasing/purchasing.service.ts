@@ -1058,6 +1058,36 @@ export class PurchasingService {
   text-align: left !important;
   padding-left: 8px !important;
 }
+
+/* Multi-page pagination fixes */
+@media print {
+  body {
+    height: auto !important;
+    overflow: visible !important;
+  }
+}
+
+.lines-table thead,
+.items-table thead {
+  display: table-header-group;
+}
+
+.lines-table tbody,
+.items-table tbody {
+  display: table-row-group;
+}
+
+.lines-table tbody tr,
+.items-table tbody tr {
+  page-break-inside: avoid;
+  break-inside: avoid;
+}
+
+.totals,
+.note {
+  page-break-inside: avoid;
+  break-inside: avoid;
+}
 `;
 
     const fullHtml = html.replace(
@@ -1100,7 +1130,7 @@ export class PurchasingService {
         margin: {
           top: "0px",
           right: "0px",
-          bottom: "42px",
+          bottom: "36px",
           left: "0px",
         },
       });

@@ -473,15 +473,18 @@ body {
   box-sizing: border-box;
 }
 
-@page {
-  size: A4 portrait;
-  margin: 24px;
-}
-
 body {
   font-family: "Helvetica", "Arial", sans-serif;
   font-size: 10pt;
   color: #222;
+  padding: 24px;
+}
+
+@media print {
+  body {
+    height: auto !important;
+    overflow: visible !important;
+  }
 }
 
 .header {
@@ -554,6 +557,14 @@ body {
   margin-bottom: 12px;
 }
 
+.items-table thead {
+  display: table-header-group;
+}
+
+.items-table tbody {
+  display: table-row-group;
+}
+
 .items-table th,
 .items-table td {
   border-bottom: 1px solid #ddd;
@@ -564,6 +575,11 @@ body {
 .items-table thead th {
   background: #f2f2f2;
   font-weight: bold;
+}
+
+.items-table tbody tr {
+  page-break-inside: avoid;
+  break-inside: avoid;
 }
 
 .col-pos {
@@ -592,12 +608,16 @@ body {
   gap: 16px;
   font-size: 9pt;
   margin-bottom: 16px;
+  page-break-inside: avoid;
+  break-inside: avoid;
 }
 
 .note {
   border-top: 1px solid #ddd;
   padding-top: 8px;
   font-size: 9pt;
+  page-break-inside: avoid;
+  break-inside: avoid;
 }
 `
     };
