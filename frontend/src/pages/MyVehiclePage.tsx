@@ -18,9 +18,12 @@ import TableContainer from "@mui/material/TableContainer";
 import TableHead from "@mui/material/TableHead";
 import TableRow from "@mui/material/TableRow";
 import TextField from "@mui/material/TextField";
+import ToggleButton from "@mui/material/ToggleButton";
+import ToggleButtonGroup from "@mui/material/ToggleButtonGroup";
 import Tooltip from "@mui/material/Tooltip";
 import Typography from "@mui/material/Typography";
 import Alert from "@mui/material/Alert";
+import Snackbar from "@mui/material/Snackbar";
 import Dialog from "@mui/material/Dialog";
 import DialogTitle from "@mui/material/DialogTitle";
 import DialogContent from "@mui/material/DialogContent";
@@ -29,7 +32,6 @@ import Button from "@mui/material/Button";
 import RemoveIcon from "@mui/icons-material/Remove";
 import AddIcon from "@mui/icons-material/Add";
 import DeleteIcon from "@mui/icons-material/Delete";
-import CloseIcon from "@mui/icons-material/Close";
 import Fab from "@mui/material/Fab";
 import QrCodeScannerIcon from "@mui/icons-material/QrCodeScanner";
 import SearchIcon from "@mui/icons-material/Search";
@@ -77,11 +79,14 @@ type ScanFeedback = {
   quantity: number;
   targetQuantity: number;
   existsOnVehicle: boolean;
+  bookedType?: "CHECKIN" | "CHECKOUT";
 };
 
 const MyVehiclePage = () => {
   // Barcode-Scanner für Fahrzeugseite
   const [scannerActive, setScannerActive] = useState(false); // Scanner standardmäßig AUS
+  // Buchungsrichtung beim Scannen: standardmäßig Ausbuchen (Techniker nimmt Teile vom Fahrzeug)
+  const [bookingMode, setBookingMode] = useState<"CHECKIN" | "CHECKOUT">("CHECKOUT");
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const [scanActionDialogOpen, setScanActionDialogOpen] = useState(false);
   const [scannedItem, setScannedItem] = useState<any>(null);
@@ -121,9 +126,8 @@ const MyVehiclePage = () => {
     }
 
     if (item) {
-      setScannedItem(item);
-      updateScanFeedback(item);
-      setScanActionDialogOpen(true);
+      // Sofort automatisch buchen (Menge 1, Richtung aus dem Modus-Umschalter oben)
+      void handleAutoBookScan(item);
       setScannerActive(false);
       setCreateDialogOpen(false);
     } else {
@@ -261,19 +265,14 @@ const MyVehiclePage = () => {
     }
 
     setLastScannedItemId(item.id);
-    
-    // NEU: Direkt den Action-Dialog öffnen statt Quick-Actions-Banner
+
+    // Scan (egal ob über den Kamera-Scanner oben oder den im Bewegungs-Panel):
+    // sofort automatisch im aktuellen Modus (Ein-/Ausbuchen) buchen.
     if (source === "scan") {
-      setScannedItem(item);
-      setScanActionDialogOpen(true);
-      setScannerActive(false);
-      // States für Dialog zurücksetzen
-      setScanActionQuantity(1);
-      setScanActionTargetQuantity(null);
-      setScanActionShowTargetInput(false);
+      void handleAutoBookScan(item);
       return;
     }
-    
+
     // Für manuelle Auswahl: Quick-Actions wie bisher
     setScanFeedbackSource(source);
 
@@ -745,6 +744,28 @@ const MyVehiclePage = () => {
     }
   };
 
+  // Scan-Sofortbuchung: bucht 1 Stück in der aktuell gewählten Richtung (bookingMode)
+  // und blendet danach eine kurze Bestätigung ein, statt einen Dialog zu öffnen.
+  const handleAutoBookScan = async (item: ItemDto) => {
+    setScannedItem(item);
+    setLastScannedItemId(item.id);
+    setScanFeedbackSource("scan");
+    setScanQuickActionsActive(true);
+
+    const existingEntry = stock.find((s) => s.item.id === item.id);
+    setScanFeedback({
+      id: item.id,
+      code: item.code,
+      description: item.description,
+      quantity: existingEntry?.quantity ?? 0,
+      targetQuantity: existingEntry?.targetQuantity ?? item.targetStock ?? 0,
+      existsOnVehicle: Boolean(existingEntry),
+      bookedType: bookingMode,
+    });
+
+    await handleMovement(bookingMode, item.id, 1);
+  };
+
   // Spezielle Funktion für bereitgestellte Mengen einbuchen
   const handleCheckinProvidedQuantity = async (_itemId: string, restockRequestId: string, quantity: number) => {
     if (movementProcessingRef.current) return;
@@ -1042,37 +1063,49 @@ const MyVehiclePage = () => {
             zIndex: (theme) => theme.zIndex.appBar + 2,
             mb: 2,
             p: 1.5,
-            display: "flex",
-            alignItems: "center",
-            gap: 1,
             boxShadow: 3,
           }}
         >
-          <Button
-            variant={scannerActive ? "outlined" : "contained"}
-            color={scannerActive ? "secondary" : "primary"}
-            startIcon={<QrCodeScannerIcon />}
+          <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+            <Button
+              variant={scannerActive ? "outlined" : "contained"}
+              color={scannerActive ? "secondary" : "primary"}
+              startIcon={<QrCodeScannerIcon />}
+              fullWidth
+              onClick={() => setScannerActive((prev) => !prev)}
+              sx={{ fontWeight: 600 }}
+            >
+              {scannerActive ? "Scanner stoppen" : "Scanner starten"}
+            </Button>
+            <Chip
+              label={scannerActive ? "Aktiv" : "Inaktiv"}
+              color={scannerActive ? "success" : "default"}
+              size="small"
+            />
+          </Box>
+
+          <ToggleButtonGroup
+            value={bookingMode}
+            exclusive
             fullWidth
-            onClick={() => setScannerActive((prev) => !prev)}
-            sx={{ fontWeight: 600 }}
-          >
-            {scannerActive ? "Scanner stoppen" : "Scanner starten"}
-          </Button>
-          <Chip
-            label={scannerActive ? "Aktiv" : "Inaktiv"}
-            color={scannerActive ? "success" : "default"}
             size="small"
-          />
+            onChange={(_event, value: "CHECKIN" | "CHECKOUT" | null) => {
+              if (value) {
+                setBookingMode(value);
+              }
+            }}
+            sx={{ mt: 1 }}
+          >
+            <ToggleButton value="CHECKOUT" color="error">
+              Ausbuchen
+            </ToggleButton>
+            <ToggleButton value="CHECKIN" color="success">
+              Einbuchen
+            </ToggleButton>
+          </ToggleButtonGroup>
         </Paper>
       )}
       
-      {/* Offline-Caching Info (beim ersten Laden) */}
-      {!isLoading && isOnline && stock.length > 0 && (
-        <Alert severity="success" sx={{ mb: 2 }}>
-          ✅ Fahrzeugbestand wurde erfolgreich zwischengespeichert. Du kannst jetzt offline arbeiten.
-        </Alert>
-      )}
-
       {/* Stock-Load Fehler */}
       {error && (
         <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError(null)}>
@@ -1105,77 +1138,21 @@ const MyVehiclePage = () => {
         />
       )}
 
-      {/* Schneller Scan-Aktionsbereich (oben fixiert) */}
-      {scanQuickActionsActive && scanFeedback && (
-        <Paper
-          sx={{
-            position: "sticky",
-            top: 72,
-            zIndex: (theme) => theme.zIndex.appBar + 1,
-            mb: 2,
-            p: 2,
-            boxShadow: 4,
-            border: "1px solid",
-            borderColor: "divider",
-          }}
+      {/* Kurze Bestätigung nach dem Scan (verschwindet automatisch) */}
+      <Snackbar
+        open={Boolean(scanQuickActionsActive && scanFeedback && scanFeedbackSource === "scan")}
+        autoHideDuration={2500}
+        onClose={() => setScanQuickActionsActive(false)}
+        anchorOrigin={{ vertical: "top", horizontal: "center" }}
+      >
+        <Alert
+          severity={scanFeedback?.bookedType === "CHECKIN" ? "success" : "info"}
+          onClose={() => setScanQuickActionsActive(false)}
+          sx={{ width: "100%" }}
         >
-          <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 1 }}>
-            <Box sx={{ flex: 1, minWidth: 0 }}>
-              <Typography variant="caption" color="text.secondary">
-                Zuletzt gescannt
-              </Typography>
-              <Typography variant="h6" noWrap title={scanFeedback.code}>
-                {scanFeedback.code}
-              </Typography>
-              <Typography variant="body2" color="text.secondary" noWrap title={scanFeedback.description}>
-                {scanFeedback.description}
-              </Typography>
-              <Typography variant="body2" sx={{ mt: 0.5 }}>
-                Bestand: <strong>{scanFeedback.quantity}</strong> | Soll: <strong>{scanFeedback.targetQuantity}</strong>
-              </Typography>
-            </Box>
-            <IconButton
-              size="small"
-              onClick={() => {
-                setScanFeedback(null);
-                setScanQuickActionsActive(false);
-              }}
-              aria-label="Scan-Aktionsbereich schließen"
-            >
-              <CloseIcon fontSize="small" />
-            </IconButton>
-          </Box>
-
-          <Stack direction="row" spacing={1} sx={{ mt: 2 }}>
-            <Button
-              fullWidth
-              variant="outlined"
-              color="error"
-              onClick={() => {
-                void handleMovement("CHECKOUT", scanFeedback.id, 1);
-                setScanActionDialogOpen(false);
-                setScannerActive(true);
-              }}
-              disabled={isProcessing}
-            >
-              -1 Ausbuchen
-            </Button>
-            <Button
-              fullWidth
-              variant="contained"
-              color="success"
-              onClick={() => {
-                void handleMovement("CHECKIN", scanFeedback.id, 1);
-                setScanActionDialogOpen(false);
-                setScannerActive(true);
-              }}
-              disabled={isProcessing}
-            >
-              +1 Einbuchen
-            </Button>
-          </Stack>
-        </Paper>
-      )}
+          {scanFeedback?.code} {scanFeedback?.bookedType === "CHECKIN" ? "eingebucht (+1)" : "ausgebucht (-1)"}
+        </Alert>
+      </Snackbar>
 
       {/* Dialog: Artikel nicht gefunden */}
       <Dialog 
@@ -1614,10 +1591,10 @@ const MyVehiclePage = () => {
           setNotFoundDialogOpen(true);
         }}
         onItemScanned={updateScanFeedback}
-        scanFeedback={scanQuickActionsActive ? scanFeedback : null}
+        scanFeedback={scanQuickActionsActive && scanFeedbackSource === "manual" ? scanFeedback : null}
         onSetTargetForMissingItem={handleSetScanTarget}
         scanTargetSaving={scanTargetSaving}
-        hideActionButtons={scanQuickActionsActive && scanFeedbackSource === "scan"}
+        hideActionButtons={false}
         onManualInput={handleManualInput}
         restockRequests={activeRestockRequests.map(r => {
           const fullItem = items.find((i: any) => i.id === r.item.id);
