@@ -1054,19 +1054,20 @@ const MyVehiclePage = () => {
       {/* Sync-Status für Offline-Queue */}
       <SyncStatusIndicator />
 
-      {/* Kompakter Scanner-Header (mobilfreundlich, sticky) */}
-      {isSupported && (
-        <Paper
-          sx={{
-            position: "sticky",
-            top: 8,
-            zIndex: (theme) => theme.zIndex.appBar + 2,
-            mb: 2,
-            p: 1.5,
-            boxShadow: 3,
-          }}
-        >
-          <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+      {/* Ein-/Ausbuchen-Modus (immer sichtbar, sticky – unabhaengig davon, ob der native
+          Kamera-Scanner oder der Fallback-Scanner im "Bewegungen erfassen"-Bereich genutzt wird) */}
+      <Paper
+        sx={{
+          position: "sticky",
+          top: 8,
+          zIndex: (theme) => theme.zIndex.appBar + 2,
+          mb: 2,
+          p: 1.5,
+          boxShadow: 3,
+        }}
+      >
+        {isSupported && (
+          <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 1 }}>
             <Button
               variant={scannerActive ? "outlined" : "contained"}
               color={scannerActive ? "secondary" : "primary"}
@@ -1083,29 +1084,28 @@ const MyVehiclePage = () => {
               size="small"
             />
           </Box>
+        )}
 
-          <ToggleButtonGroup
-            value={bookingMode}
-            exclusive
-            fullWidth
-            size="small"
-            onChange={(_event, value: "CHECKIN" | "CHECKOUT" | null) => {
-              if (value) {
-                setBookingMode(value);
-              }
-            }}
-            sx={{ mt: 1 }}
-          >
-            <ToggleButton value="CHECKOUT" color="error">
-              Ausbuchen
-            </ToggleButton>
-            <ToggleButton value="CHECKIN" color="success">
-              Einbuchen
-            </ToggleButton>
-          </ToggleButtonGroup>
-        </Paper>
-      )}
-      
+        <ToggleButtonGroup
+          value={bookingMode}
+          exclusive
+          fullWidth
+          size="small"
+          onChange={(_event, value: "CHECKIN" | "CHECKOUT" | null) => {
+            if (value) {
+              setBookingMode(value);
+            }
+          }}
+        >
+          <ToggleButton value="CHECKOUT" color="error">
+            Ausbuchen
+          </ToggleButton>
+          <ToggleButton value="CHECKIN" color="success">
+            Einbuchen
+          </ToggleButton>
+        </ToggleButtonGroup>
+      </Paper>
+
       {/* Stock-Load Fehler */}
       {error && (
         <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError(null)}>
