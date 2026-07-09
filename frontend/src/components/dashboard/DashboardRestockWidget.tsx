@@ -373,15 +373,7 @@ const DashboardRestockWidget: React.FC = () => {
             </TableCell>
             <TableCell>
               {request.location ? (
-                <>
-                  <b>{request.location.code}</b>
-                  {request.location.name && (
-                    <>
-                      <br />
-                      <span style={{ fontSize: 12 }}>{request.location.name}</span>
-                    </>
-                  )}
-                </>
+                <b>{request.location.name || request.location.code}</b>
               ) : (
                 "-"
               )}
