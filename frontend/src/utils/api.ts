@@ -1032,7 +1032,10 @@ export interface InventorySessionDto {
   clientChecksum?: string | null;
   serverChecksum?: string | null;
   adjustmentsApplied?: boolean;
-  lines: InventoryLineDto[];
+  /** Volle Zeilen: nur bei Einzelabruf (findSessionById) befüllt. */
+  lines?: InventoryLineDto[];
+  /** Nur bei Listenabruf (findSessions) befüllt – Anzahl statt voller Zeilen. */
+  linesCount?: number;
   branchId?: string | null;
   branch?: { id: string; name: string } | null;
   assignedUserIds?: string[] | null;
@@ -1128,6 +1131,12 @@ export interface InventoryDifferencesResponse {
 
 export const fetchInventorySessions = async (): Promise<InventorySessionDto[]> => {
   const response = await api.get<InventorySessionDto[]>("/inventory");
+  return response.data;
+};
+
+/** Lädt eine einzelne Session inkl. voller Zeilen (im Gegensatz zu fetchInventorySessions, das nur linesCount liefert). */
+export const fetchInventorySessionDetail = async (sessionId: string): Promise<InventorySessionDto> => {
+  const response = await api.get<InventorySessionDto>(`/inventory/sessions/${sessionId}`);
   return response.data;
 };
 

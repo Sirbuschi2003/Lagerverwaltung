@@ -29,6 +29,7 @@
 - **Bestellvorschläge – Zulauf:** Bereits bestellte aber noch nicht eingegangene Mengen werden in der „Benötigt"-Berechnung abgezogen und sichtbar angezeigt
 - **Bestellvorschläge – Sortierung Wareneingang:** Sortierung nach Artikel-Nr. korrigiert
 - **Lieferscheinnummern bei Teillieferungen:** Nummern werden jetzt angehängt statt überschrieben
+- **Inventur-Crash nach Erstellen/Zuweisen:** Session-Liste lieferte seit dem Perf-Fix vom 11.05. keine Inventurzeilen mehr, wodurch die aktive Inventur ohne Positionen geladen wurde (Crash beim Rendern, Dubletten-Erkennung beim Scannen griff nicht). Neuer Detail-Endpoint lädt die aktive Session jetzt mit vollen Zeilen nach; die Liste liefert weiterhin nur eine Positionsanzahl (`linesCount`) für die Performance
 
 ### Security & Integrity
 

@@ -70,6 +70,9 @@ export class InventorySession {
   @OneToMany(() => InventoryLine, (line) => line.session, { cascade: true })
   lines!: InventoryLine[];
 
+  /** Nur bei findSessions() (Listenansicht) via loadRelationCountAndMap befüllt; sonst undefined. */
+  linesCount?: number;
+
   @OneToMany(() => InventoryVehicleStatus, (vs) => vs.session, { cascade: true })
   vehicleStatuses?: InventoryVehicleStatus[];
 

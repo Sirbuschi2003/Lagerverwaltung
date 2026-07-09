@@ -58,6 +58,32 @@ export class InventoryController {
     return this.inventoryService.findSessions(req.user?.branchId, req.user?.id, isManager);
   }
 
+  /**
+   * Liefert eine einzelne Session inkl. voller Zeilen (im Gegensatz zur Listenansicht,
+   * die aus Performance-Gründen nur linesCount liefert).
+   */
+  @Get("sessions/:sessionId")
+  @Roles("MANAGER", "WAREHOUSE", "TECHNICIAN")
+  async getSessionById(@Param("sessionId") sessionId: string, @Req() req: InventoryRequest) {
+    const session = await this.inventoryService.findSessionById(sessionId, req.user?.branchId);
+    if (!session) {
+      throw new BadRequestException("Session nicht gefunden");
+    }
+
+    const isManager = req.user?.role === "MANAGER";
+    const requestingUserId = req.user?.id;
+    const isVisible =
+      isManager ||
+      !session.assignedUserIds?.length ||
+      (!!requestingUserId && session.assignedUserIds.includes(requestingUserId));
+
+    if (!isVisible) {
+      throw new BadRequestException("Session nicht gefunden");
+    }
+
+    return session;
+  }
+
   @Post("start")
   @Roles("MANAGER")
   startSession(@Body() dto: StartInventoryDto, @Req() req: InventoryRequest) {

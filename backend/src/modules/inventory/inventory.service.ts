@@ -71,22 +71,26 @@ export class InventoryService {
     this.hmacSecret = `inventory-checksum-v1:${secret}`;
   }
 
-  findSessions(branchId?: string | null, requestingUserId?: string, isManager?: boolean) {
-    const where: Record<string, unknown> = {};
+  async findSessions(branchId?: string | null, requestingUserId?: string, isManager?: boolean) {
+    const qb = this.sessionsRepository
+      .createQueryBuilder("session")
+      .leftJoinAndSelect("session.vehicleStatuses", "vehicleStatuses")
+      .leftJoinAndSelect("vehicleStatuses.vehicle", "vehicle")
+      .leftJoinAndSelect("session.branch", "branch")
+      .loadRelationCountAndMap("session.linesCount", "session.lines")
+      .orderBy("session.startedAt", "DESC");
+
     if (branchId) {
-      where.branchId = branchId;
+      qb.andWhere("session.branchId = :branchId", { branchId });
     }
-    return this.sessionsRepository.find({
-      where,
-      relations: ["vehicleStatuses", "vehicleStatuses.vehicle", "branch"],
-      order: { startedAt: "DESC" },
-    }).then((sessions) => {
-      if (isManager) return sessions;
-      // Nicht-Manager sehen nur Sitzungen ohne Zuordnung ODER die ihnen zugeordnet sind
-      return sessions.filter(
-        (s) => !s.assignedUserIds?.length || (!!requestingUserId && s.assignedUserIds.includes(requestingUserId)),
-      );
-    });
+
+    const sessions = await qb.getMany();
+
+    if (isManager) return sessions;
+    // Nicht-Manager sehen nur Sitzungen ohne Zuordnung ODER die ihnen zugeordnet sind
+    return sessions.filter(
+      (s) => !s.assignedUserIds?.length || (!!requestingUserId && s.assignedUserIds.includes(requestingUserId)),
+    );
   }
 
   findSessionById(id: string, branchId?: string | null) {
@@ -94,7 +98,7 @@ export class InventoryService {
     if (branchId) where.branchId = branchId;
     return this.sessionsRepository.findOne({
       where,
-      relations: ["lines", "lines.item", "lines.item.storageLocation", "lines.vehicle", "lines.location", "vehicleStatuses", "vehicleStatuses.vehicle"],
+      relations: ["lines", "lines.item", "lines.item.storageLocation", "lines.vehicle", "lines.location", "vehicleStatuses", "vehicleStatuses.vehicle", "branch"],
     });
   }
 

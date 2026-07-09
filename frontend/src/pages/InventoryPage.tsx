@@ -50,6 +50,7 @@ import useVehiclesStore from "../store/useVehiclesStore";
 import useUsersStore from "../store/useUsersStore";
 import {
   fetchInventorySessions,
+  fetchInventorySessionDetail,
   startInventorySession,
   recordInventoryLine,
   completeInventorySession,
@@ -288,8 +289,21 @@ const InventoryPage = () => {
         (session: any) =>
           session.status === 'DRAFT' || session.status === 'SUBMITTED' || session.status === 'CANCELLED',
       );
-      setActiveSession(active || null);
-      
+
+      if (active) {
+        // Die Listenansicht liefert nur linesCount, keine vollen Zeilen (Performance).
+        // Für die aktive Session brauchen wir die vollen Zeilen (Positionsliste, Dubletten-Check).
+        try {
+          const detail = await fetchInventorySessionDetail(active.id);
+          setActiveSession({ ...detail, status: normalizeSessionStatus(detail.status) });
+        } catch (detailErr) {
+          console.error('[InventoryPage] Fehler beim Laden der Session-Details:', detailErr);
+          setActiveSession(active);
+        }
+      } else {
+        setActiveSession(null);
+      }
+
       setError(null);
     } catch (err) {
       console.error(err);
@@ -1106,7 +1120,7 @@ const InventoryPage = () => {
                       color="primary"
                       startIcon={<CompleteIcon />}
                       onClick={() => handleSubmitSession(activeSession.id)}
-                      disabled={isLoading || activeSession.lines.length === 0}
+                      disabled={isLoading || (activeSession.linesCount ?? activeSession.lines?.length ?? 0) === 0}
                     >
                       Fertig (zur Prüfung)
                     </Button>
@@ -1569,7 +1583,7 @@ const InventoryPage = () => {
                           </Typography>
                         )}
                         <Typography variant="body2">
-                          {session.lines.length} Position(en) erfasst
+                          {session.linesCount ?? session.lines?.length ?? 0} Position(en) erfasst
                         </Typography>
                       </Box>
                     }
