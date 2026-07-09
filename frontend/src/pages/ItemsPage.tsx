@@ -1308,16 +1308,6 @@ const ItemsPage = () => {
           if (basePayload.orderQuantity !== undefined) updatePayload.orderQuantity = basePayload.orderQuantity;
           if (basePayload.minimumStock !== undefined) updatePayload.minimumStock = basePayload.minimumStock;
           if (basePayload.reorderPoint !== undefined) updatePayload.reorderPoint = basePayload.reorderPoint;
-          const existingAlternateCodes = Array.isArray((existingItem as any)?.alternateCodes)
-            ? ((existingItem as any).alternateCodes as string[])
-            : [];
-          if (
-            existingAlternateCodes.length === 0 &&
-            basePayload.alternateCodes &&
-            basePayload.alternateCodes.length > 0
-          ) {
-            updatePayload.alternateCodes = basePayload.alternateCodes;
-          }
 
           existingUpdates.push({
             code: row.code,

@@ -289,7 +289,7 @@ const DashboardRestockWidget: React.FC = () => {
 
       const header = (
         <TableRow key={"header-" + techId}>
-          <TableCell colSpan={9} sx={{ background: "transparent", border: 0, px: 0, py: 0 }}>
+          <TableCell colSpan={10} sx={{ background: "transparent", border: 0, px: 0, py: 0 }}>
             <Box
               sx={{
                 display: "flex",
@@ -370,6 +370,21 @@ const DashboardRestockWidget: React.FC = () => {
             <TableCell>{request.vehicle?.description ?? "-"}</TableCell>
             <TableCell>
               {request.item.code} - {request.item.description}
+            </TableCell>
+            <TableCell>
+              {request.location ? (
+                <>
+                  <b>{request.location.code}</b>
+                  {request.location.name && (
+                    <>
+                      <br />
+                      <span style={{ fontSize: 12 }}>{request.location.name}</span>
+                    </>
+                  )}
+                </>
+              ) : (
+                "-"
+              )}
             </TableCell>
             <TableCell align="right">{request.quantityNeeded}</TableCell>
             <TableCell align="right">
@@ -731,6 +746,7 @@ const DashboardRestockWidget: React.FC = () => {
                   <TableCell>Fahrzeug</TableCell>
                   <TableCell>Techniker</TableCell>
                   <TableCell>Artikel</TableCell>
+                  <TableCell>Lagerort</TableCell>
                   <TableCell align="right">Fehlt</TableCell>
                   <TableCell align="right">Im Lager</TableCell>
                   <TableCell align="right">Bereitgestellt</TableCell>
