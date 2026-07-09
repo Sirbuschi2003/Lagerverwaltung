@@ -4,6 +4,7 @@ import api, { fetchAuthProfile, type AuthProfileDto } from "../utils/api";
 import { SecureTokenManager, SecurityLogger, validateAuthToken, sanitizeInput } from "../utils/securityUtils";
 import { useNetworkStore } from "./useNetworkStore";
 import { useUserSettingsStore } from "./useUserSettingsStore";
+import useTabStore from "./useTabStore";
 
 type UserProfile = AuthProfileDto;
 
@@ -227,6 +228,9 @@ const useAuthStore = create<AuthState>()(
         delete api.defaults.headers.common.Authorization;
         SecureTokenManager.clearToken();
         useUserSettingsStore.getState().reset();
+        // Sicherheit: geöffnete Tabs (auch rollenbeschränkte Seiten wie Firmendaten)
+        // dürfen nicht für den nächsten Benutzer in derselben Browser-Session sichtbar bleiben.
+        useTabStore.getState().clearTabs();
         set({ token: null, refreshToken: null, user: null, lastActivity: Date.now() });
       },
 
