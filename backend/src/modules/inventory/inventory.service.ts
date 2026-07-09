@@ -2,7 +2,7 @@
 import { Cron, CronExpression } from "@nestjs/schedule";
 import { ConfigService } from "@nestjs/config";
 import { InjectRepository } from "@nestjs/typeorm";
-import { Repository } from "typeorm";
+import { IsNull, Repository } from "typeorm";
 import { createHmac } from "crypto";
 
 import { ItemsService } from "../items/items.service";
@@ -71,6 +71,19 @@ export class InventoryService {
     this.hmacSecret = `inventory-checksum-v1:${secret}`;
   }
 
+  /**
+   * Sessions mit branchId=null werden vom Super-Admin (branchId=null) angelegt und sind
+   * niederlassungsübergreifend sichtbar — daher IS NULL immer mit einschließen, nicht nur
+   * exakte Gleichheit prüfen. Analog zu delivery-notes.service.ts.
+   */
+  private sessionWhereForBranch(id: string, branchId?: string | null): Record<string, unknown>[] | Record<string, unknown> {
+    if (!branchId) return { id };
+    return [
+      { id, branchId },
+      { id, branchId: IsNull() },
+    ];
+  }
+
   async findSessions(branchId?: string | null, requestingUserId?: string, isManager?: boolean) {
     const qb = this.sessionsRepository
       .createQueryBuilder("session")
@@ -81,7 +94,7 @@ export class InventoryService {
       .orderBy("session.startedAt", "DESC");
 
     if (branchId) {
-      qb.andWhere("session.branchId = :branchId", { branchId });
+      qb.andWhere("(session.branchId = :branchId OR session.branchId IS NULL)", { branchId });
     }
 
     const sessions = await qb.getMany();
@@ -94,10 +107,8 @@ export class InventoryService {
   }
 
   findSessionById(id: string, branchId?: string | null) {
-    const where: Record<string, unknown> = { id };
-    if (branchId) where.branchId = branchId;
     return this.sessionsRepository.findOne({
-      where,
+      where: this.sessionWhereForBranch(id, branchId),
       relations: ["lines", "lines.item", "lines.item.storageLocation", "lines.vehicle", "lines.location", "vehicleStatuses", "vehicleStatuses.vehicle", "branch"],
     });
   }
@@ -254,9 +265,9 @@ export class InventoryService {
   }
 
   async deleteSession(sessionId: string, branchId?: string | null, force = false) {
-    const where: Record<string, unknown> = { id: sessionId };
-    if (branchId) where.branchId = branchId;
-    const session = await this.sessionsRepository.findOne({ where });
+    const session = await this.sessionsRepository.findOne({
+      where: this.sessionWhereForBranch(sessionId, branchId),
+    });
     if (!session) {
       throw new NotFoundException("Inventory session not found");
     }
@@ -348,9 +359,8 @@ export class InventoryService {
    * Keine Änderungen mehr für Techniker; Manager kann prüfen/reopen
    */
   async submitSession(sessionId: string, username: string, userContext?: any, dto?: SubmitInventoryDto) {
-    const branchWhere = userContext?.branchId ? { id: sessionId, branchId: userContext.branchId } : { id: sessionId };
     const session = await this.sessionsRepository.findOne({
-      where: branchWhere,
+      where: this.sessionWhereForBranch(sessionId, userContext?.branchId),
       relations: ["lines", "lines.location"],
     });
 
@@ -569,9 +579,9 @@ export class InventoryService {
    * Erlaubt Wiedereröffnung von SUBMITTED und FINALIZED Sessions
    */
   async reopenSession(sessionId: string, username: string, branchId?: string | null) {
-    const where: Record<string, unknown> = { id: sessionId };
-    if (branchId) where.branchId = branchId;
-    const session = await this.sessionsRepository.findOne({ where });
+    const session = await this.sessionsRepository.findOne({
+      where: this.sessionWhereForBranch(sessionId, branchId),
+    });
 
     if (!session) {
       throw new NotFoundException("Inventur-Session nicht gefunden");
@@ -634,10 +644,8 @@ export class InventoryService {
    * Setzt nur das spezifische Fahrzeug auf DRAFT, nicht alle
    */
   async reopenVehicle(sessionId: string, vehicleId: string, username: string, branchId?: string | null) {
-    const where: Record<string, unknown> = { id: sessionId };
-    if (branchId) where.branchId = branchId;
     const session = await this.sessionsRepository.findOne({
-      where,
+      where: this.sessionWhereForBranch(sessionId, branchId),
       relations: ["vehicleStatuses", "lines", "lines.vehicle", "lines.item"],
     });
 
@@ -714,10 +722,8 @@ export class InventoryService {
    * Validiert Checksum, setzt finalizedBy/At
    */
   async finalizeSession(sessionId: string, username: string, dto?: FinalizeInventoryDto, branchId?: string | null) {
-    const where: Record<string, unknown> = { id: sessionId };
-    if (branchId) where.branchId = branchId;
     const session = await this.sessionsRepository.findOne({
-      where,
+      where: this.sessionWhereForBranch(sessionId, branchId),
       relations: ["lines", "lines.location"],
     });
 
@@ -953,10 +959,8 @@ export class InventoryService {
    * Liefert eine Inventur-Session mit allen benötigten Relationen für Exporte/Reports
    */
   async getSessionForExport(sessionId: string, branchId?: string | null): Promise<InventorySession> {
-    const where: Record<string, unknown> = { id: sessionId };
-    if (branchId) where.branchId = branchId;
     const session = await this.sessionsRepository.findOne({
-      where,
+      where: this.sessionWhereForBranch(sessionId, branchId),
       relations: [
         "lines",
         "lines.item",

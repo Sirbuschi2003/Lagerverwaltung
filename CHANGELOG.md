@@ -30,6 +30,8 @@
 - **Bestellvorschläge – Sortierung Wareneingang:** Sortierung nach Artikel-Nr. korrigiert
 - **Lieferscheinnummern bei Teillieferungen:** Nummern werden jetzt angehängt statt überschrieben
 - **Inventur-Crash nach Erstellen/Zuweisen:** Session-Liste lieferte seit dem Perf-Fix vom 11.05. keine Inventurzeilen mehr, wodurch die aktive Inventur ohne Positionen geladen wurde (Crash beim Rendern, Dubletten-Erkennung beim Scannen griff nicht). Neuer Detail-Endpoint lädt die aktive Session jetzt mit vollen Zeilen nach; die Liste liefert weiterhin nur eine Positionsanzahl (`linesCount`) für die Performance
+- **Zugewiesene Inventur für Benutzer unsichtbar:** Vom Super-Admin (branchId=null) erstellte und einem Benutzer zugewiesene Inventuren wurden dem Benutzer nie angezeigt, da die Sichtbarkeitsprüfung strikt auf Gleichheit der Niederlassung filterte statt branchId=null als niederlassungsübergreifend zu behandeln. Betraf auch Submit/Reopen/Finalize/Export derselben Sessions
+- **Dashboard-Kachel „Offene Inventuren":** Zeigte die Gesamtzahl aller offenen Inventuren systemweit an (alle Niederlassungen, ohne Zuweisungsfilter) statt nur der für den jeweiligen Benutzer sichtbaren
 
 ### Security & Integrity
 

@@ -176,19 +176,36 @@ export class StockService {
     return qb;
   }
 
-  async findDashboardSnapshot(user?: { role?: string; vehicleId?: string | null; branchId?: string | null; locationIds?: string[] }) {
+  async findDashboardSnapshot(user?: { id?: string; role?: string; vehicleId?: string | null; branchId?: string | null; locationIds?: string[] }) {
     try {
-      const [totalItems, openInventorySessions] = await Promise.all([
+      const openSessionsQb = this.inventorySessionRepository
+        .createQueryBuilder("session")
+        .select(["session.id", "session.assignedUserIds"])
+        .where("session.status IN (:...statuses)", {
+          statuses: [InventorySessionStatus.DRAFT, InventorySessionStatus.SUBMITTED],
+        });
+
+      // Sessions mit branchId=null (Super-Admin) sind niederlassungsübergreifend sichtbar.
+      if (user?.branchId) {
+        openSessionsQb.andWhere("(session.branchId = :branchId OR session.branchId IS NULL)", {
+          branchId: user.branchId,
+        });
+      }
+
+      const [totalItems, openSessions] = await Promise.all([
         this.itemsService.countItems(user?.branchId, user?.locationIds),
-        this.inventorySessionRepository.count({
-          where: [
-            { status: InventorySessionStatus.DRAFT },
-            { status: InventorySessionStatus.SUBMITTED },
-          ],
-        }),
+        openSessionsQb.getMany(),
       ]);
 
-      return { totalItems, openInventorySessions };
+      // Nicht-Manager sehen nur Sessions ohne Zuordnung ODER die ihnen zugeordnet sind
+      const isManager = user?.role === "MANAGER";
+      const visibleSessions = isManager
+        ? openSessions
+        : openSessions.filter(
+            (s) => !s.assignedUserIds?.length || (!!user?.id && s.assignedUserIds.includes(user.id)),
+          );
+
+      return { totalItems, openInventorySessions: visibleSessions.length };
     } catch (error) {
       this.logger.error("Fehler beim Laden des Dashboard-Snapshots:", error);
       throw error;
