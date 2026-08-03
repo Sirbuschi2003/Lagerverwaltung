@@ -36,7 +36,6 @@ import DeleteIcon from "@mui/icons-material/Delete";
 import AddIcon from "@mui/icons-material/Add";
 import PictureAsPdfIcon from "@mui/icons-material/PictureAsPdf";
 import ArchiveIcon from "@mui/icons-material/Archive";
-import CheckCircleIcon from "@mui/icons-material/CheckCircle";
 
 import useAuthStore from "../../store/useAuthStore";
 import ItemEditDialog from "../items/ItemEditDialog";
@@ -45,7 +44,6 @@ import {
   fetchItems,
   fetchPurchaseOrderPdf,
   fetchPurchaseOrders,
-  receivePurchaseOrder,
   addPurchaseOrderLine,
   updatePurchaseOrderLine,
   deletePurchaseOrderLine,
@@ -88,7 +86,6 @@ const ActiveOrdersTab: React.FC = () => {
   const isSuperAdmin = user?.branchId === null || user?.branchId === undefined;
   const canEdit = hasPermission("orders.edit");
   const canDelete = hasPermission("orders.delete");
-  const canReceive = hasPermission("orders.receive");
 
   const [orders, setOrders] = useState<PurchaseOrderDto[]>([]);
   const [loading, setLoading] = useState(false);
@@ -108,10 +105,6 @@ const ActiveOrdersTab: React.FC = () => {
     note: "",
   });
   const [updating, setUpdating] = useState(false);
-
-  const [receiveDialogOpen, setReceiveDialogOpen] = useState(false);
-  const [receiveQuantities, setReceiveQuantities] = useState<Record<string, number>>({});
-  const [receiving, setReceiving] = useState(false);
 
   const [deleteTarget, setDeleteTarget] = useState<PurchaseOrderDto | null>(null);
   const [itemDialogId, setItemDialogId] = useState<string | null>(null);
@@ -284,36 +277,6 @@ const ActiveOrdersTab: React.FC = () => {
       alert(`Fehler beim Aktualisieren: ${err?.response?.data?.message || err?.message || "Unbekannt"}`);
     } finally {
       setUpdating(false);
-    }
-  };
-
-  const handleReceiveOpen = (order: PurchaseOrderDto) => {
-    setActiveOrder(order);
-    const quantities: Record<string, number> = {};
-    order.lines.forEach((line) => {
-      const remaining = Math.max(0, line.quantity - (line.receivedQuantity || 0));
-      quantities[line.id] = remaining;
-    });
-    setReceiveQuantities(quantities);
-    setReceiveDialogOpen(true);
-  };
-
-  const handleReceive = async () => {
-    if (!activeOrder) return;
-    setReceiving(true);
-    try {
-      const lines = Object.entries(receiveQuantities).map(([lineId, receivedQuantity]) => ({
-        lineId,
-        receivedQuantity,
-      }));
-      await receivePurchaseOrder(activeOrder.id, { lines });
-      setSuccessMessage("Wareneingang erfolgreich gebucht.");
-      setReceiveDialogOpen(false);
-      await loadOrders(statusFilter === "ALL" ? undefined : statusFilter);
-    } catch (err: any) {
-      alert(`Fehler beim Wareneingang: ${err?.response?.data?.message || err?.message || "Unbekannt"}`);
-    } finally {
-      setReceiving(false);
     }
   };
 
@@ -511,13 +474,6 @@ const ActiveOrdersTab: React.FC = () => {
                           </IconButton>
                         </Tooltip>
                       )}
-                      {canReceive && order.status === "ORDERED" && (
-                        <Tooltip title="Wareneingang buchen">
-                          <IconButton size="small" color="success" onClick={() => handleReceiveOpen(order)}>
-                            <CheckCircleIcon fontSize="small" />
-                          </IconButton>
-                        </Tooltip>
-                      )}
                       <Tooltip title="PDF herunterladen">
                         <IconButton size="small" onClick={() => handleDownloadPdf(order)}>
                           <PictureAsPdfIcon fontSize="small" />
@@ -693,81 +649,6 @@ const ActiveOrdersTab: React.FC = () => {
           <Button onClick={() => setEditDialogOpen(false)}>Abbrechen</Button>
           <Button onClick={handleEditSave} variant="contained" disabled={updating}>
             {updating ? "Speichere..." : "Speichern"}
-          </Button>
-        </DialogActions>
-      </Dialog>
-
-      <Dialog open={receiveDialogOpen} onClose={() => setReceiveDialogOpen(false)} maxWidth="md" fullWidth>
-        <DialogTitle>Wareneingang buchen</DialogTitle>
-        <DialogContent>
-          <Alert severity="info" sx={{ mb: 2 }}>
-            Tragen Sie die tatsächlich eingegangene Menge ein. Teillieferungen sind möglich.
-          </Alert>
-          <Table size="small">
-            <TableHead>
-              <TableRow>
-                <TableCell>Artikel</TableCell>
-                <TableCell align="right">Bestellt</TableCell>
-                <TableCell align="right">Bereits empfangen</TableCell>
-                <TableCell align="right">Noch offen</TableCell>
-                <TableCell align="right">Jetzt empfangen</TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {activeOrder?.lines.map((line) => {
-                const ordered = line.quantity;
-                const alreadyReceived = line.receivedQuantity || 0;
-                const remaining = Math.max(0, ordered - alreadyReceived);
-                const currentReceiving = receiveQuantities[line.id] || 0;
-
-                return (
-                  <TableRow key={line.id}>
-                    <TableCell>
-                      <Typography
-                        variant="body2"
-                        sx={{ fontWeight: 600, cursor: line.item?.id ? "pointer" : undefined, "&:hover": line.item?.id ? { textDecoration: "underline" } : undefined }}
-                        onClick={() => { if (line.item?.id) setItemDialogId(line.item.id); }}
-                      >
-                        {line.item.code} – {line.item.description}
-                      </Typography>
-                      {line.item.descriptionSecondary && (
-                        <Typography variant="body2" color="text.secondary">{line.item.descriptionSecondary}</Typography>
-                      )}
-                    </TableCell>
-                    <TableCell align="right">{ordered}</TableCell>
-                    <TableCell align="right">{alreadyReceived}</TableCell>
-                    <TableCell align="right">{remaining}</TableCell>
-                    <TableCell align="right">
-                      <TextField
-                        type="number"
-                        size="small"
-                        value={currentReceiving}
-                        onFocus={(e) => e.target.select()}
-                        onChange={(event) => {
-                          const value = Math.max(0, Math.min(remaining, Number.parseInt(event.target.value, 10) || 0));
-                          setReceiveQuantities({
-                            ...receiveQuantities,
-                            [line.id]: value,
-                          });
-                        }}
-                        inputProps={{ min: 0, max: remaining }}
-                        sx={{ width: 90 }}
-                      />
-                    </TableCell>
-                  </TableRow>
-                );
-              })}
-            </TableBody>
-          </Table>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setReceiveDialogOpen(false)}>Abbrechen</Button>
-          <Button
-            onClick={handleReceive}
-            variant="contained"
-            disabled={receiving || Object.values(receiveQuantities).every((value) => value === 0)}
-          >
-            {receiving ? "Buche..." : "Wareneingang buchen"}
           </Button>
         </DialogActions>
       </Dialog>
