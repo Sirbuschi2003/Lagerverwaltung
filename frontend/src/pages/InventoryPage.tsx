@@ -44,6 +44,7 @@ import {
 } from "@mui/icons-material";
 import { ScannerButton } from "../components/ScannerButton";
 import { findItemByCode } from "../utils/itemLookup";
+import useScanSound from "../hooks/useScanSound";
 import useAuthStore from "../store/useAuthStore";
 import useItemsStore from "../store/useItemsStore";
 import useVehiclesStore from "../store/useVehiclesStore";
@@ -110,11 +111,14 @@ const InventoryPage = () => {
   const theme = useTheme();
   const isMobileView = useMediaQuery(theme.breakpoints.down("sm"));
 
+  const { playSuccess, playError } = useScanSound();
+
   const [quantityDialogOpen, setQuantityDialogOpen] = useState(false);
   const [quantityInput, setQuantityInput] = useState("");
   const [quantityError, setQuantityError] = useState<string | null>(null);
   const [pendingItem, setPendingItem] = useState<any>(null);
   const [pendingExpected, setPendingExpected] = useState<number | null>(null);
+  const [alreadyScannedLine, setAlreadyScannedLine] = useState<any>(null);
   const [offlineCount, setOfflineCount] = useState(0);
   const [exportVehicleFilters, setExportVehicleFilters] = useState<Record<string, string | null>>({});
   
@@ -268,10 +272,20 @@ const InventoryPage = () => {
       setPendingExpected(expected);
       setQuantityInput("");
       setQuantityError(null);
+
+      // Prüfe ob Artikel bereits in dieser Session erfasst wurde
+      const vehicle = selectedVehicle ?? defaultVehicle;
+      const existing = activeSession?.lines?.find(
+        (line: any) =>
+          line.item?.id === item.id &&
+          (line.vehicle?.id || null) === (vehicle?.id || null),
+      ) ?? null;
+      setAlreadyScannedLine(existing);
+
       setQuantityDialogOpen(true);
       return expected;
     },
-    [selectItemForEntry],
+    [selectItemForEntry, activeSession, selectedVehicle, defaultVehicle],
   );
 
   const loadSessions = useCallback(async () => {
@@ -643,6 +657,7 @@ const InventoryPage = () => {
     setManualCode("");
     setPendingItem(null);
     setPendingExpected(null);
+    setAlreadyScannedLine(null);
     setQuantityInput("");
     setQuantityError(null);
     setQuantityDialogOpen(false);
@@ -701,6 +716,7 @@ const InventoryPage = () => {
       setLoading(true);
       await recordInventoryLine(requestData);
 
+      playSuccess();
       await loadSessions();
       resetEntryForm();
       setError(null);
@@ -726,6 +742,7 @@ const InventoryPage = () => {
         localStorage.setItem('offlineInventoryLines', JSON.stringify(offlineInventory));
         
         // Aktualisiere UI optimistisch
+        playSuccess();
         await loadSessions();
         resetEntryForm();
         setError("Position offline erfasst - wird bei nächster Synchronisation übertragen.");
@@ -733,6 +750,7 @@ const InventoryPage = () => {
         // Auto-clear Warnung nach 5 Sekunden
         setTimeout(() => setError(null), 5000);
       } else {
+        playError();
         setError("Fehler beim Erfassen der Inventur-Position.");
       }
     } finally {
@@ -968,11 +986,13 @@ const InventoryPage = () => {
 
   const handleScanCode = (code: string) => {
     if (!activeSession) {
+      playError();
       setError('Keine aktive Inventur vorhanden.');
       return;
     }
     const item = findItemByCode(items, code);
     if (!item) {
+      playError();
       setError(`Artikel mit Code "${code}" nicht gefunden.`);
       return;
     }
@@ -984,6 +1004,7 @@ const InventoryPage = () => {
     setQuantityDialogOpen(false);
     setPendingItem(null);
     setPendingExpected(null);
+    setAlreadyScannedLine(null);
     setQuantityInput("");
     setQuantityError(null);
   };
@@ -999,14 +1020,15 @@ const InventoryPage = () => {
       return;
     }
 
+    const expected = pendingExpected ?? resolveExpectedQuantity(pendingItem);
     const normalized = quantityInput.trim();
-    const counted = Number.parseInt(normalized, 10);
-    if (!normalized || Number.isNaN(counted) || counted < 0) {
+
+    // Leere Eingabe → Systemwert (erwartete Menge) übernehmen
+    const counted = normalized === "" ? expected : Number.parseInt(normalized, 10);
+    if (Number.isNaN(counted) || counted < 0) {
       setQuantityError("Bitte eine gültige Menge eingeben.");
       return;
     }
-
-    const expected = pendingExpected ?? resolveExpectedQuantity(pendingItem);
 
     await submitInventoryLine({
       item: pendingItem,
@@ -1393,6 +1415,11 @@ const InventoryPage = () => {
                                   <Typography variant="caption" color="text.secondary" sx={{ display: "block" }}>
                                     {line.item?.description || "-"}
                                   </Typography>
+                                  {line.item?.descriptionSecondary && (
+                                    <Typography variant="caption" color="text.secondary" sx={{ display: "block" }}>
+                                      {line.item.descriptionSecondary}
+                                    </Typography>
+                                  )}
                                 </Box>
                                 {renderDifferenceChip(difference)}
                               </Stack>
@@ -1767,6 +1794,13 @@ const InventoryPage = () => {
                 )}
               </Box>
             )}
+
+            {alreadyScannedLine && (
+              <Alert severity="warning" sx={{ py: 0.5 }}>
+                Bereits erfasst: <strong>{alreadyScannedLine.countedQuantity}</strong> Stk. — neue Menge wird addiert.
+              </Alert>
+            )}
+
             <Box
               sx={{
                 display: "flex",
@@ -1798,8 +1832,14 @@ const InventoryPage = () => {
                   setQuantityError(null);
                 }
               }}
+              onKeyDown={(e: any) => {
+                if (e.key === "Enter") {
+                  void handleQuantityConfirm();
+                }
+              }}
               inputProps={{ min: 0, inputMode: "numeric" }}
               fullWidth
+              helperText="Leer lassen = erwartete Menge übernehmen"
             />
             {quantityError && (
               <Alert severity="warning">{quantityError}</Alert>
