@@ -1040,22 +1040,6 @@ const InventoryPage = () => {
       return;
     }
 
-    // Addier-Modus: Eingabe auf vorhandenen Wert aufschlagen
-    if (mode === 'add' && alreadyScannedLine) {
-      if (!normalized) {
-        setQuantityError("Bitte eine Menge zum Hinzufügen eingeben.");
-        return;
-      }
-      const newTotal = alreadyScannedLine.countedQuantity + enteredValue;
-      await submitInventoryLine({
-        item: pendingItem,
-        counted: newTotal,
-        expected,
-        vehicle: selectedVehicle ?? defaultVehicle ?? undefined,
-      });
-      return;
-    }
-
     await submitInventoryLine({
       item: pendingItem,
       counted: enteredValue,
@@ -1879,9 +1863,7 @@ const InventoryPage = () => {
               }}
               inputProps={{ min: 0, inputMode: "numeric" }}
               fullWidth
-              helperText={alreadyScannedLine
-                ? `Korrigieren: neuer Gesamtwert · Hinzufügen: wird auf ${alreadyScannedLine.countedQuantity} addiert`
-                : "Leer lassen = erwartete Menge übernehmen"}
+              helperText={alreadyScannedLine ? "Leer lassen = aktuellen Wert beibehalten" : "Leer lassen = erwartete Menge übernehmen"}
             />
             {quantityError && (
               <Alert severity="warning">{quantityError}</Alert>
@@ -1890,34 +1872,13 @@ const InventoryPage = () => {
         </DialogContent>
         <DialogActions>
           <Button onClick={handleQuantityDialogClose}>Abbrechen</Button>
-          {alreadyScannedLine ? (
-            <>
-              <Button
-                variant="outlined"
-                color="primary"
-                onClick={() => handleQuantityConfirm('replace')}
-                disabled={isLoading}
-              >
-                Korrigieren
-              </Button>
-              <Button
-                variant="contained"
-                color="success"
-                onClick={() => handleQuantityConfirm('add')}
-                disabled={isLoading}
-              >
-                + Hinzufügen
-              </Button>
-            </>
-          ) : (
-            <Button
-              variant="contained"
-              onClick={() => handleQuantityConfirm('replace')}
-              disabled={isLoading}
-            >
-              Übernehmen
-            </Button>
-          )}
+          <Button
+            variant="contained"
+            onClick={() => handleQuantityConfirm('replace')}
+            disabled={isLoading}
+          >
+            {alreadyScannedLine ? "Korrigieren" : "Übernehmen"}
+          </Button>
         </DialogActions>
       </Dialog>
 
