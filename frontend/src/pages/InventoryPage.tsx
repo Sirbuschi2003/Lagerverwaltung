@@ -433,6 +433,20 @@ const InventoryPage = () => {
     });
   }, [activeSession?.lines, defaultVehicle?.id, isTechnician]);
 
+  const usingVehicle = selectedVehicle ?? defaultVehicle;
+
+  const totalExpectedCount = useMemo(() => {
+    const stock = usingVehicle ? vehicleStock : locationStock;
+    const uniqueIds = new Set(stock.filter((s: any) => s.quantity > 0).map((s: any) => s.item?.id));
+    return uniqueIds.size;
+  }, [usingVehicle, vehicleStock, locationStock]);
+
+  const missingItems = useMemo(() => {
+    const stock = usingVehicle ? vehicleStock : locationStock;
+    const scannedIds = new Set(sortedLines.map((l: any) => l.item?.id));
+    return stock.filter((s: any) => s.quantity > 0 && !scannedIds.has(s.item?.id));
+  }, [usingVehicle, vehicleStock, locationStock, sortedLines]);
+
   const renderDifferenceChip = (difference: number) => (
     <Chip
       label={difference}
@@ -716,7 +730,6 @@ const InventoryPage = () => {
       setLoading(true);
       await recordInventoryLine(requestData);
 
-      playSuccess();
       await loadSessions();
       resetEntryForm();
       setError(null);
@@ -742,7 +755,6 @@ const InventoryPage = () => {
         localStorage.setItem('offlineInventoryLines', JSON.stringify(offlineInventory));
         
         // Aktualisiere UI optimistisch
-        playSuccess();
         await loadSessions();
         resetEntryForm();
         setError("Position offline erfasst - wird bei nächster Synchronisation übertragen.");
@@ -806,9 +818,11 @@ const InventoryPage = () => {
     }
     const item = findItemByCode(items, code);
     if (!item) {
+      playError();
       setError(`Artikel mit Code "${code}" nicht gefunden.`);
       return;
     }
+    playSuccess();
     openQuantityDialogForItem(item);
     setManualCode('');
     setError(null);
@@ -996,6 +1010,7 @@ const InventoryPage = () => {
       setError(`Artikel mit Code "${code}" nicht gefunden.`);
       return;
     }
+    playSuccess();
     openQuantityDialogForItem(item);
     setError(null);
   };
@@ -1254,7 +1269,21 @@ const InventoryPage = () => {
               {/* Recording Form */}
               {!currentVehicleSubmitted && activeSession.status === 'DRAFT' ? (
               <Stack spacing={2}>
-                <Typography variant="subtitle1">Neue Position erfassen</Typography>
+                <Stack direction="row" justifyContent="space-between" alignItems="center">
+                  <Typography variant="subtitle1">Neue Position erfassen</Typography>
+                  {totalExpectedCount > 0 && (
+                    <Stack direction="row" spacing={1} alignItems="center">
+                      <Typography variant="body2" color="text.secondary">
+                        <strong>{sortedLines.length}</strong> / {totalExpectedCount} erfasst
+                      </Typography>
+                      {missingItems.length === 0 ? (
+                        <Chip label="Alle erfasst" size="small" color="success" />
+                      ) : (
+                        <Chip label={`${missingItems.length} fehlen`} size="small" color="warning" />
+                      )}
+                    </Stack>
+                  )}
+                </Stack>
 
                 <Stack direction="row" spacing={2} alignItems="center">
                   <Autocomplete
@@ -1914,6 +1943,34 @@ const InventoryPage = () => {
           {finalizeTargetSession?.status === 'SUBMITTED' ? 'Inventur finalisieren' : 'Inventur einreichen'}{finalizeTargetSession ? `: ${finalizeTargetSession.name}` : ''}
         </DialogTitle>
         <DialogContent sx={{ px: { xs: 3, sm: 3 }, pb: { xs: 2, sm: 2 }, pt: { xs: 1.5, sm: 2 } }}>
+          {missingItems.length > 0 && (
+            <Box sx={{ mb: 2 }}>
+              <Alert severity="warning">
+                <Typography variant="subtitle2" sx={{ mb: 0.5 }}>
+                  {missingItems.length} Artikel aus dem Bestand noch nicht gescannt:
+                </Typography>
+                <Box component="ul" sx={{ m: 0, pl: 2 }}>
+                  {missingItems.slice(0, 10).map((s: any) => (
+                    <li key={s.item?.id}>
+                      <Typography variant="caption">
+                        <strong>{s.item?.code}</strong> – {s.item?.description}
+                        {s.item?.descriptionSecondary ? ` · ${s.item.descriptionSecondary}` : ''}{' '}
+                        (Bestand: {s.quantity})
+                      </Typography>
+                    </li>
+                  ))}
+                  {missingItems.length > 10 && (
+                    <li>
+                      <Typography variant="caption" color="text.secondary">
+                        … und {missingItems.length - 10} weitere
+                      </Typography>
+                    </li>
+                  )}
+                </Box>
+              </Alert>
+            </Box>
+          )}
+
           {differencesLoading ? (
             <Typography variant="body2" color="text.secondary" sx={{ py: 1 }}>
               Lade Differenzen...
