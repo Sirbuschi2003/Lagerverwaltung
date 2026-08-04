@@ -282,6 +282,11 @@ const InventoryPage = () => {
       ) ?? null;
       setAlreadyScannedLine(existing);
 
+      // Bereits erfasst: Feld mit aktuellem Wert vorausfüllen (Korrektur-Modus)
+      if (existing) {
+        setQuantityInput(String(existing.countedQuantity));
+      }
+
       setQuantityDialogOpen(true);
       return expected;
     },
@@ -692,22 +697,11 @@ const InventoryPage = () => {
     );
     
     if (existingLine) {
-      // Summiere die Mengen auf
-      const newCountedQuantity = existingLine.countedQuantity + params.counted;
-      
-      console.log('[InventoryPage] Artikel bereits erfasst - summiere Mengen:', {
-        existing: existingLine.countedQuantity,
-        adding: params.counted,
-        newTotal: newCountedQuantity
-      });
-      
-      // Lösche alte Position und erstelle neue mit summierter Menge
+      // Ersetze vorhandene Position (kein Aufsummieren → verhindert versehentliches Verdoppeln)
       try {
         await deleteInventoryLine(existingLine.id);
-        // Fahre fort mit der neuen summierten Menge
-        params.counted = newCountedQuantity;
       } catch (err) {
-        console.error('[InventoryPage] Fehler beim Aufsummieren:', err);
+        console.error('[InventoryPage] Fehler beim Ersetzen der Position:', err);
         setError("Fehler beim Aktualisieren der Menge.");
         return;
       }
@@ -1038,8 +1032,9 @@ const InventoryPage = () => {
     const expected = pendingExpected ?? resolveExpectedQuantity(pendingItem);
     const normalized = quantityInput.trim();
 
-    // Leere Eingabe → Systemwert (erwartete Menge) übernehmen
-    const counted = normalized === "" ? expected : Number.parseInt(normalized, 10);
+    // Leere Eingabe: bereits erfasst → aktuellen Wert behalten; neu → Systemwert übernehmen
+    const fallback = alreadyScannedLine ? alreadyScannedLine.countedQuantity : expected;
+    const counted = normalized === "" ? fallback : Number.parseInt(normalized, 10);
     if (Number.isNaN(counted) || counted < 0) {
       setQuantityError("Bitte eine gültige Menge eingeben.");
       return;
@@ -1826,7 +1821,7 @@ const InventoryPage = () => {
 
             {alreadyScannedLine && (
               <Alert severity="warning" sx={{ py: 0.5 }}>
-                Bereits erfasst: <strong>{alreadyScannedLine.countedQuantity}</strong> Stk. — neue Menge wird addiert.
+                Bereits erfasst: <strong>{alreadyScannedLine.countedQuantity}</strong> Stk. — Eingabe ersetzt den vorhandenen Wert.
               </Alert>
             )}
 
@@ -1868,7 +1863,7 @@ const InventoryPage = () => {
               }}
               inputProps={{ min: 0, inputMode: "numeric" }}
               fullWidth
-              helperText="Leer lassen = erwartete Menge übernehmen"
+              helperText={alreadyScannedLine ? "Leer lassen = aktuellen Wert beibehalten" : "Leer lassen = erwartete Menge übernehmen"}
             />
             {quantityError && (
               <Alert severity="warning">{quantityError}</Alert>
