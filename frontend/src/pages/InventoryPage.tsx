@@ -1018,7 +1018,7 @@ const InventoryPage = () => {
     setQuantityError(null);
   };
 
-  const handleQuantityConfirm = async () => {
+  const handleQuantityConfirm = async (mode: 'replace' | 'add' = 'replace') => {
     if (!pendingItem) {
       handleQuantityDialogClose();
       return;
@@ -1034,15 +1034,31 @@ const InventoryPage = () => {
 
     // Leere Eingabe: bereits erfasst → aktuellen Wert behalten; neu → Systemwert übernehmen
     const fallback = alreadyScannedLine ? alreadyScannedLine.countedQuantity : expected;
-    const counted = normalized === "" ? fallback : Number.parseInt(normalized, 10);
-    if (Number.isNaN(counted) || counted < 0) {
+    const enteredValue = normalized === "" ? fallback : Number.parseInt(normalized, 10);
+    if (Number.isNaN(enteredValue) || enteredValue < 0) {
       setQuantityError("Bitte eine gültige Menge eingeben.");
+      return;
+    }
+
+    // Addier-Modus: Eingabe auf vorhandenen Wert aufschlagen
+    if (mode === 'add' && alreadyScannedLine) {
+      if (!normalized) {
+        setQuantityError("Bitte eine Menge zum Hinzufügen eingeben.");
+        return;
+      }
+      const newTotal = alreadyScannedLine.countedQuantity + enteredValue;
+      await submitInventoryLine({
+        item: pendingItem,
+        counted: newTotal,
+        expected,
+        vehicle: selectedVehicle ?? defaultVehicle ?? undefined,
+      });
       return;
     }
 
     await submitInventoryLine({
       item: pendingItem,
-      counted,
+      counted: enteredValue,
       expected,
       vehicle: selectedVehicle ?? defaultVehicle ?? undefined,
     });
@@ -1863,7 +1879,9 @@ const InventoryPage = () => {
               }}
               inputProps={{ min: 0, inputMode: "numeric" }}
               fullWidth
-              helperText={alreadyScannedLine ? "Leer lassen = aktuellen Wert beibehalten" : "Leer lassen = erwartete Menge übernehmen"}
+              helperText={alreadyScannedLine
+                ? `Korrigieren: neuer Gesamtwert · Hinzufügen: wird auf ${alreadyScannedLine.countedQuantity} addiert`
+                : "Leer lassen = erwartete Menge übernehmen"}
             />
             {quantityError && (
               <Alert severity="warning">{quantityError}</Alert>
@@ -1872,13 +1890,34 @@ const InventoryPage = () => {
         </DialogContent>
         <DialogActions>
           <Button onClick={handleQuantityDialogClose}>Abbrechen</Button>
-          <Button
-            variant="contained"
-            onClick={handleQuantityConfirm}
-            disabled={isLoading}
-          >
-            Übernehmen
-          </Button>
+          {alreadyScannedLine ? (
+            <>
+              <Button
+                variant="outlined"
+                color="primary"
+                onClick={() => handleQuantityConfirm('replace')}
+                disabled={isLoading}
+              >
+                Korrigieren
+              </Button>
+              <Button
+                variant="contained"
+                color="success"
+                onClick={() => handleQuantityConfirm('add')}
+                disabled={isLoading}
+              >
+                + Hinzufügen
+              </Button>
+            </>
+          ) : (
+            <Button
+              variant="contained"
+              onClick={() => handleQuantityConfirm('replace')}
+              disabled={isLoading}
+            >
+              Übernehmen
+            </Button>
+          )}
         </DialogActions>
       </Dialog>
 
