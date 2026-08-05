@@ -325,7 +325,10 @@ const QuickBookingPage: React.FC = () => {
       }
     } else {
       // Ref nutzen statt bookingList direkt (stale closure im useCallback vermeiden)
-      const existing = bookingListRef.current.find((e) => e.itemId === found.id && e.mode === mode);
+      const entryRef = reference || "";
+      const existing = bookingListRef.current.find(
+        (e) => e.itemId === found.id && e.mode === mode && e.reference === entryRef,
+      );
       if (existing) {
         setCameraScanFeedback({
           type: "duplicate",
@@ -335,10 +338,12 @@ const QuickBookingPage: React.FC = () => {
         setCameraScanFeedback({ type: "success", text: `${found.code} – zur Liste hinzugefügt` });
       }
       setBookingList((prev) => {
-        const ex = prev.find((e) => e.itemId === found.id && e.mode === mode);
+        const ex = prev.find(
+          (e) => e.itemId === found.id && e.mode === mode && e.reference === entryRef,
+        );
         if (ex) {
           return prev.map((e) =>
-            e.itemId === found.id && e.mode === mode
+            e.itemId === found.id && e.mode === mode && e.reference === entryRef
               ? { ...e, quantity: e.quantity + quantity }
               : e,
           );
