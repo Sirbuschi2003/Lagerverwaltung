@@ -1,6 +1,6 @@
-# Lagerverwaltung – KFZ-Teilelager Plattform
+# Lagerverwaltung
 
-Eine vollständige, webbasierte Lagerverwaltungssoftware für KFZ-Betriebe. Verwaltet Artikel, Fahrzeugbestände, Bestellungen und Inventuren – mit mobiler Scanner-App und Offline-Unterstützung.
+Eine vollständige, webbasierte Lagerverwaltungssoftware. Verwaltet Artikel, Lager- und Fahrzeugbestände, Bestellungen und Inventuren – mit mobiler Scanner-App und Offline-Unterstützung.
 
 ---
 
@@ -26,10 +26,10 @@ Eine vollständige, webbasierte Lagerverwaltungssoftware für KFZ-Betriebe. Verw
 Die Lagerverwaltung ist eine **selbst gehostete Webanwendung**, die als Progressive Web App (PWA) im Browser läuft – auf dem PC genauso wie auf dem Smartphone oder Tablet.
 
 Kern-Anwendungsfälle:
-- Techniker scannen Teile per QR-Code ein und aus, auch ohne stabile Internetverbindung
-- Das Lager behält jederzeit den Überblick über Bestände pro Fahrzeug und Lagerort
-- Manager steuern Bestellungen, sehen Fehlbestände und führen Inventuren durch
-- Alle Vorgänge werden protokolliert und sind nachvollziehbar
+- Internes Lager: Bestände in Lagerhallen und Lagerorten verwalten, Wareneingänge buchen, Bestellungen steuern
+- Fahrzeuglager: Techniker scannen Teile direkt am Fahrzeug per QR-Code ein und aus – auch ohne stabile Verbindung
+- Manager behalten den Überblick über Fehlbestände, führen Inventuren durch und erstellen Berichte
+- Alle Vorgänge werden protokolliert und sind lückenlos nachvollziehbar
 
 ---
 
