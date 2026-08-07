@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import {
   Box,
   Container,
@@ -16,6 +17,7 @@ import CheckCircleIcon from "@mui/icons-material/CheckCircle";
 import LockIcon from "@mui/icons-material/Lock";
 import useAuthStore from "../store/useAuthStore";
 import useSystemConfigStore from "../store/useSystemConfigStore";
+import { checkSetupStatus } from "../utils/api";
 import PasswordResetPage from "./PasswordResetPage";
 import { APP_VERSION } from "../utils/version";
 import { hasOfflineCredentials } from "../utils/offlineAuth";
@@ -42,6 +44,7 @@ const toLoginRequestError = (value: unknown): LoginRequestError => {
 };
 
 const LoginPage = () => {
+  const navigate = useNavigate();
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down("sm"));
   const login = useAuthStore((state) => state.login);
@@ -57,6 +60,12 @@ const LoginPage = () => {
   const [isOffline, setIsOffline] = useState(!navigator.onLine);
   const [offlineLoginAvailable, setOfflineLoginAvailable] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+
+  useEffect(() => {
+    checkSetupStatus().then(({ needsSetup }) => {
+      if (needsSetup) navigate("/setup", { replace: true });
+    }).catch(() => undefined);
+  }, [navigate]);
 
   useEffect(() => {
     const handleOnline = () => setIsOffline(false);
