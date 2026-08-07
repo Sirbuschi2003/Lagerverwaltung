@@ -3,8 +3,6 @@ import { InjectRepository } from "@nestjs/typeorm";
 import { Repository, DataSource } from "typeorm";
 import * as fs from 'fs';
 import * as path from 'path';
-// eslint-disable-next-line @typescript-eslint/no-require-imports
-const archiverCreate = require('archiver') as (format: 'zip' | 'tar', options?: object) => import('archiver').Archiver;
 
 import { UsersService } from "../users/users.service";
 import { User } from "../users/entities/user.entity";
@@ -992,7 +990,10 @@ export class SetupService {
   }
 
   async streamFullArchive(res: import('express').Response): Promise<void> {
-    const archive = archiverCreate('zip', { zlib: { level: 6 } });
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const archiverLib = require('archiver');
+    const archiverFn: (format: string, opts?: object) => import('archiver').Archiver = archiverLib.default ?? archiverLib;
+    const archive = archiverFn('zip', { zlib: { level: 6 } });
     const timestamp = new Date().toISOString().slice(0, 19).replace(/:/g, '-');
     const filename = `lagerverwaltung-vollbackup-${timestamp}.zip`;
 
