@@ -44,7 +44,10 @@ const SetupPage = () => {
   const validate = () => {
     if (!form.username.trim()) return "Bitte Benutzernamen eingeben.";
     if (!form.displayName.trim()) return "Bitte Anzeigenamen eingeben.";
-    if (form.password.length < 6) return "Passwort muss mindestens 6 Zeichen haben.";
+    if (form.password.length < 8) return "Passwort muss mindestens 8 Zeichen haben.";
+    if (!/[A-Z]/.test(form.password)) return "Passwort muss mindestens einen Großbuchstaben enthalten.";
+    if (!/[0-9]/.test(form.password)) return "Passwort muss mindestens eine Zahl enthalten.";
+    if (!/[^A-Za-z0-9]/.test(form.password)) return "Passwort muss mindestens ein Sonderzeichen enthalten.";
     if (form.password !== form.confirmPassword) return "Passwörter stimmen nicht überein.";
     return null;
   };
@@ -67,9 +70,15 @@ const SetupPage = () => {
         password: form.password,
       });
       navigate("/login", { replace: true });
-    } catch (submitError) {
+    } catch (submitError: unknown) {
       console.error(submitError);
-      setError("Setup konnte nicht abgeschlossen werden. Bitte erneut versuchen.");
+      const errObj = submitError as { response?: { data?: { message?: string | string[] } } };
+      const backendMsg = errObj?.response?.data?.message;
+      if (backendMsg) {
+        setError(Array.isArray(backendMsg) ? backendMsg.join(" ") : backendMsg);
+      } else {
+        setError("Setup konnte nicht abgeschlossen werden. Bitte erneut versuchen.");
+      }
     } finally {
       setSubmitting(false);
     }
