@@ -275,8 +275,8 @@ export class SetupService {
           kind: ic.kind,
           itemId: (ic as any).item?.id ?? null,
         })),
-        purchaseOrderPdfs: await this.collectPurchaseOrderPdfs(),
-        itemImages: await this.collectItemImages(),
+        // Hinweis: Artikel-Bilder und Bestellungs-PDFs werden NICHT im JSON-Backup gesichert.
+        // Diese liegen in Docker-Volumes und werden über die Volume-Backup-Infrastruktur (rsync/NAS) gesichert.
       },
     };
   }
@@ -987,6 +987,38 @@ export class SetupService {
     } catch (error: any) {
       this.logger.error('Fehler bei der Backup-Bereinigung:', error);
     }
+  }
+
+  async streamFullArchive(res: import('express').Response): Promise<void> {
+    const archiver = (await import('archiver')).default;
+    const archive = archiver('zip', { zlib: { level: 6 } });
+    const timestamp = new Date().toISOString().slice(0, 19).replace(/:/g, '-');
+    const filename = `lagerverwaltung-vollbackup-${timestamp}.zip`;
+
+    res.set({
+      'Content-Type': 'application/zip',
+      'Content-Disposition': `attachment; filename="${filename}"`,
+    });
+
+    archive.pipe(res);
+
+    // Datenbankdaten als JSON
+    const backup = await this.createBackup();
+    archive.append(JSON.stringify(backup, null, 2), { name: 'data.json' });
+
+    // Artikel-Bilder
+    const imageDir = this.getItemImageStoragePath();
+    if (fs.existsSync(imageDir)) {
+      archive.directory(imageDir, 'item-images');
+    }
+
+    // Bestellungs-PDFs
+    const pdfDir = this.getPurchaseOrderStoragePath();
+    if (fs.existsSync(pdfDir)) {
+      archive.directory(pdfDir, 'purchase-orders');
+    }
+
+    await archive.finalize();
   }
 
   async getLastAutoBackupTime(): Promise<string | null> {

@@ -85,6 +85,17 @@ export class SetupController {
   }
 
   /**
+   * Vollständiges Archiv (ZIP): Datenbankdaten + Bilder + Bestellungs-PDFs
+   */
+  @Get("backup/archive")
+  @UseGuards(JwtAuthGuard, RolesGuard, PermissionsGuard)
+  @Roles("MANAGER")
+  @Permissions("backup.access")
+  async downloadFullArchive(@Res() res: Response) {
+    await this.setupService.streamFullArchive(res);
+  }
+
+  /**
    * MySQL SQL-Dump herunterladen
    */
   @Get("backup/sql")

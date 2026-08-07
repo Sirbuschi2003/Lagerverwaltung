@@ -24,7 +24,7 @@ import {
 } from '@mui/icons-material';
 import api, {
   getAutoBackupConfig, setAutoBackupConfig, getLastAutoBackup,
-  listAutoBackups, downloadAutoBackup, deleteAutoBackup, downloadSqlDump,
+  listAutoBackups, downloadAutoBackup, deleteAutoBackup, downloadSqlDump, downloadFullArchive,
   restoreSelective, restoreFullBackup, loadBackupFromServer,
   type AutoBackupConfig, type AutoBackupFile, type RestoreFilters,
 } from '../utils/api';
@@ -118,6 +118,7 @@ const BackupPage = () => {
   // Backup erstellen
   const [backupLoading, setBackupLoading] = useState(false);
   const [sqlDumpLoading, setSqlDumpLoading] = useState(false);
+  const [archiveLoading, setArchiveLoading] = useState(false);
   const [backupMessage, setBackupMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
   // Auto-Backup
@@ -280,6 +281,27 @@ const BackupPage = () => {
     }
   };
 
+  // ── Vollständiges Archiv (ZIP) herunterladen ──────────────────────────────
+
+  const handleDownloadFullArchive = async () => {
+    setArchiveLoading(true);
+    setBackupMessage(null);
+    try {
+      const blob = await downloadFullArchive();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `lagerverwaltung-vollbackup-${new Date().toISOString().slice(0, 10)}.zip`;
+      a.click();
+      window.URL.revokeObjectURL(url);
+      setBackupMessage({ type: 'success', text: 'Vollständiges Archiv erfolgreich heruntergeladen.' });
+    } catch {
+      setBackupMessage({ type: 'error', text: 'Archiv-Download fehlgeschlagen.' });
+    } finally {
+      setArchiveLoading(false);
+    }
+  };
+
   // ── SQL-Dump herunterladen ────────────────────────────────────────────────
 
   const handleDownloadSqlDump = async () => {
@@ -353,28 +375,39 @@ const BackupPage = () => {
           <BackupIcon /> Backup erstellen
         </Typography>
         <Typography variant="body2" color="text.secondary" paragraph>
-          Lädt ein vollständiges Backup aller Daten herunter (Artikel, Fahrzeuge, Benutzer, Bestände, Buchungen, Lagerorte, Niederlassungen …).
+          Lädt ein vollständiges Backup aller Datenbankdaten herunter (Artikel, Fahrzeuge, Benutzer, Bestände, Buchungen, Lagerorte, Niederlassungen …).
         </Typography>
-        <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
+        <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap', mb: 2 }}>
           <Button
             variant="contained"
             onClick={handleDownloadBackup}
-            disabled={backupLoading || sqlDumpLoading}
+            disabled={backupLoading || sqlDumpLoading || archiveLoading}
             startIcon={backupLoading ? <CircularProgress size={20} /> : <BackupIcon />}
           >
-            {backupLoading ? 'Erstelle…' : 'JSON-Backup herunterladen'}
+            {backupLoading ? 'Erstelle…' : 'JSON-Backup (nur DB)'}
+          </Button>
+          <Button
+            variant="contained"
+            color="secondary"
+            onClick={handleDownloadFullArchive}
+            disabled={backupLoading || sqlDumpLoading || archiveLoading}
+            startIcon={archiveLoading ? <CircularProgress size={20} /> : <DownloadIcon />}
+          >
+            {archiveLoading ? 'Erstelle Archiv…' : 'Vollständiges Archiv (ZIP)'}
           </Button>
           <Button
             variant="outlined"
             onClick={handleDownloadSqlDump}
-            disabled={backupLoading || sqlDumpLoading}
+            disabled={backupLoading || sqlDumpLoading || archiveLoading}
             startIcon={sqlDumpLoading ? <CircularProgress size={20} /> : <SqlIcon />}
           >
             {sqlDumpLoading ? 'Erstelle SQL-Dump…' : 'MySQL-Dump (.sql)'}
           </Button>
         </Box>
-        <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 1 }}>
-          MySQL-Dump enthält die rohen SQL-Tabellendaten – nützlich für Diagnose und direkte Datenbankwiederherstellung.
+        <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
+          <strong>JSON-Backup</strong>: Nur Datenbankdaten – klein, schnell, für selektive Wiederherstellung. &nbsp;|&nbsp;
+          <strong>Vollständiges Archiv (ZIP)</strong>: DB + Artikel-Bilder + Bestellungs-PDFs – empfohlen für vollständige Sicherung. &nbsp;|&nbsp;
+          <strong>MySQL-Dump</strong>: Rohe SQL-Tabellendaten für Diagnose.
         </Typography>
       </Paper>
 
