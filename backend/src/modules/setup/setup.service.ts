@@ -127,7 +127,7 @@ export class SetupService {
       userPermissions,
       itemCodes,
     ] = await Promise.all([
-      this.userRepository.find(),
+      this.userRepository.find({ relations: ['locations'] }),
       this.itemRepository.find({ relations: ["storageLocation", "supplier"] }),
       this.vehicleRepository.find(),
       this.locationRepository.createQueryBuilder('loc')
