@@ -135,7 +135,7 @@ export class SetupService {
         .leftJoinAndSelect('loc.vehicle', 'vehicle')
         .getMany(),
       this.supplierRepository.find(),
-      this.purchaseOrderRepository.find(),
+      this.purchaseOrderRepository.find({ relations: ["supplier", "location"] }),
       this.purchaseOrderLineRepository.find({ relations: ["order", "item"] }),
       this.stockLevelRepository.createQueryBuilder('sl')
         .leftJoinAndSelect('sl.item', 'item')
