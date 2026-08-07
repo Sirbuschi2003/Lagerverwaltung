@@ -38,6 +38,8 @@ import InfoOutlinedIcon from "@mui/icons-material/InfoOutlined";
 import QrCodeScannerIcon from "@mui/icons-material/QrCodeScanner";
 import CloseIcon from "@mui/icons-material/Close";
 import WarningAmberIcon from "@mui/icons-material/WarningAmber";
+import PrintIcon from "@mui/icons-material/Print";
+import { QRCodeSVG } from "qrcode.react";
 import { io, type Socket } from "socket.io-client";
 import useItemsStore from "../store/useItemsStore";
 import useAuthStore from "../store/useAuthStore";
@@ -98,6 +100,9 @@ const QuickBookingPage: React.FC = () => {
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [cameraOpen, setCameraOpen] = useState(false);
   const [cameraScanFeedback, setCameraScanFeedback] = useState<CameraScanFeedback | null>(null);
+  const [qrDialogOpen, setQrDialogOpen] = useState(false);
+  const qrConfirmRef = useRef<HTMLDivElement>(null);
+  const qrResetRef = useRef<HTMLDivElement>(null);
   const [duplicateWarnings, setDuplicateWarnings] = useState<DuplicateWarning[]>([]);
   const [cameraScanTarget, setCameraScanTarget] = useState<"barcode" | "source">("barcode");
   const [syncConnected, setSyncConnected] = useState(false);
@@ -231,6 +236,26 @@ const QuickBookingPage: React.FC = () => {
   const closeCameraDialog = () => {
     setCameraOpen(false);
     setCameraScanFeedback(null);
+  };
+
+  const handlePrintQrCodes = () => {
+    const confirmSvg = qrConfirmRef.current?.innerHTML ?? "";
+    const resetSvg = qrResetRef.current?.innerHTML ?? "";
+    const win = window.open("", "_blank");
+    if (!win) return;
+    win.document.write(`<!DOCTYPE html><html><head><title>Schnellbuchung QR-Aktionscodes</title>
+      <style>
+        body{font-family:Arial,sans-serif;display:flex;justify-content:center;gap:48px;padding:48px;background:#fff;}
+        .card{text-align:center;border:2px solid #ccc;border-radius:10px;padding:24px 32px;}
+        h2{margin:0 0 16px 0;font-size:18px;}
+        p{margin:12px 0 0 0;font-size:13px;color:#555;max-width:160px;}
+        @media print{@page{size:A5 landscape;margin:10mm;}}
+      </style></head><body>
+      <div class="card"><h2>✅ Übernehmen</h2>${confirmSvg}<p>Buchung abschließen</p></div>
+      <div class="card"><h2>🔄 Neue Vorgangsnummer</h2>${resetSvg}<p>Vorgangsnummer zurücksetzen, Artikel bleiben in der Liste</p></div>
+    </body></html>`);
+    win.document.close();
+    setTimeout(() => { win.focus(); win.print(); }, 300);
   };
 
   const lookupItem = async (code: string): Promise<ItemDto | null> => {
@@ -376,6 +401,29 @@ const QuickBookingPage: React.FC = () => {
 
   const handleScan = async (code: string) => {
     if (!code.trim()) return;
+
+    // QR-Aktionscodes auswerten bevor Artikelsuche startet
+    const trimmed = code.trim();
+    if (trimmed === "QB:CONFIRM") {
+      setBarcodeInput("");
+      if (!sofortBuchen && bookingList.length > 0) {
+        void handleUebernehmen();
+      } else {
+        // Im Sofort-Modus sind Artikel bereits gebucht → nur Vorgangsnummer zurücksetzen
+        setReference("");
+        setTimeout(() => { referenceRef.current?.focus(); }, 80);
+        playSuccess();
+      }
+      return;
+    }
+    if (trimmed === "QB:RESET") {
+      setBarcodeInput("");
+      setReference("");
+      setTimeout(() => { referenceRef.current?.focus(); }, 80);
+      playSuccess();
+      return;
+    }
+
     // Verhindert parallele Verarbeitung falls Cooldown kürzer als API-Antwortzeit
     if (busyRef.current) return;
     busyRef.current = true;
@@ -383,13 +431,13 @@ const QuickBookingPage: React.FC = () => {
     setItemNotFound(false);
     setBarcodeInput("");
 
-    const found = await lookupItem(code.trim());
+    const found = await lookupItem(trimmed);
 
     if (!found) {
       playError();
       setItemNotFound(true);
       setCurrentItem(null);
-      setCameraScanFeedback({ type: "error", text: `"${code.trim()}" – Artikel nicht gefunden` });
+      setCameraScanFeedback({ type: "error", text: `"${trimmed}" – Artikel nicht gefunden` });
       busyRef.current = false;
       setBusy(false);
       refocusBarcode();
@@ -681,6 +729,12 @@ const QuickBookingPage: React.FC = () => {
                 ? "Workflow: Vorgangsnummer → Artikel (z.B. Tonerlager)"
                 : "Workflow: Direkt Artikel (z.B. Teilelager)"}
             </Typography>
+            <Box sx={{ flex: 1 }} />
+            <Tooltip title="QR-Aktionscodes drucken (Übernehmen / Neue Vorgangsnummer)">
+              <Button size="small" variant="text" startIcon={<PrintIcon fontSize="small" />} onClick={() => setQrDialogOpen(true)} sx={{ fontSize: "0.7rem", color: "text.secondary" }}>
+                QR-Aktionscodes
+              </Button>
+            </Tooltip>
           </Stack>
           <Stack direction="row" spacing={1} alignItems="center">
             <Switch size="small" checked={duplicateCheckEnabled} onChange={toggleDuplicateCheck} />
@@ -1109,6 +1163,44 @@ const QuickBookingPage: React.FC = () => {
           </Stack>
         </Box>
       </Paper>
+
+      {/* ── QR-Aktionscodes Dialog ── */}
+      <Dialog open={qrDialogOpen} onClose={() => setQrDialogOpen(false)} maxWidth="sm" fullWidth>
+        <DialogTitle sx={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+          QR-Aktionscodes drucken
+          <IconButton size="small" onClick={() => setQrDialogOpen(false)}><CloseIcon /></IconButton>
+        </DialogTitle>
+        <DialogContent>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
+            Diese QR-Codes ausdrucken und z.B. im Fahrzeug oder Lager aufhängen. Beim Scannen wird die jeweilige Aktion direkt ausgelöst.
+          </Typography>
+          <Box sx={{ display: "flex", gap: 4, justifyContent: "center", flexWrap: "wrap" }}>
+            <Box sx={{ textAlign: "center" }}>
+              <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1.5 }}>✅ Übernehmen</Typography>
+              <Box ref={qrConfirmRef} sx={{ display: "inline-block", border: "3px solid", borderColor: "success.main", borderRadius: 2, p: 1.5 }}>
+                <QRCodeSVG value="QB:CONFIRM" size={160} />
+              </Box>
+              <Typography variant="caption" display="block" color="text.secondary" sx={{ mt: 1, maxWidth: 180 }}>
+                Buchung abschließen (Übernehmen)
+              </Typography>
+            </Box>
+            <Box sx={{ textAlign: "center" }}>
+              <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1.5 }}>🔄 Neue Vorgangsnummer</Typography>
+              <Box ref={qrResetRef} sx={{ display: "inline-block", border: "3px solid", borderColor: "info.main", borderRadius: 2, p: 1.5 }}>
+                <QRCodeSVG value="QB:RESET" size={160} />
+              </Box>
+              <Typography variant="caption" display="block" color="text.secondary" sx={{ mt: 1, maxWidth: 180 }}>
+                Vorgangsnummer löschen, Artikel bleiben in der Liste
+              </Typography>
+            </Box>
+          </Box>
+          <Box sx={{ display: "flex", justifyContent: "center", mt: 3 }}>
+            <Button variant="contained" startIcon={<PrintIcon />} onClick={handlePrintQrCodes}>
+              Drucken
+            </Button>
+          </Box>
+        </DialogContent>
+      </Dialog>
 
       {/* ── Kamera-Scanner Dialog ── */}
       <Dialog
