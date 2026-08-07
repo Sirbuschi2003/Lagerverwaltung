@@ -1,4 +1,6 @@
-import { Body, ConflictException, Controller, Delete, Get, Param, Post, Res, StreamableFile, UseGuards } from "@nestjs/common";
+import { BadRequestException, Body, ConflictException, Controller, Delete, Get, Param, Post, Res, StreamableFile, UploadedFile, UseGuards, UseInterceptors } from "@nestjs/common";
+import { FileInterceptor } from "@nestjs/platform-express";
+import { memoryStorage } from "multer";
 import { Readable } from "stream";
 import { Throttle } from "@nestjs/throttler";
 import { Response } from 'express';
@@ -93,6 +95,20 @@ export class SetupController {
   @Permissions("backup.access")
   async downloadFullArchive(@Res() res: Response) {
     await this.setupService.streamFullArchive(res);
+  }
+
+  /**
+   * Vollständiges Archiv (ZIP) wiederherstellen: Datenbankdaten + Bilder + Bestellungs-PDFs
+   */
+  @Post("restore/archive")
+  @UseGuards(JwtAuthGuard, RolesGuard, PermissionsGuard)
+  @Roles("MANAGER")
+  @Permissions("backup.access")
+  @UseInterceptors(FileInterceptor("file", { storage: memoryStorage(), limits: { fileSize: 2 * 1024 * 1024 * 1024 } }))
+  async restoreFromArchive(@UploadedFile() file: Express.Multer.File) {
+    if (!file) throw new BadRequestException('Keine Datei hochgeladen');
+    await this.setupService.restoreFromArchive(file.buffer);
+    return { success: true, message: 'Archiv-Backup erfolgreich wiederhergestellt' };
   }
 
   /**

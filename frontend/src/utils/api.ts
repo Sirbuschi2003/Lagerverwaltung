@@ -1788,6 +1788,15 @@ export const restoreFullBackup = async (backup: any): Promise<void> => {
   await api.post('/setup/restore', backup, { timeout: 300000 });
 };
 
+export const restoreFromArchive = async (file: File): Promise<void> => {
+  const form = new FormData();
+  form.append('file', file);
+  await api.post('/setup/restore/archive', form, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+    timeout: 600000,
+  });
+};
+
 // Bewegungsverlauf
 export interface MovementDto {
   id: string;

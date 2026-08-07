@@ -25,7 +25,7 @@ import {
 import api, {
   getAutoBackupConfig, setAutoBackupConfig, getLastAutoBackup,
   listAutoBackups, downloadAutoBackup, deleteAutoBackup, downloadSqlDump, downloadFullArchive,
-  restoreSelective, restoreFullBackup, loadBackupFromServer,
+  restoreSelective, restoreFullBackup, restoreFromArchive, loadBackupFromServer,
   type AutoBackupConfig, type AutoBackupFile, type RestoreFilters,
 } from '../utils/api';
 
@@ -149,6 +149,11 @@ const BackupPage = () => {
   const [fullRestoreLoading, setFullRestoreLoading] = useState(false);
   const [fullRestoreConfirm, setFullRestoreConfirm] = useState(false);
 
+  // ZIP-Archiv Wiederherstellung
+  const [archiveRestoreLoading, setArchiveRestoreLoading] = useState(false);
+  const [archiveRestoreConfirm, setArchiveRestoreConfirm] = useState(false);
+  const [pendingArchiveFile, setPendingArchiveFile] = useState<File | null>(null);
+
   // Selektive Wiederherstellung
   const [selectiveLoading, setSelectiveLoading] = useState(false);
   const [confirmDialog, setConfirmDialog] = useState(false);
@@ -247,6 +252,32 @@ const BackupPage = () => {
       setBackupMessage({ type: 'error', text: `Vollständige Wiederherstellung fehlgeschlagen: ${e.message}` });
     } finally {
       setFullRestoreLoading(false);
+    }
+  };
+
+  // ── ZIP-Archiv Wiederherstellung ──────────────────────────────────────────
+
+  const handleArchiveFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    event.target.value = '';
+    setPendingArchiveFile(file);
+    setArchiveRestoreConfirm(true);
+  };
+
+  const handleArchiveRestore = async () => {
+    if (!pendingArchiveFile) return;
+    setArchiveRestoreLoading(true);
+    setArchiveRestoreConfirm(false);
+    try {
+      await restoreFromArchive(pendingArchiveFile);
+      setBackupMessage({ type: 'success', text: 'Archiv-Backup wiederhergestellt! Bitte neu anmelden.' });
+      setPendingArchiveFile(null);
+      setTimeout(() => { localStorage.removeItem('token'); navigate('/login'); }, 2000);
+    } catch (e: any) {
+      setBackupMessage({ type: 'error', text: `ZIP-Wiederherstellung fehlgeschlagen: ${e.message}` });
+    } finally {
+      setArchiveRestoreLoading(false);
     }
   };
 
@@ -356,7 +387,7 @@ const BackupPage = () => {
   // ─────────────────────────────────────────────────────────────────────────
   return (
     <Container maxWidth="md" sx={{ mt: 4, mb: 4 }}>
-      <Backdrop open={fullRestoreLoading || selectiveLoading} sx={{ color: '#fff', zIndex: t => t.zIndex.drawer + 1, flexDirection: 'column', gap: 2 }}>
+      <Backdrop open={fullRestoreLoading || selectiveLoading || archiveRestoreLoading} sx={{ color: '#fff', zIndex: t => t.zIndex.drawer + 1, flexDirection: 'column', gap: 2 }}>
         <CircularProgress color="inherit" />
         <Typography>Wiederherstellung läuft…</Typography>
       </Backdrop>
@@ -424,10 +455,20 @@ const BackupPage = () => {
               Lade zuerst eine Backup-Datei – entweder von deinem Gerät oder aus der Serverliste unten.
               Danach kannst du genau auswählen, was wiederhergestellt werden soll.
             </Alert>
-            <Button variant="outlined" component="label" startIcon={<LoadIcon />}>
-              Backup-Datei auswählen
-              <input type="file" accept=".json" hidden onChange={handleFileSelect} />
-            </Button>
+            <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
+              <Button variant="outlined" component="label" startIcon={<LoadIcon />}>
+                JSON-Backup auswählen
+                <input type="file" accept=".json" hidden onChange={handleFileSelect} />
+              </Button>
+              <Button variant="outlined" color="secondary" component="label" startIcon={<RestoreIcon />}>
+                ZIP-Archiv wiederherstellen
+                <input type="file" accept=".zip" hidden onChange={handleArchiveFileSelect} />
+              </Button>
+            </Box>
+            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 1 }}>
+              <strong>JSON-Backup</strong>: Selektive Wiederherstellung von DB-Daten. &nbsp;|&nbsp;
+              <strong>ZIP-Archiv</strong>: Vollständige Wiederherstellung inkl. Bilder &amp; PDFs (überschreibt alles).
+            </Typography>
           </Box>
         ) : (
           <Box>
@@ -843,6 +884,27 @@ const BackupPage = () => {
           <Button onClick={() => setConfirmDialog(false)}>Abbrechen</Button>
           <Button color="warning" variant="contained" onClick={handleSelectiveRestore}>
             Jetzt wiederherstellen
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* ZIP-Archiv wiederherstellen bestätigen */}
+      <Dialog open={archiveRestoreConfirm} onClose={() => { setArchiveRestoreConfirm(false); setPendingArchiveFile(null); }}>
+        <DialogTitle>ZIP-Archiv wiederherstellen</DialogTitle>
+        <DialogContent>
+          <Alert severity="error" sx={{ mb: 2 }}>
+            <strong>ACHTUNG:</strong> Alle aktuellen Daten (DB, Bilder, PDFs) werden unwiderruflich durch das Archiv ersetzt!
+          </Alert>
+          <DialogContentText>
+            Datei: <strong>{pendingArchiveFile?.name}</strong><br />
+            Das schließt Artikel, Fahrzeuge, Bestände, Benutzer, Lagerorte, Buchungen, Einstellungen, Artikel-Bilder und Bestellungs-PDFs ein.
+            Bist du absolut sicher?
+          </DialogContentText>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => { setArchiveRestoreConfirm(false); setPendingArchiveFile(null); }}>Abbrechen</Button>
+          <Button color="error" variant="contained" onClick={handleArchiveRestore}>
+            Ja, vollständig wiederherstellen
           </Button>
         </DialogActions>
       </Dialog>

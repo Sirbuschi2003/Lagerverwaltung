@@ -3,6 +3,8 @@ import { InjectRepository } from "@nestjs/typeorm";
 import { Repository, DataSource } from "typeorm";
 import * as fs from 'fs';
 import * as path from 'path';
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const archiverCreate = require('archiver') as (format: 'zip' | 'tar', options?: object) => import('archiver').Archiver;
 
 import { UsersService } from "../users/users.service";
 import { User } from "../users/entities/user.entity";
@@ -990,8 +992,7 @@ export class SetupService {
   }
 
   async streamFullArchive(res: import('express').Response): Promise<void> {
-    const archiver = (await import('archiver')).default;
-    const archive = archiver('zip', { zlib: { level: 6 } });
+    const archive = archiverCreate('zip', { zlib: { level: 6 } });
     const timestamp = new Date().toISOString().slice(0, 19).replace(/:/g, '-');
     const filename = `lagerverwaltung-vollbackup-${timestamp}.zip`;
 
@@ -1019,6 +1020,37 @@ export class SetupService {
     }
 
     await archive.finalize();
+  }
+
+  async restoreFromArchive(buffer: Buffer): Promise<void> {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const AdmZip = require('adm-zip') as new (buffer: Buffer) => any;
+    const zip = new AdmZip(buffer);
+
+    const dataEntry = zip.getEntry('data.json');
+    if (!dataEntry) throw new Error('data.json nicht im Archiv gefunden');
+    const backup = JSON.parse(dataEntry.getData().toString('utf8'));
+    await this.restoreBackup(backup);
+
+    const imageDir = this.getItemImageStoragePath();
+    const pdfDir = this.getPurchaseOrderStoragePath();
+
+    for (const entry of zip.getEntries() as any[]) {
+      if (entry.isDirectory) continue;
+      const name = entry.entryName as string;
+
+      if (name.startsWith('item-images/')) {
+        const filename = path.basename(name);
+        if (!filename) continue;
+        fs.mkdirSync(imageDir, { recursive: true });
+        fs.writeFileSync(path.join(imageDir, filename), entry.getData());
+      } else if (name.startsWith('purchase-orders/')) {
+        const filename = path.basename(name);
+        if (!filename) continue;
+        fs.mkdirSync(pdfDir, { recursive: true });
+        fs.writeFileSync(path.join(pdfDir, filename), entry.getData());
+      }
+    }
   }
 
   async getLastAutoBackupTime(): Promise<string | null> {
