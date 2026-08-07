@@ -659,13 +659,25 @@ const BackupPage = () => {
             inputProps={{ min: 1, max: 365 }}
             sx={{ width: 160 }}
           />
+          <TextField
+            size="small" label="Max. Anzahl Backups" type="number"
+            value={autoConfig.maxAutoBackups ?? ''}
+            placeholder="unbegrenzt"
+            onChange={e => setAutoConfig(c => ({
+              ...c,
+              maxAutoBackups: e.target.value === '' ? undefined : Math.max(1, Math.min(100, Number(e.target.value) || 1)),
+            }))}
+            disabled={!autoConfig.enabled || savingConfig}
+            inputProps={{ min: 1, max: 100 }}
+            sx={{ width: 180 }}
+          />
           <Button variant="contained" disabled={savingConfig} onClick={async () => {
             setSavingConfig(true);
             try {
               const [h, m] = autoConfig.time.split(':').map(Number);
               const d = new Date(); d.setHours(h, m, 0, 0);
               const utcTime = `${String(d.getUTCHours()).padStart(2, '0')}:${String(d.getUTCMinutes()).padStart(2, '0')}`;
-              await setAutoBackupConfig({ enabled: autoConfig.enabled, frequency: autoConfig.frequency, time: utcTime, retentionDays: autoConfig.retentionDays });
+              await setAutoBackupConfig({ enabled: autoConfig.enabled, frequency: autoConfig.frequency, time: utcTime, retentionDays: autoConfig.retentionDays, maxAutoBackups: autoConfig.maxAutoBackups });
               setSnackbar({ open: true, message: 'Gespeichert', severity: 'success' });
             } catch { setSnackbar({ open: true, message: 'Fehler beim Speichern', severity: 'error' }); }
             finally { setSavingConfig(false); }
@@ -673,7 +685,7 @@ const BackupPage = () => {
         </Box>
         <Alert severity={autoConfig.enabled ? 'success' : 'info'}>
           {autoConfig.enabled
-            ? `Aktiv: ${autoConfig.frequency} um ${autoConfig.time} (${autoConfig.retentionDays || 30} Tage)`
+            ? `Aktiv: ${autoConfig.frequency} um ${autoConfig.time} · ${autoConfig.retentionDays || 30} Tage · max. ${autoConfig.maxAutoBackups ?? '∞'} Backups`
             : 'Automatische Backups sind deaktiviert.'}
         </Alert>
         <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>

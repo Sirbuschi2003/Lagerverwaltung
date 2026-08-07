@@ -3,7 +3,7 @@ import { logApiCall } from "../hooks/useGlobalLogging";
 
 const api = axios.create({
   baseURL: "/api",
-  timeout: 3000, // 3 Sekunden Timeout - schneller Fallback auf Offline-Modus
+  timeout: 6000, // 6 Sekunden Timeout - Fallback auf Offline-Modus (3s war zu kurz für schlechte WLAN-Verbindungen im Lager)
   // withCredentials: HttpOnly-Cookie (Refresh-Token) wird automatisch mitgesendet
   withCredentials: true,
 });
@@ -1623,7 +1623,8 @@ export interface AutoBackupConfig {
   frequency: 'daily' | 'weekly' | 'monthly';
   time: string; // HH:MM
   lastBackup?: string | null;
-  retentionDays?: number; // Wie lange Backups aufbewahrt werden
+  retentionDays?: number;
+  maxAutoBackups?: number; // Maximale Anzahl Auto-Backups (unabhängig vom Alter)
 }
 
 export const getAutoBackupConfig = async (): Promise<AutoBackupConfig> => {
@@ -1717,11 +1718,12 @@ export const updatePurchaseOrderPdfDesigner = async (
   return response.data;
 };
 
-export const setAutoBackupConfig = async (config: { 
-  enabled: boolean; 
-  frequency: 'daily' | 'weekly' | 'monthly'; 
+export const setAutoBackupConfig = async (config: {
+  enabled: boolean;
+  frequency: 'daily' | 'weekly' | 'monthly';
   time: string;
   retentionDays?: number;
+  maxAutoBackups?: number;
 }): Promise<{ success: boolean; config: AutoBackupConfig }> => {
   const response = await api.post<{ success: boolean; config: AutoBackupConfig }>("/setup/backup/auto-config", config);
   return response.data;

@@ -766,26 +766,21 @@ export class SetupService {
   async getAutoBackupConfig(): Promise<{
     enabled: boolean;
     frequency: 'daily' | 'weekly' | 'monthly';
-    time: string; // Format: HH:MM
+    time: string;
     lastBackup?: string;
-    retentionDays?: number; // Wie lange Backups aufbewahrt werden
+    retentionDays?: number;
+    maxAutoBackups?: number;
   }> {
     try {
-      const enabledConfig = await this.configRepository.findOne({ 
-        where: { key: 'backup.auto.enabled' } 
-      });
-      const frequencyConfig = await this.configRepository.findOne({ 
-        where: { key: 'backup.auto.frequency' } 
-      });
-      const timeConfig = await this.configRepository.findOne({ 
-        where: { key: 'backup.auto.time' } 
-      });
-      const lastBackupConfig = await this.configRepository.findOne({ 
-        where: { key: 'backup.auto.lastBackup' } 
-      });
-      const retentionConfig = await this.configRepository.findOne({ 
-        where: { key: 'backup.auto.retentionDays' } 
-      });
+      const [enabledConfig, frequencyConfig, timeConfig, lastBackupConfig, retentionConfig, maxCountConfig] =
+        await Promise.all([
+          this.configRepository.findOne({ where: { key: 'backup.auto.enabled' } }),
+          this.configRepository.findOne({ where: { key: 'backup.auto.frequency' } }),
+          this.configRepository.findOne({ where: { key: 'backup.auto.time' } }),
+          this.configRepository.findOne({ where: { key: 'backup.auto.lastBackup' } }),
+          this.configRepository.findOne({ where: { key: 'backup.auto.retentionDays' } }),
+          this.configRepository.findOne({ where: { key: 'backup.auto.maxAutoBackups' } }),
+        ]);
 
       return {
         enabled: enabledConfig?.value === 'true',
@@ -793,6 +788,7 @@ export class SetupService {
         time: timeConfig?.value || '02:00',
         lastBackup: lastBackupConfig?.value,
         retentionDays: retentionConfig?.value ? parseInt(retentionConfig.value, 10) : 30,
+        maxAutoBackups: maxCountConfig?.value ? parseInt(maxCountConfig.value, 10) : undefined,
       };
     } catch (error) {
       this.logger.error('Fehler beim Laden der Auto-Backup-Konfiguration:', error);
@@ -805,13 +801,17 @@ export class SetupService {
     frequency: 'daily' | 'weekly' | 'monthly';
     time: string;
     retentionDays?: number;
+    maxAutoBackups?: number;
   }): Promise<void> {
     await this.loggingService.setConfig('backup.auto.enabled', config.enabled.toString(), 'Automatisches Backup aktiviert');
     await this.loggingService.setConfig('backup.auto.frequency', config.frequency, 'Backup-Häufigkeit (daily, weekly, monthly)');
     await this.loggingService.setConfig('backup.auto.time', config.time, 'Backup-Uhrzeit (HH:MM)');
-    
+
     if (config.retentionDays !== undefined) {
       await this.loggingService.setConfig('backup.auto.retentionDays', config.retentionDays.toString(), 'Backup-Aufbewahrungsdauer in Tagen');
+    }
+    if (config.maxAutoBackups !== undefined) {
+      await this.loggingService.setConfig('backup.auto.maxAutoBackups', config.maxAutoBackups.toString(), 'Maximale Anzahl Auto-Backups');
     }
 
     // Stoppe aktuelles Scheduling und starte neu
@@ -943,40 +943,44 @@ export class SetupService {
     try {
       const config = await this.getAutoBackupConfig();
       const retentionDays = config.retentionDays || 30;
+      const maxAutoBackups = config.maxAutoBackups;
 
-      if (!fs.existsSync(backupDir)) {
-        return;
-      }
+      if (!fs.existsSync(backupDir)) return;
 
-      const files = fs.readdirSync(backupDir);
+      const autoBackupFiles = fs.readdirSync(backupDir)
+        .filter(f => f.startsWith('auto-backup-') && f.endsWith('.json'))
+        .map(f => ({ name: f, filepath: path.join(backupDir, f), mtime: fs.statSync(path.join(backupDir, f)).mtime.getTime() }))
+        .sort((a, b) => b.mtime - a.mtime); // neueste zuerst
+
       const now = Date.now();
-      const maxAge = retentionDays * 24 * 60 * 60 * 1000; // Tage in ms
+      const maxAge = retentionDays * 24 * 60 * 60 * 1000;
+      const toDelete = new Set<string>();
+
+      // Altersbasiert: älter als retentionDays löschen
+      autoBackupFiles.forEach((f, idx) => {
+        if (now - f.mtime > maxAge) toDelete.add(f.filepath);
+        // Anzahlbasiert: alles jenseits maxAutoBackups löschen (nach Alter sortiert, neueste behalten)
+        if (maxAutoBackups !== undefined && idx >= maxAutoBackups) toDelete.add(f.filepath);
+      });
 
       let deletedCount = 0;
-      for (const file of files) {
-        if (!file.startsWith('auto-backup-') || !file.endsWith('.json')) {
-          continue; // Nur Auto-Backups bereinigen
-        }
-
-        const filepath = path.join(backupDir, file);
-        const stats = fs.statSync(filepath);
-        const age = now - stats.mtime.getTime();
-
-        if (age > maxAge) {
-          try {
-            fs.unlinkSync(filepath);
-            deletedCount++;
-          } catch (unlinkError) {
-            this.logger.warn(`Backup-Datei konnte nicht geloescht werden (${filepath}):`, unlinkError);
-          }
+      for (const filepath of toDelete) {
+        try {
+          fs.unlinkSync(filepath);
+          deletedCount++;
+        } catch (unlinkError) {
+          this.logger.warn(`Backup-Datei konnte nicht geloescht werden (${filepath}):`, unlinkError);
         }
       }
 
       if (deletedCount > 0) {
+        const reason = maxAutoBackups !== undefined
+          ? `Limit: ${maxAutoBackups} Backups / ${retentionDays} Tage`
+          : `älter als ${retentionDays} Tage`;
         await this.loggingService.logInfo(
           'SYSTEM' as any,
           'AUTO_BACKUP_CLEANUP',
-          `${deletedCount} alte Backup-Dateien gelöscht (älter als ${retentionDays} Tage)`
+          `${deletedCount} alte Backup-Dateien gelöscht (${reason})`
         );
         this.logger.log(`Backup-Bereinigung: ${deletedCount} alte Dateien geloescht`);
       }
