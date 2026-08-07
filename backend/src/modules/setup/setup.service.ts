@@ -238,18 +238,25 @@ export class SetupService {
           quantity: sl.quantity,
           targetQuantity: sl.targetQuantity,
         })),
-        stockMovements: stockMovements.map(sm => ({
-          id: sm.id,
-          type: sm.type,
-          itemId: sm.item?.id,
-          vehicleId: sm.vehicle?.id,
-          locationId: sm.location?.id ?? null,
-          quantity: sm.quantity,
-          userId: sm.user?.id,
-          occurredAt: sm.occurredAt,
-          note: sm.note,
-          source: sm.source,
-        })),
+        stockMovements: stockMovements
+          .filter(sm => sm.item != null)
+          .map(sm => ({
+            id: sm.id,
+            type: sm.type,
+            itemId: sm.item!.id,
+            vehicleId: sm.vehicle?.id ?? null,
+            locationId: sm.location?.id ?? null,
+            quantity: sm.quantity,
+            userId: sm.user?.id ?? null,
+            occurredAt: sm.occurredAt,
+            createdAt: sm.createdAt,
+            note: sm.note,
+            source: sm.source,
+            isVoided: sm.isVoided,
+            voidedAt: sm.voidedAt,
+            voidedBy: sm.voidedBy,
+            voidReason: sm.voidReason,
+          })),
         inventorySessions,
         inventoryLines: inventoryLines.map(il => ({
           id: il.id,
@@ -268,6 +275,7 @@ export class SetupService {
           kind: ic.kind,
           itemId: (ic as any).item?.id ?? null,
         })),
+        purchaseOrderPdfs: await this.collectPurchaseOrderPdfs(),
       },
     };
   }
@@ -392,13 +400,20 @@ export class SetupService {
         })));
       }
 
-      if (data.stockMovements?.length > 0) {
-        await mgr.getRepository(StockMovement).save(data.stockMovements.map((sm: any) => ({
+      const validMovements = (data.stockMovements ?? []).filter((sm: any) => sm.itemId);
+      if (validMovements.length > 0) {
+        await mgr.getRepository(StockMovement).save(validMovements.map((sm: any) => ({
           id: sm.id, type: sm.type, item: { id: sm.itemId },
           vehicle: sm.vehicleId ? { id: sm.vehicleId } : null,
           location: sm.locationId ? { id: sm.locationId } : null,
           user: sm.userId ? { id: sm.userId } : null,
-          quantity: sm.quantity, occurredAt: sm.occurredAt, note: sm.note, source: sm.source,
+          quantity: sm.quantity, occurredAt: sm.occurredAt,
+          createdAt: sm.createdAt ?? undefined,
+          note: sm.note, source: sm.source,
+          isVoided: sm.isVoided ?? false,
+          voidedAt: sm.voidedAt ?? null,
+          voidedBy: sm.voidedBy ?? null,
+          voidReason: sm.voidReason ?? null,
         })));
       }
 
@@ -421,6 +436,10 @@ export class SetupService {
       throw err;
     } finally {
       await queryRunner.release();
+    }
+
+    if (data.purchaseOrderPdfs?.length > 0) {
+      await this.restorePurchaseOrderPdfs(data.purchaseOrderPdfs);
     }
   }
 
@@ -594,13 +613,23 @@ export class SetupService {
         const resolveItemId = (backupItemId: string): string =>
           codeToCurrentId.get(backupItemIdToCode.get(backupItemId) ?? '') ?? backupItemId;
 
-        await mgr.getRepository(StockMovement).save(data.stockMovements.map((sm: any) => ({
-          id: sm.id, type: sm.type, item: { id: resolveItemId(sm.itemId) },
-          vehicle: sm.vehicleId ? { id: sm.vehicleId } : null,
-          location: sm.locationId ? { id: sm.locationId } : null,
-          user: sm.userId ? { id: sm.userId } : null,
-          quantity: sm.quantity, occurredAt: sm.occurredAt, note: sm.note, source: sm.source,
-        })));
+        await mgr.getRepository(StockMovement).save(
+          data.stockMovements
+            .filter((sm: any) => sm.itemId)
+            .map((sm: any) => ({
+              id: sm.id, type: sm.type, item: { id: resolveItemId(sm.itemId) },
+              vehicle: sm.vehicleId ? { id: sm.vehicleId } : null,
+              location: sm.locationId ? { id: sm.locationId } : null,
+              user: sm.userId ? { id: sm.userId } : null,
+              quantity: sm.quantity, occurredAt: sm.occurredAt,
+              createdAt: sm.createdAt ?? undefined,
+              note: sm.note, source: sm.source,
+              isVoided: sm.isVoided ?? false,
+              voidedAt: sm.voidedAt ?? null,
+              voidedBy: sm.voidedBy ?? null,
+              voidReason: sm.voidReason ?? null,
+            }))
+        );
       }
 
       if (sections.includes('inventorySessions')) {
@@ -623,6 +652,10 @@ export class SetupService {
       throw err;
     } finally {
       await queryRunner.release();
+    }
+
+    if (sections.includes('purchaseOrders') && data.purchaseOrderPdfs?.length > 0) {
+      await this.restorePurchaseOrderPdfs(data.purchaseOrderPdfs);
     }
   }
 
@@ -1104,5 +1137,53 @@ export class SetupService {
       .replace(/\r/g, '\\r')
       .replace(/\0/g, '\\0');
     return `'${str}'`;
+  }
+
+  private getPurchaseOrderStoragePath(): string {
+    return (process.env.PURCHASE_ORDER_STORAGE_PATH || '/app/purchase-orders').trim();
+  }
+
+  private async collectPurchaseOrderPdfs(): Promise<Array<{ relativePath: string; data: string }>> {
+    const storageDir = this.getPurchaseOrderStoragePath();
+    const result: Array<{ relativePath: string; data: string }> = [];
+
+    const scan = async (dir: string): Promise<void> => {
+      let entries: fs.Dirent[];
+      try {
+        entries = await fs.promises.readdir(dir, { withFileTypes: true });
+      } catch {
+        return;
+      }
+      for (const entry of entries) {
+        const fullPath = path.join(dir, entry.name);
+        if (entry.isDirectory()) {
+          await scan(fullPath);
+        } else if (entry.isFile() && entry.name.endsWith('.pdf')) {
+          try {
+            const data = await fs.promises.readFile(fullPath);
+            result.push({
+              relativePath: path.relative(storageDir, fullPath).replace(/\\/g, '/'),
+              data: data.toString('base64'),
+            });
+          } catch { /* skip unreadable files */ }
+        }
+      }
+    };
+
+    await scan(storageDir);
+    return result;
+  }
+
+  private async restorePurchaseOrderPdfs(pdfs: Array<{ relativePath: string; data: string }>): Promise<void> {
+    const storageDir = this.getPurchaseOrderStoragePath();
+    for (const pdf of pdfs) {
+      try {
+        const normalized = path.normalize(pdf.relativePath);
+        if (normalized.startsWith('..') || path.isAbsolute(normalized)) continue;
+        const fullPath = path.join(storageDir, normalized);
+        await fs.promises.mkdir(path.dirname(fullPath), { recursive: true });
+        await fs.promises.writeFile(fullPath, Buffer.from(pdf.data, 'base64'));
+      } catch { /* skip individual failures */ }
+    }
   }
 }
