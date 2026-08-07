@@ -42,3 +42,9 @@ mysql_data/
 caddy_data/
 caddy_config/
 purchase_orders/
+
+# Dev-Laufzeitdaten (lokal, nicht committen)
+purchase-orders-dev/
+item-images-dev/
+backups-dev/
+backups/

@@ -20,6 +20,7 @@ if not exist ".env.dev" (
         echo BACKEND_JWT_SECRET=dev-secret-key-nur-fuer-lokale-entwicklung
         echo BACKEND_JWT_EXPIRES_IN=8h
         echo BACKEND_JWT_REFRESH_EXPIRES_IN=30d
+        echo INVENTORY_HMAC_SECRET=dev-hmac-secret-nur-fuer-lokale-entwicklung-32z
         echo PURCHASE_ORDER_STORAGE_HOST_PATH=./purchase-orders-dev
         echo ITEM_IMAGE_STORAGE_HOST_PATH=./item-images-dev
     ) > .env.dev
