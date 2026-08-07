@@ -33,6 +33,6 @@ echo URL: https://localhost:8443
 echo phpMyAdmin: http://localhost:8082
 echo.
 
-docker compose -f docker-compose.dev.yml --env-file .env.dev up --build
+docker compose -f docker-compose.dev.yml --env-file .env.dev up --build --force-recreate
 
 pause
