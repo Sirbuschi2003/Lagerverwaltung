@@ -57,6 +57,7 @@ services:
       JWT_EXPIRES_IN: ${BACKEND_JWT_EXPIRES_IN:-1d}
       JWT_REFRESH_EXPIRES_IN: ${BACKEND_JWT_REFRESH_EXPIRES_IN:-30d}
       INVENTORY_HMAC_SECRET: ${INVENTORY_HMAC_SECRET}
+      ALLOWED_ORIGINS: https://localhost:8443,http://localhost:8080
     ports:
       - "${BACKEND_PORT:-3000}:3000"
     volumes:
