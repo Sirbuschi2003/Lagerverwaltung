@@ -10,6 +10,48 @@ import { DataSource } from "typeorm";
 import { AppModule } from "./app.module";
 import { SetupService } from "./modules/setup/setup.service";
 
+async function runFreshInstallMigrations(): Promise<void> {
+  const logger = new Logger("MigrationBootstrap");
+
+  const ds = new DataSource({
+    type: "mysql",
+    host: process.env.DB_HOST ?? "localhost",
+    port: Number.parseInt(process.env.DB_PORT ?? "3306", 10),
+    username: process.env.DB_USER ?? "root",
+    password: process.env.DB_PASSWORD ?? "",
+    database: process.env.DB_NAME ?? "lagerverwaltung",
+    migrations: ["dist/migrations/*.js"],
+    charset: "utf8mb4",
+  });
+
+  try {
+    await ds.initialize();
+
+    let isFreshInstall = true;
+    try {
+      const rows: Array<{ cnt: string }> = await ds.query("SELECT COUNT(*) AS cnt FROM migrations");
+      isFreshInstall = Number(rows[0]?.cnt ?? 0) === 0;
+    } catch {
+      // migrations table doesn't exist → definitely fresh install
+    }
+
+    if (!isFreshInstall) {
+      return; // existing install → runMigrationsWithBackup handles it after app creation
+    }
+
+    const hasPending = await ds.showMigrations();
+    if (!hasPending) {
+      return;
+    }
+
+    logger.log("Erstinstallation erkannt – führe Migrationen vorab aus...");
+    await ds.runMigrations();
+    logger.log("Erstinstallations-Migrationen abgeschlossen.");
+  } finally {
+    await ds.destroy().catch(() => undefined);
+  }
+}
+
 async function runMigrationsWithBackup(app: Awaited<ReturnType<typeof NestFactory.create>>): Promise<void> {
   const logger = new Logger("MigrationBootstrap");
   const dataSource = app.get(DataSource);
@@ -64,6 +106,10 @@ async function runMigrationsWithBackup(app: Awaited<ReturnType<typeof NestFactor
 }
 
 async function bootstrap() {
+  // Fresh install: run migrations before modules initialize so onModuleInit finds all tables.
+  // Existing installs with new migrations: runMigrationsWithBackup handles backup + migrate after app creation.
+  await runFreshInstallMigrations();
+
   const requestLogger = new Logger("HTTP");
   const app = await NestFactory.create(AppModule);
 
