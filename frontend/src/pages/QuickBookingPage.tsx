@@ -273,8 +273,9 @@ const QuickBookingPage: React.FC = () => {
 
   const processFoundItem = async (found: ItemDto) => {
     if (mode === "CHECKOUT" && found.currentQuantity !== null && found.currentQuantity !== undefined) {
+      const currentRef = reference || "";
       const alreadyBooked = bookingListRef.current
-        .filter((e) => e.itemId === found.id && e.mode === "CHECKOUT")
+        .filter((e) => e.itemId === found.id && e.mode === "CHECKOUT" && e.reference === currentRef)
         .reduce((sum, e) => sum + e.quantity, 0);
       const totalAfterScan = alreadyBooked + quantity;
       if (totalAfterScan > found.currentQuantity) {
