@@ -276,6 +276,7 @@ export class SetupService {
           itemId: (ic as any).item?.id ?? null,
         })),
         purchaseOrderPdfs: await this.collectPurchaseOrderPdfs(),
+        itemImages: await this.collectItemImages(),
       },
     };
   }
@@ -440,6 +441,9 @@ export class SetupService {
 
     if (data.purchaseOrderPdfs?.length > 0) {
       await this.restorePurchaseOrderPdfs(data.purchaseOrderPdfs);
+    }
+    if (data.itemImages?.length > 0) {
+      await this.restoreItemImages(data.itemImages);
     }
   }
 
@@ -656,6 +660,9 @@ export class SetupService {
 
     if (sections.includes('purchaseOrders') && data.purchaseOrderPdfs?.length > 0) {
       await this.restorePurchaseOrderPdfs(data.purchaseOrderPdfs);
+    }
+    if (sections.includes('items') && data.itemImages?.length > 0) {
+      await this.restoreItemImages(data.itemImages);
     }
   }
 
@@ -1183,6 +1190,41 @@ export class SetupService {
         const fullPath = path.join(storageDir, normalized);
         await fs.promises.mkdir(path.dirname(fullPath), { recursive: true });
         await fs.promises.writeFile(fullPath, Buffer.from(pdf.data, 'base64'));
+      } catch { /* skip individual failures */ }
+    }
+  }
+
+  private getItemImageStoragePath(): string {
+    return (process.env.ITEM_IMAGE_PATH || '/app/item-images').trim();
+  }
+
+  private async collectItemImages(): Promise<Array<{ filename: string; data: string }>> {
+    const imageDir = this.getItemImageStoragePath();
+    const result: Array<{ filename: string; data: string }> = [];
+    let entries: fs.Dirent[];
+    try {
+      entries = await fs.promises.readdir(imageDir, { withFileTypes: true });
+    } catch {
+      return result;
+    }
+    for (const entry of entries) {
+      if (!entry.isFile()) continue;
+      if (!/\.(jpg|jpeg|png|webp|gif)$/i.test(entry.name)) continue;
+      try {
+        const data = await fs.promises.readFile(path.join(imageDir, entry.name));
+        result.push({ filename: entry.name, data: data.toString('base64') });
+      } catch { /* skip unreadable */ }
+    }
+    return result;
+  }
+
+  private async restoreItemImages(images: Array<{ filename: string; data: string }>): Promise<void> {
+    const imageDir = this.getItemImageStoragePath();
+    await fs.promises.mkdir(imageDir, { recursive: true }).catch(() => {});
+    for (const img of images) {
+      try {
+        if (!/^[0-9a-f-]{36}\.(jpg|jpeg|png|webp|gif)$/i.test(img.filename)) continue;
+        await fs.promises.writeFile(path.join(imageDir, img.filename), Buffer.from(img.data, 'base64'));
       } catch { /* skip individual failures */ }
     }
   }
