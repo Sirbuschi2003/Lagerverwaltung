@@ -6,6 +6,7 @@ import {
   Button,
   Chip,
   CircularProgress,
+  Collapse,
   Dialog,
   DialogActions,
   DialogContent,
@@ -36,6 +37,8 @@ import DeleteIcon from "@mui/icons-material/Delete";
 import AddIcon from "@mui/icons-material/Add";
 import PictureAsPdfIcon from "@mui/icons-material/PictureAsPdf";
 import ArchiveIcon from "@mui/icons-material/Archive";
+import KeyboardArrowDownIcon from "@mui/icons-material/KeyboardArrowDown";
+import KeyboardArrowUpIcon from "@mui/icons-material/KeyboardArrowUp";
 
 import useAuthStore from "../../store/useAuthStore";
 import ItemEditDialog from "../items/ItemEditDialog";
@@ -97,6 +100,7 @@ const ActiveOrdersTab: React.FC = () => {
   const [yearFilter, setYearFilter] = useState<string>("ALL");
   const [sortOption, setSortOption] = useState<SortOption>("newest");
 
+  const [expandedOrderId, setExpandedOrderId] = useState<string | null>(null);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [activeOrder, setActiveOrder] = useState<PurchaseOrderDto | null>(null);
   const [orderForm, setOrderForm] = useState({
@@ -428,6 +432,7 @@ const ActiveOrdersTab: React.FC = () => {
           <Table size="small">
             <TableHead>
               <TableRow>
+                <TableCell sx={{ width: 40 }} />
                 <TableCell>Bestellnummer</TableCell>
                 <TableCell>Lieferant</TableCell>
                 {isSuperAdmin && <TableCell>Niederlassung</TableCell>}
@@ -440,63 +445,122 @@ const ActiveOrdersTab: React.FC = () => {
               </TableRow>
             </TableHead>
             <TableBody>
-              {filteredOrders.map((order) => (
-                <TableRow key={order.id} hover>
-                  <TableCell>
-                    <Typography variant="body2" fontWeight={700}>
-                      {order.orderNumber || "-"}
-                    </Typography>
-                  </TableCell>
-                  <TableCell>{order.supplier?.name || "-"}</TableCell>
-                  {isSuperAdmin && (
-                    <TableCell>
-                      <Chip
-                        label={order.branch?.name || order.branch?.externalCode || "–"}
-                        size="small"
-                        variant="outlined"
-                        color="secondary"
-                      />
-                    </TableCell>
-                  )}
-                  <TableCell>
-                    <Chip label={statusMeta[order.status].label} color={statusMeta[order.status].color} size="small" />
-                  </TableCell>
-                  <TableCell>{getOrderYear(order)}</TableCell>
-                  <TableCell>{order.lines.length} Artikel</TableCell>
-                  <TableCell>{formatDate(order.createdAt)}</TableCell>
-                  <TableCell>{formatDate(order.orderedAt)}</TableCell>
-                  <TableCell align="right">
-                    <Box sx={{ display: "flex", gap: 0.5, justifyContent: "flex-end" }}>
-                      {canEdit && (
-                        <Tooltip title="Bearbeiten">
-                          <IconButton size="small" onClick={() => handleEditOpen(order)}>
-                            <EditIcon fontSize="small" />
-                          </IconButton>
-                        </Tooltip>
-                      )}
-                      <Tooltip title="PDF herunterladen">
-                        <IconButton size="small" onClick={() => handleDownloadPdf(order)}>
-                          <PictureAsPdfIcon fontSize="small" />
+              {filteredOrders.map((order) => {
+                const isExpanded = expandedOrderId === order.id;
+                const colSpan = isSuperAdmin ? 10 : 9;
+                return (
+                  <React.Fragment key={order.id}>
+                    <TableRow
+                      hover
+                      onClick={() => setExpandedOrderId(isExpanded ? null : order.id)}
+                      sx={{ cursor: "pointer" }}
+                    >
+                      <TableCell sx={{ py: 0.5 }}>
+                        <IconButton size="small" tabIndex={-1}>
+                          {isExpanded ? <KeyboardArrowUpIcon fontSize="small" /> : <KeyboardArrowDownIcon fontSize="small" />}
                         </IconButton>
-                      </Tooltip>
-                      {canEdit && order.status === "RECEIVED" && (
-                        <Tooltip title="Archivieren">
-                          <IconButton size="small" onClick={() => handleArchive(order)}>
-                            <ArchiveIcon fontSize="small" />
-                          </IconButton>
-                        </Tooltip>
+                      </TableCell>
+                      <TableCell>
+                        <Typography variant="body2" fontWeight={700}>
+                          {order.orderNumber || "-"}
+                        </Typography>
+                      </TableCell>
+                      <TableCell>{order.supplier?.name || "-"}</TableCell>
+                      {isSuperAdmin && (
+                        <TableCell>
+                          <Chip
+                            label={order.branch?.name || order.branch?.externalCode || "–"}
+                            size="small"
+                            variant="outlined"
+                            color="secondary"
+                          />
+                        </TableCell>
                       )}
-                      {canDelete && (
-                        <Tooltip title="Löschen">
-                          <IconButton size="small" color="error" onClick={() => setDeleteTarget(order)}>
-                            <DeleteIcon fontSize="small" />
-                          </IconButton>
-                        </Tooltip>
-                      )}
-                    </Box>
-                  </TableCell>
-                </TableRow>
-              ))}
+                      <TableCell>
+                        <Chip label={statusMeta[order.status].label} color={statusMeta[order.status].color} size="small" />
+                      </TableCell>
+                      <TableCell>{getOrderYear(order)}</TableCell>
+                      <TableCell>{order.lines.length} Artikel</TableCell>
+                      <TableCell>{formatDate(order.createdAt)}</TableCell>
+                      <TableCell>{formatDate(order.orderedAt)}</TableCell>
+                      <TableCell align="right" onClick={(e) => e.stopPropagation()}>
+                        <Box sx={{ display: "flex", gap: 0.5, justifyContent: "flex-end" }}>
+                          {canEdit && (
+                            <Tooltip title="Bearbeiten">
+                              <IconButton size="small" onClick={() => handleEditOpen(order)}>
+                                <EditIcon fontSize="small" />
+                              </IconButton>
+                            </Tooltip>
+                          )}
+                          <Tooltip title="PDF herunterladen">
+                            <IconButton size="small" onClick={() => handleDownloadPdf(order)}>
+                              <PictureAsPdfIcon fontSize="small" />
+                            </IconButton>
+                          </Tooltip>
+                          {canEdit && order.status === "RECEIVED" && (
+                            <Tooltip title="Archivieren">
+                              <IconButton size="small" onClick={() => handleArchive(order)}>
+                                <ArchiveIcon fontSize="small" />
+                              </IconButton>
+                            </Tooltip>
+                          )}
+                          {canDelete && (
+                            <Tooltip title="Löschen">
+                              <IconButton size="small" color="error" onClick={() => setDeleteTarget(order)}>
+                                <DeleteIcon fontSize="small" />
+                              </IconButton>
+                            </Tooltip>
+                          )}
+                        </Box>
+                      </TableCell>
+                    </TableRow>
+                    <TableRow>
+                      <TableCell colSpan={colSpan} sx={{ py: 0, border: isExpanded ? undefined : "none" }}>
+                        <Collapse in={isExpanded} timeout="auto" unmountOnExit>
+                          <Box sx={{ py: 1.5, px: 2 }}>
+                            <Table size="small">
+                              <TableHead>
+                                <TableRow>
+                                  <TableCell sx={{ fontWeight: 700 }}>Artikel</TableCell>
+                                  <TableCell align="right" sx={{ fontWeight: 700 }}>Bestellt</TableCell>
+                                  <TableCell align="right" sx={{ fontWeight: 700 }}>Geliefert</TableCell>
+                                  <TableCell sx={{ fontWeight: 700 }}>Status</TableCell>
+                                </TableRow>
+                              </TableHead>
+                              <TableBody>
+                                {order.lines.map((line) => {
+                                  const received = line.receivedQuantity ?? 0;
+                                  const isFullyDelivered = received >= line.quantity;
+                                  const isPartial = received > 0 && received < line.quantity;
+                                  return (
+                                    <TableRow key={line.id}>
+                                      <TableCell>
+                                        <Typography variant="body2" fontWeight={600}>{line.item.code}</Typography>
+                                        <Typography variant="caption" color="text.secondary">{line.item.description}</Typography>
+                                      </TableCell>
+                                      <TableCell align="right">{line.quantity}</TableCell>
+                                      <TableCell align="right">{received}</TableCell>
+                                      <TableCell>
+                                        {isFullyDelivered ? (
+                                          <Chip label="Geliefert" color="success" size="small" />
+                                        ) : isPartial ? (
+                                          <Chip label={`Teilgeliefert (${received}/${line.quantity})`} color="warning" size="small" />
+                                        ) : (
+                                          <Chip label="Ausstehend" color="error" size="small" />
+                                        )}
+                                      </TableCell>
+                                    </TableRow>
+                                  );
+                                })}
+                              </TableBody>
+                            </Table>
+                          </Box>
+                        </Collapse>
+                      </TableCell>
+                    </TableRow>
+                  </React.Fragment>
+                );
+              })}
             </TableBody>
           </Table>
         </TableContainer>
