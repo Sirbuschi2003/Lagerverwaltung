@@ -394,6 +394,7 @@ const QuickBookingPage: React.FC = () => {
       }
     }
 
+    setQuantity(1);
     busyRef.current = false;
     setBusy(false);
     refocusBarcode();
