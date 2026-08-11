@@ -990,42 +990,32 @@ export class SetupService {
   }
 
   async streamFullArchive(res: import('express').Response): Promise<void> {
-    // dynamic import() ist zuverlässiger als require() für ESM-Pakete:
-    // ESM → { default: fn }, CJS → { default: module.exports }
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const archiverModule: any = await import('archiver');
-    const archiverFn = archiverModule.default ?? archiverModule;
-    if (typeof archiverFn !== 'function') {
-      throw new Error('archiver-Modul konnte nicht initialisiert werden');
-    }
-    const archive: import('archiver').Archiver = archiverFn('zip', { zlib: { level: 6 } });
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const AdmZip = require('adm-zip') as new (input?: Buffer | string) => any;
+    const zip = new AdmZip();
     const timestamp = new Date().toISOString().slice(0, 19).replace(/:/g, '-');
     const filename = `lagerverwaltung-vollbackup-${timestamp}.zip`;
 
+    const backup = await this.createBackup();
+    zip.addFile('data.json', Buffer.from(JSON.stringify(backup, null, 2), 'utf8'));
+
+    const imageDir = this.getItemImageStoragePath();
+    if (fs.existsSync(imageDir)) {
+      zip.addLocalFolder(imageDir, 'item-images');
+    }
+
+    const pdfDir = this.getPurchaseOrderStoragePath();
+    if (fs.existsSync(pdfDir)) {
+      zip.addLocalFolder(pdfDir, 'purchase-orders');
+    }
+
+    const buffer: Buffer = zip.toBuffer();
     res.set({
       'Content-Type': 'application/zip',
       'Content-Disposition': `attachment; filename="${filename}"`,
+      'Content-Length': buffer.length.toString(),
     });
-
-    archive.pipe(res);
-
-    // Datenbankdaten als JSON
-    const backup = await this.createBackup();
-    archive.append(JSON.stringify(backup, null, 2), { name: 'data.json' });
-
-    // Artikel-Bilder
-    const imageDir = this.getItemImageStoragePath();
-    if (fs.existsSync(imageDir)) {
-      archive.directory(imageDir, 'item-images');
-    }
-
-    // Bestellungs-PDFs
-    const pdfDir = this.getPurchaseOrderStoragePath();
-    if (fs.existsSync(pdfDir)) {
-      archive.directory(pdfDir, 'purchase-orders');
-    }
-
-    await archive.finalize();
+    res.end(buffer);
   }
 
   async restoreFromArchive(buffer: Buffer): Promise<void> {
