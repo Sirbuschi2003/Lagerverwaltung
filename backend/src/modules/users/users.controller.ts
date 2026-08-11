@@ -1,4 +1,4 @@
-﻿import { Body, Controller, Delete, Get, Param, Patch, Post, Put, Req, UseGuards, ForbiddenException, BadRequestException } from "@nestjs/common";
+﻿import { Body, ClassSerializerInterceptor, Controller, Delete, Get, NotFoundException, Param, Patch, Post, Put, Req, UseGuards, UseInterceptors, ForbiddenException, BadRequestException } from "@nestjs/common";
 import type { Request } from "express";
 
 interface UsersRequest extends Request {
@@ -19,6 +19,7 @@ import { UpdateUserDto } from "./dto/update-user.dto";
 import { User } from "./entities/user.entity";
 import { UsersService } from "./users.service";
 
+@UseInterceptors(ClassSerializerInterceptor)
 @Controller("users")
 @UseGuards(JwtAuthGuard, RolesGuard, PermissionsGuard)
 export class UsersController {
@@ -58,8 +59,20 @@ export class UsersController {
   @Get(":id")
   @Roles("MANAGER")
   @Permissions("users.view")
-  findOne(@Param("id") id: string) {
-    return this.usersService.findOneById(id);
+  async findOne(@Param("id") id: string, @CurrentUser() currentUser: User) {
+    const user = await this.usersService.findOneById(id);
+    if (!user) throw new NotFoundException("Benutzer nicht gefunden");
+
+    // Cross-Branch-Schutz: Nicht-Manager dürfen nur eigene Niederlassung einsehen
+    if (
+      currentUser.role !== "MANAGER" &&
+      currentUser.branchId !== null &&
+      user.branchId !== currentUser.branchId
+    ) {
+      throw new NotFoundException("Benutzer nicht gefunden");
+    }
+
+    return user;
   }
 
   @Post()
@@ -82,6 +95,15 @@ export class UsersController {
     if (currentUser.role !== "MANAGER" && currentUser.id !== id) {
       throw new ForbiddenException("Keine Berechtigung");
     }
+
+    // Privilege escalation guard: only MANAGER may change sensitive fields
+    if (currentUser.role !== "MANAGER") {
+      delete (dto as any).role;
+      delete (dto as any).branchId;
+      delete (dto as any).vehicleId;
+      delete (dto as any).locationIds;
+    }
+
     return this.usersService.update(id, dto);
   }
 

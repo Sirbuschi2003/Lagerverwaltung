@@ -407,7 +407,8 @@ const QuickBookingPage: React.FC = () => {
     const trimmed = code.trim();
     if (trimmed === "QB:CONFIRM") {
       setBarcodeInput("");
-      if (!sofortBuchen && bookingList.length > 0) {
+      if (busyRef.current) return;
+      if (!sofortBuchen && bookingListRef.current.length > 0) {
         void handleUebernehmen();
       } else {
         // Im Sofort-Modus sind Artikel bereits gebucht → nur Vorgangsnummer zurücksetzen

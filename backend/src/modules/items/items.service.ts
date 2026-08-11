@@ -943,6 +943,8 @@ export class ItemsService {
     if (branchId) where.branchId = branchId;
     const item = await this.repository.findOne({ where });
     if (!item) throw new NotFoundException("Item not found");
+    await this.dataSource.query('DELETE FROM purchase_order_lines WHERE itemId = ?', [id]);
+    await this.dataSource.query('DELETE FROM item_codes WHERE itemId = ?', [id]);
     await this.repository.delete(id);
 
     // Audit-Log: Loeschvorgang protokollieren

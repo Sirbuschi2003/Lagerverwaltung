@@ -1838,7 +1838,7 @@ export const fetchMovementHistory = async (params: {
   if (params.from) query.append("from", params.from);
   if (params.to) query.append("to", params.to);
   if (params.limit) query.append("limit", String(params.limit));
-  if (params.offset) query.append("offset", String(params.offset));
+  if (params.offset !== undefined && params.offset !== null) query.append("offset", String(params.offset));
   if (params.warehouseId) query.append("warehouseId", params.warehouseId);
   if (params.source) query.append("source", params.source);
   if (params.includeVehicles) query.append("includeVehicles", "true");

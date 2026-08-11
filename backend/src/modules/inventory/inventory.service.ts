@@ -2,7 +2,7 @@
 import { Cron, CronExpression } from "@nestjs/schedule";
 import { ConfigService } from "@nestjs/config";
 import { InjectRepository } from "@nestjs/typeorm";
-import { IsNull, Repository } from "typeorm";
+import { DataSource, IsNull, Repository } from "typeorm";
 import { createHmac } from "crypto";
 
 import { ItemsService } from "../items/items.service";
@@ -58,6 +58,7 @@ export class InventoryService {
     private readonly vehiclesService: VehiclesService,
     private readonly loggingService: LoggingService,
     private readonly configService: ConfigService,
+    private readonly dataSource: DataSource,
   ) {
     // HMAC-Geheimnis für Inventur-Checksums (tamper-evident)
     const secret = this.configService.get<string>("INVENTORY_HMAC_SECRET");
@@ -189,10 +190,10 @@ export class InventoryService {
     return this.sessionsRepository.save(session);
   }
 
-  async recordLine(dto: RecordInventoryLineDto) {
-    await this.ensureSessionIsEditable(dto.sessionId);
+  async recordLine(dto: RecordInventoryLineDto, branchId?: string | null) {
+    await this.ensureSessionIsEditable(dto.sessionId, branchId);
 
-    const session = await this.sessionsRepository.findOne({ where: { id: dto.sessionId } });
+    const session = await this.sessionsRepository.findOne({ where: this.sessionWhereForBranch(dto.sessionId, branchId) as any });
     if (!session) {
       throw new NotFoundException("Inventory session not found");
     }
@@ -368,9 +369,9 @@ export class InventoryService {
       throw new NotFoundException("Inventur-Session nicht gefunden");
     }
 
-    if (session.status === InventorySessionStatus.FINALIZED) {
+    if (session.status === InventorySessionStatus.FINALIZED || session.status === InventorySessionStatus.SUBMITTED) {
       throw new ConflictException(
-        `Session ist bereits ${session.status}. Finalisierte Sessions können nicht eingereicht werden.`,
+        `Session ist bereits ${session.status}. Finalisierte oder bereits eingereichte Sessions können nicht erneut eingereicht werden.`,
       );
     }
 
@@ -506,46 +507,50 @@ export class InventoryService {
     let deltaSum = 0;
 
     if (applyAdjustments) {
-      if (saved.adjustmentsApplied) {
-        throw new ConflictException(
-          "Differenzen wurden bereits gebucht. Doppelbuchung nicht erlaubt.",
-        );
-      }
+      // SELECT FOR UPDATE verhindert Doppelbuchung bei parallelen Requests.
+      await this.dataSource.transaction(async (manager) => {
+        const lockedSession = await manager.findOne(InventorySession, {
+          where: { id: sessionId },
+          lock: { mode: 'pessimistic_write' },
+        });
 
-      const differenceResult = await this.getSessionDifferences(sessionId);
-      differenceCount = differenceResult.differences.length;
-      deltaSum = differenceResult.totals.deltaSum;
-      const hasDifferences = differenceCount > 0;
-
-      if (hasDifferences) {
-        const unbuchbar = differenceResult.differences.some((diff) => !diff.vehicleId && !diff.locationId);
-        if (unbuchbar) {
-          throw new BadRequestException(
-            "Differenzen ohne Fahrzeug und ohne Lagerort können nicht automatisch gebucht werden.",
-          );
+        if (!lockedSession || lockedSession.adjustmentsApplied) {
+          return; // bereits verarbeitet – stille Idempotenz
         }
 
-        for (const diff of differenceResult.differences) {
-          const quantity = Math.abs(diff.delta);
-          const type = diff.delta > 0 ? "CHECKIN" : "CHECKOUT";
+        const differenceResult = await this.getSessionDifferences(sessionId);
+        differenceCount = differenceResult.differences.length;
+        deltaSum = differenceResult.totals.deltaSum;
 
-          await this.stockService.recordMovement({
-            itemId: diff.itemId,
-            vehicleId: diff.vehicleId ?? undefined,
-            locationId: diff.locationId ?? undefined,
-            type,
-            quantity,
-            occurredAt: new Date().toISOString(),
-            note: `Inventur ${session.name}: Delta ${diff.delta > 0 ? "+" : ""}${diff.delta}`,
-            source: `inventory:${session.id}`,
-          });
+        if (differenceCount > 0) {
+          const unbuchbar = differenceResult.differences.some((diff) => !diff.vehicleId && !diff.locationId);
+          if (unbuchbar) {
+            throw new BadRequestException(
+              "Differenzen ohne Fahrzeug und ohne Lagerort können nicht automatisch gebucht werden.",
+            );
+          }
+
+          for (const diff of differenceResult.differences) {
+            const quantity = Math.abs(diff.delta);
+            const type = diff.delta > 0 ? "CHECKIN" : "CHECKOUT";
+
+            await this.stockService.recordMovement({
+              itemId: diff.itemId,
+              vehicleId: diff.vehicleId ?? undefined,
+              locationId: diff.locationId ?? undefined,
+              type,
+              quantity,
+              occurredAt: new Date().toISOString(),
+              note: `Inventur ${session.name}: Delta ${diff.delta > 0 ? "+" : ""}${diff.delta}`,
+              source: `inventory:${session.id}`,
+            });
+          }
+
+          differencesApplied = true;
+          lockedSession.adjustmentsApplied = true;
+          await manager.save(InventorySession, lockedSession);
         }
-        differencesApplied = true;
-        
-        // Flag setzen, dass Differenzen bereits gebucht wurden
-        saved.adjustmentsApplied = true;
-        await this.sessionsRepository.save(saved);
-      }
+      });
     }
 
     // User für Logging holen
@@ -860,9 +865,9 @@ export class InventoryService {
   /**
    * Prüft, ob Session editierbar ist (nur DRAFT erlaubt Änderungen)
    */
-  private async ensureSessionIsEditable(sessionId: string) {
+  private async ensureSessionIsEditable(sessionId: string, branchId?: string | null) {
     const session = await this.sessionsRepository.findOne({
-      where: { id: sessionId },
+      where: this.sessionWhereForBranch(sessionId, branchId) as any,
       select: ["id", "status"],
     });
 

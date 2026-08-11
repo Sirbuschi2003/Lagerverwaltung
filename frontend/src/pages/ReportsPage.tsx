@@ -108,17 +108,20 @@ const ArticleDetailDialog: React.FC<{
 
   useEffect(() => {
     if (!open || !row) return;
+    let aborted = false;
     setLoading(true);
     Promise.all([
       fetchConsumptionTrend(12, row.itemId, warehouseId),
       fetchMovementHistory({ itemId: row.itemId, from, to, limit: 200 }),
     ])
       .then(([trendData, histData]) => {
+        if (aborted) return;
         setTrend(trendData);
         setMovements(histData.movements);
       })
-      .catch(() => null)
-      .finally(() => setLoading(false));
+      .catch(() => { if (aborted) return; })
+      .finally(() => { if (!aborted) setLoading(false); });
+    return () => { aborted = true; };
   }, [open, row?.itemId, from, to, warehouseId]);
 
   if (!row) return null;

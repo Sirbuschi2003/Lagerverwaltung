@@ -53,17 +53,15 @@ export class StockGateway implements OnGatewayConnection, OnGatewayDisconnect {
   }
 
   broadcastRestockUpdate() {
-    void this.stockService.getRestockOverview({ status: 'OPEN' }).then((overview) => {
-      if (this.server) {
-        this.logger.debug(`restockUpdate gesendet (${overview.length} Requests)`);
-        this.server.emit('restockUpdate', overview);
-      } else {
-        this.logger.warn('Kein Socket-Server verfuegbar, restockUpdate nicht gesendet');
-      }
-    }).catch((error: unknown) => {
-      const message = error instanceof Error ? error.message : "Unbekannter Fehler";
-      this.logger.error(`Fehler beim Senden von restockUpdate: ${message}`);
-    });
+    // TODO: Branch-Room-Routing für WebSocket-Events implementieren.
+    // Der Gateway kennt den Branch des empfangenden Clients nicht – getRestockOverview()
+    // ohne branchId würde Daten aller Niederlassungen an alle Clients senden (Cross-Branch-Leak).
+    // Temporärer Fix: leeres Array senden, bis Branch-Rooms korrekt implementiert sind.
+    if (this.server) {
+      this.server.emit('restockUpdate', []);
+    } else {
+      this.logger.warn('Kein Socket-Server verfuegbar, restockUpdate nicht gesendet');
+    }
   }
 
   // ── Schnellbuchung Echtzeit-Sync ──────────────────────────────────────────

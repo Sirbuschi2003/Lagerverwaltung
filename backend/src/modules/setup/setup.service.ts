@@ -232,8 +232,8 @@ export class SetupService {
         })),
         stockLevels: stockLevels.map(sl => ({
           id: sl.id,
-          itemId: sl.item?.id,
-          vehicleId: sl.vehicle?.id,
+          itemId: sl.item?.id ?? null,
+          vehicleId: sl.vehicle?.id ?? null,
           locationId: sl.location?.id ?? null,
           quantity: sl.quantity,
           targetQuantity: sl.targetQuantity,
@@ -260,9 +260,9 @@ export class SetupService {
         inventorySessions,
         inventoryLines: inventoryLines.map(il => ({
           id: il.id,
-          sessionId: il.session?.id,
-          itemId: il.item?.id,
-          vehicleId: il.vehicle?.id,
+          sessionId: il.session?.id ?? null,
+          itemId: il.item?.id ?? null,
+          vehicleId: il.vehicle?.id ?? null,
           locationId: il.location?.id ?? null,
           expectedQuantity: il.expectedQuantity,
           countedQuantity: il.countedQuantity,
@@ -1042,11 +1042,15 @@ export class SetupService {
       if (name.startsWith('item-images/')) {
         const filename = path.basename(name);
         if (!filename) continue;
+        const VALID_IMAGE = /^[0-9a-f-]{36}\.(jpg|jpeg|png|webp|gif)$/i;
+        if (!VALID_IMAGE.test(filename)) continue;
         fs.mkdirSync(imageDir, { recursive: true });
         fs.writeFileSync(path.join(imageDir, filename), entry.getData());
       } else if (name.startsWith('purchase-orders/')) {
         const filename = path.basename(name);
         if (!filename) continue;
+        const VALID_PDF = /^[0-9a-f-]{36}\.pdf$/i;
+        if (!VALID_PDF.test(filename)) continue;
         fs.mkdirSync(pdfDir, { recursive: true });
         fs.writeFileSync(path.join(pdfDir, filename), entry.getData());
       }

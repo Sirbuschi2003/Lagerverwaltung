@@ -147,6 +147,11 @@ export class UsersService {
   }
 
   async changePassword(userId: string, currentPassword: string, newPassword: string): Promise<void> {
+    // TODO (Fix A5): AuthService.changePassword() enthält vollständige Passwort-Historie-Prüfung
+    // (isPasswordInHistory / addToPasswordHistory). Eine direkte Injektion von AuthService hier
+    // ist nicht möglich, da AuthModule → UsersModule eine zirkuläre Abhängigkeit entstehen würde.
+    // Lösung: PasswordHistory-Entity in UsersModule registrieren, PasswordHistoryRepository
+    // hier injizieren und die Logik aus auth.service.ts (Zeilen 78–106, 328–379) übertragen.
     const user = await this.repository.findOne({ where: { id: userId } });
     if (!user) throw new NotFoundException("Benutzer nicht gefunden");
 

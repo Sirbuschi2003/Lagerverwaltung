@@ -17,6 +17,7 @@ export interface OfflineMovement {
 
 interface OfflineQueueState {
   movements: OfflineMovement[];
+  itemQueue: any[]; // Persistente Item-Queue mit in-memory retryCount-Tracking
   isSyncing: boolean;
   requiresReauth: boolean;
   lastError: string | null;
@@ -114,6 +115,7 @@ const setupAutoSync = (syncFn: () => Promise<void>) => {
 const useOfflineQueue = create<OfflineQueueState>()(
   devtools((set, get) => ({
     movements: [],
+    itemQueue: [],
     isSyncing: false,
     requiresReauth: false,
     lastError: null,
@@ -132,9 +134,14 @@ const useOfflineQueue = create<OfflineQueueState>()(
         return;
       }
       
-      const db = await getDb();
-      await db.put(STORE_NAME, movement);
-      set((state) => ({ movements: [...state.movements, movement] }));
+      try {
+        const db = await getDb();
+        await db.put(STORE_NAME, movement);
+        set((state) => ({ movements: [...state.movements, movement] }));
+      } catch (err) {
+        set({ lastError: 'Offline-Speicher nicht verfügbar: ' + String(err) });
+        throw err; // Aufrufer soll den Fehler anzeigen
+      }
     },
     
     syncNow: async () => {
@@ -193,7 +200,15 @@ const useOfflineQueue = create<OfflineQueueState>()(
       try {
         const { useOfflineStorage } = await import('../hooks/useOfflineStorage');
         const offlineStorage = useOfflineStorage();
-        itemQueue = await offlineStorage.getItemQueue();
+        const storageQueue = await offlineStorage.getItemQueue();
+        const storeQueue = get().itemQueue;
+        // In-memory retryCount aus dem Store zurück in die frisch geladene Queue mergen,
+        // da retryCount nicht in den Storage geschrieben wird.
+        itemQueue = storageQueue.map((item: any) => {
+          const tracked = storeQueue.find((i: any) => i.id === item.id);
+          return tracked?.retryCount ? { ...item, retryCount: tracked.retryCount } : item;
+        });
+        set({ itemQueue });
         hasItemQueue = itemQueue.length > 0;
       } catch (err) {
         // Error ignored
@@ -346,24 +361,31 @@ const useOfflineQueue = create<OfflineQueueState>()(
     },
     
     loadFromStorage: async () => {
-      const db = await getDb();
-      const all = await db.getAll(STORE_NAME);
-      set({ movements: all as OfflineMovement[] });
-      
       const { syncNow } = get();
-      initializeAutoSyncOnce(syncNow);
-      
-      // Fallback-Sync beim App-Start: nur wenn online UND noch Bewegungen vorhanden.
-      // Verzögerung > Online-Event-Handler, damit kein Doppel-Sync entsteht.
-      // Der isSyncing-Guard verhindert parallele Ausführung zusätzlich.
-      if (all.length > 0 && navigator.onLine) {
-        setTimeout(async () => {
-          try {
-            await syncNow();
-          } catch (err) {
-            // Error ignored
-          }
-        }, 5000);
+
+      try {
+        const db = await getDb();
+        const all = await db.getAll(STORE_NAME);
+        set({ movements: all as OfflineMovement[] });
+
+        initializeAutoSyncOnce(syncNow);
+
+        // Fallback-Sync beim App-Start: nur wenn online UND noch Bewegungen vorhanden.
+        // Verzögerung > Online-Event-Handler, damit kein Doppel-Sync entsteht.
+        // Der isSyncing-Guard verhindert parallele Ausführung zusätzlich.
+        if (all.length > 0 && navigator.onLine) {
+          setTimeout(async () => {
+            try {
+              await syncNow();
+            } catch (err) {
+              // Error ignored
+            }
+          }, 5000);
+        }
+      } catch (err) {
+        console.error('[OfflineQueue] loadFromStorage fehlgeschlagen:', err);
+        set({ movements: [], lastError: String(err) });
+        initializeAutoSyncOnce(syncNow); // trotzdem starten
       }
     },
   })),

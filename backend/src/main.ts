@@ -2,7 +2,8 @@ import bodyParser from "body-parser";
 import compression from "compression";
 import cookieParser from "cookie-parser";
 import helmet from "helmet";
-import { Logger, ValidationPipe } from "@nestjs/common";
+import { ClassSerializerInterceptor, Logger, ValidationPipe } from "@nestjs/common";
+import { Reflector } from "@nestjs/core";
 import { NestFactory } from "@nestjs/core";
 import { NextFunction, Request, Response } from "express";
 import { DataSource } from "typeorm";
@@ -210,6 +211,9 @@ async function bootstrap() {
     });
     next();
   });
+
+  // Globally exclude @Exclude()-annotated fields (e.g. passwordHash on User entity)
+  app.useGlobalInterceptors(new ClassSerializerInterceptor(app.get(Reflector)));
 
   app.useGlobalPipes(
     new ValidationPipe({

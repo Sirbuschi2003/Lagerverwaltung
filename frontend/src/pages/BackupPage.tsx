@@ -186,7 +186,7 @@ const BackupPage = () => {
           localTime = `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
         }
         setAutoConfig({ ...cfg, time: localTime, lastBackup: last.lastBackup });
-      } catch { /* ignore */ } finally { setConfigLoading(false); }
+      } catch { setSnackbar({ open: true, message: 'Konfiguration konnte nicht geladen werden', severity: 'error' }); } finally { setConfigLoading(false); }
     })();
     loadBackupFiles();
   }, [loadBackupFiles]);
@@ -323,7 +323,7 @@ const BackupPage = () => {
       const a = document.createElement('a');
       a.href = url;
       a.download = `lagerverwaltung-vollbackup-${new Date().toISOString().slice(0, 10)}.zip`;
-      a.click();
+      document.body.appendChild(a); a.click(); document.body.removeChild(a);
       window.URL.revokeObjectURL(url);
       setBackupMessage({ type: 'success', text: 'Vollständiges Archiv erfolgreich heruntergeladen.' });
     } catch {

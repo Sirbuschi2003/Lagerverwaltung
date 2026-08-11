@@ -6,6 +6,7 @@
 interface OfflineCredentials {
   username: string;
   passwordHash: string; // SHA-256 Hash des Passworts (nur fuer Offline-Verifikation)
+  salt?: string; // Zufaelliger Salt fuer den Hash (fehlt in alten Eintraegen ohne Salt)
   userId: string;
   displayName: string;
   role: string;
@@ -33,6 +34,7 @@ function parseOfflineCredentials(value: string): OfflineCredentials | null {
 
     const username = parsed.username;
     const passwordHash = parsed.passwordHash;
+    const salt = parsed.salt;
     const userId = parsed.userId;
     const displayName = parsed.displayName;
     const role = parsed.role;
@@ -41,6 +43,9 @@ function parseOfflineCredentials(value: string): OfflineCredentials | null {
     const lastSync = parsed.lastSync;
 
     if (typeof username !== "string" || typeof passwordHash !== "string" || typeof userId !== "string" || typeof displayName !== "string" || typeof role !== "string") {
+      return null;
+    }
+    if (salt !== undefined && typeof salt !== "string") {
       return null;
     }
     if (!(vehicleId === null || typeof vehicleId === "string")) {
@@ -56,6 +61,7 @@ function parseOfflineCredentials(value: string): OfflineCredentials | null {
     return {
       username,
       passwordHash,
+      salt: typeof salt === "string" ? salt : undefined,
       userId,
       displayName,
       role,
@@ -71,17 +77,16 @@ function parseOfflineCredentials(value: string): OfflineCredentials | null {
 /**
  * SHA-256 Hash fuer Passwort-Verifikation (client-side, nur fuer Offline-Modus).
  * WICHTIG: Dies ist NICHT fuer Server-Authentifizierung geeignet!
+ * Erfordert HTTPS, da crypto.subtle nur in sicheren Kontexten verfuegbar ist.
  */
-async function hashPassword(password: string): Promise<string> {
+async function hashPassword(password: string, salt: string): Promise<string> {
   try {
     const encoder = new TextEncoder();
-    const data = encoder.encode(password);
-    const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+    const hashBuffer = await crypto.subtle.digest('SHA-256', encoder.encode(salt + password));
     const hashArray = Array.from(new Uint8Array(hashBuffer));
     return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
   } catch {
-    // Fallback wenn Web Crypto nicht verfuegbar (sollte nicht vorkommen in modernen Browsern)
-    return btoa(password).slice(0, 64);
+    throw new Error('Offline-Anmeldung erfordert HTTPS (crypto.subtle nicht verfügbar)');
   }
 }
 
@@ -99,11 +104,14 @@ export async function saveOfflineCredentials(
     permissions?: string[];
   }
 ): Promise<void> {
-  const passwordHash = await hashPassword(password);
+  const saltArray = crypto.getRandomValues(new Uint8Array(16));
+  const salt = Array.from(saltArray).map(b => b.toString(16).padStart(2, '0')).join('');
+  const passwordHash = await hashPassword(password, salt);
 
   const credentials: OfflineCredentials = {
     username,
     passwordHash,
+    salt,
     userId: user.id,
     displayName: user.displayName,
     role: user.role,
@@ -148,8 +156,14 @@ export async function verifyOfflineCredentials(
       return null;
     }
 
-    // Passwort-Hash-Verifikation
-    const passwordHash = await hashPassword(password);
+    // Rueckwaertskompatibilitaet: Alte Eintraege ohne Salt sind unsicher und werden verworfen
+    if (!credentials.salt) {
+      localStorage.removeItem(OFFLINE_CREDS_KEY);
+      return null;
+    }
+
+    // Passwort-Hash-Verifikation mit Salt
+    const passwordHash = await hashPassword(password, credentials.salt);
     if (credentials.passwordHash !== passwordHash) {
       return null;
     }

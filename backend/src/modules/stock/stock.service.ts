@@ -1301,8 +1301,25 @@ export class StockService {
       return;
     }
 
-    stockLevel.quantity = nextQuantity;
-    await this.stockLevelsRepository.save(stockLevel);
+    if (stockLevel.id) {
+      // Atomic conditional UPDATE: prevents race conditions from concurrent bookings.
+      // The WHERE quantity check runs on the current DB value, not the stale in-memory read.
+      const result = await this.dataSource
+        .createQueryBuilder()
+        .update(StockLevel)
+        .set({ quantity: () => `quantity + (${quantityDelta})` })
+        .where('id = :id AND (quantity + :delta) >= 0', { id: stockLevel.id, delta: quantityDelta })
+        .execute();
+
+      if ((result.affected ?? 0) === 0) {
+        throw new BadRequestException('Bestand reicht nicht aus (gleichzeitige Buchung erkannt).');
+      }
+      stockLevel.quantity = nextQuantity;
+    } else {
+      stockLevel.quantity = nextQuantity;
+      await this.stockLevelsRepository.save(stockLevel);
+    }
+
     await this.syncRestockRequest(stockLevel.id);
   }
 

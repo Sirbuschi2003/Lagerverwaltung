@@ -419,6 +419,11 @@ export class PurchasingService {
           throw new BadRequestException("Keine Lagerposition fuer Wareneingang hinterlegt.");
         }
 
+        // TODO (Fix B4): recordMovement() läuft in einer eigenen Transaktion und nimmt keinen
+        // EntityManager entgegen. Um vollständige Atomarität mit der äußeren Transaktion zu
+        // erreichen, müsste recordMovement() und alle privaten Helfer (applyMovementToStock,
+        // normalizeVehicleStockLevels etc.) auf EntityManager umgestellt werden. Bis dahin:
+        // Bewegung ist committed bevor die Bestellung gespeichert wird.
         await this.stockService.recordMovement({
           itemId: line.item.id,
           locationId,
@@ -426,7 +431,7 @@ export class PurchasingService {
           type: "CHECKIN",
           quantity: toReceive,
           occurredAt: new Date().toISOString(),
-          note: `Wareneingang ${order.orderNumber ?? order.id}${payload.deliveryNoteNumber?.trim() ? ` Â· LS: ${payload.deliveryNoteNumber.trim()}` : ""}`,
+          note: `Wareneingang ${order.orderNumber ?? order.id}${payload.deliveryNoteNumber?.trim() ? ` · LS: ${payload.deliveryNoteNumber.trim()}` : ""}`,
           source: order.orderNumber ?? `purchase-order:${order.id}`,
         });
       }

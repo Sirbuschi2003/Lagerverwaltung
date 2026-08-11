@@ -92,8 +92,8 @@ export class InventoryController {
 
   @Post("line")
   @Roles("MANAGER", "WAREHOUSE", "TECHNICIAN")
-  recordLine(@Body() dto: RecordInventoryLineDto) {
-    return this.inventoryService.recordLine(dto);
+  recordLine(@Body() dto: RecordInventoryLineDto, @Req() req: InventoryRequest) {
+    return this.inventoryService.recordLine(dto, req.user?.branchId);
   }
 
   @Post("remove-vehicle-stock")

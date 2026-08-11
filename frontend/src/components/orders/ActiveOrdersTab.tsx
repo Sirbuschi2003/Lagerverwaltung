@@ -121,21 +121,27 @@ const ActiveOrdersTab: React.FC = () => {
   const [addItem, setAddItem] = useState<ItemDto | null>(null);
   const [addQty, setAddQty] = useState(1);
 
-  const loadOrders = async (status?: PurchaseOrderStatus) => {
+  const loadOrders = async (status?: PurchaseOrderStatus, signal?: { aborted: boolean }) => {
     setLoading(true);
     setError(null);
     try {
       const data = await fetchPurchaseOrders(status ? { status } : undefined);
+      if (signal?.aborted) return;
       setOrders(data.filter((order) => order.status !== "ARCHIVED"));
     } catch {
+      if (signal?.aborted) return;
       setError("Bestellungen konnten nicht geladen werden.");
     } finally {
-      setLoading(false);
+      if (!signal?.aborted) setLoading(false);
     }
   };
 
   useEffect(() => {
-    void loadOrders(statusFilter === "ALL" ? undefined : statusFilter);
+    const signal = { aborted: false };
+    setSupplierFilter("ALL");
+    setYearFilter("ALL");
+    void loadOrders(statusFilter === "ALL" ? undefined : statusFilter, signal);
+    return () => { signal.aborted = true; };
   }, [statusFilter]);
 
   const supplierOptions = useMemo(() => {

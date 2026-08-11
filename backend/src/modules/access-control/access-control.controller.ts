@@ -24,8 +24,9 @@ export class AccessControlController {
   }
 
   @Get("roles/list")
+  @Roles("MANAGER")
+  @Permissions("access.manage")
   listRolesList() {
-    // Authentifizierung durch Klassen-Guard (JwtAuthGuard) gesichert
     return this.accessControlService.listRolesWithPermissions();
   }
 
