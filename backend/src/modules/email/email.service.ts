@@ -201,7 +201,7 @@ export class EmailService {
         <p>Hallo <strong>${username}</strong>,</p>
         <p>Sie haben eine Passwort-Zurücksetzung für Ihr Lagerverwaltung Konto angefordert.</p>
         <p><a href="${resetUrl}" style="background-color: #1976d2; color: white; padding: 10px 20px; text-decoration: none; border-radius: 4px;">Passwort zurücksetzen</a></p>
-        <p>Dieser Link ist für <strong>24 Stunden</strong> gültig.</p>
+        <p>Dieser Link ist für <strong>1 Stunde</strong> gültig.</p>
         <hr>
         <p><small>Lagerverwaltung System</small></p>
       `,

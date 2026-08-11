@@ -269,7 +269,7 @@ export class AuthService {
     await this.passwordResetTokenRepository.save(passwordResetToken);
 
     // Sende Reset-E-Mail
-    await this.emailService.sendPasswordResetEmail(user.email!, token, user.displayName);
+    await this.emailService.sendPasswordResetEmail(user.email!, user.displayName, token);
 
     // Log erfolgreiche Anfrage
     await this.loggingService.logSecurity(
