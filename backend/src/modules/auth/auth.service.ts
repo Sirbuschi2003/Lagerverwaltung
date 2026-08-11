@@ -1,6 +1,6 @@
 import * as crypto from "crypto";
 
-import { Injectable, UnauthorizedException, BadRequestException } from "@nestjs/common";
+import { Injectable, Logger, UnauthorizedException, BadRequestException } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { JwtService } from "@nestjs/jwt";
 import { InjectRepository } from "@nestjs/typeorm";
@@ -36,10 +36,18 @@ export class AuthService {
     private readonly passwordHistoryRepository: Repository<PasswordHistory>,
   ) {}
 
+  private readonly logger = new Logger(AuthService.name);
+
   private static readonly PASSWORD_HISTORY_LIMIT = 5;
 
-  // Account-Lockout: In-Memory-Tracking fehlgeschlagener Login-Versuche
-  // Wird bei Server-Neustart zurückgesetzt (reicht für Brute-Force-Schutz im Betrieb)
+  /**
+   * In-Memory-Tracking fehlgeschlagener Login-Versuche für Account-Lockout.
+   *
+   * BEKANNTE EINSCHRÄNKUNG: Der Map-Inhalt geht bei jedem Server-Neustart verloren.
+   * Das bedeutet: Ein gesperrtes Konto ist nach einem Neustart sofort wieder entsperrt.
+   * Für persistente Lockouts muss eine `failed_login_attempts`-Tabelle (DB-Migration)
+   * implementiert werden, die Zähler und `locked_until` pro Benutzer speichert.
+   */
   private static readonly failedAttempts = new Map<string, { count: number; lockedUntil: number | null }>();
   private static readonly MAX_FAILED_ATTEMPTS = 10;
   private static readonly LOCKOUT_DURATION_MS = 15 * 60 * 1000; // 15 Minuten
@@ -66,6 +74,11 @@ export class AuthService {
     if (entry.count >= AuthService.MAX_FAILED_ATTEMPTS) {
       entry.lockedUntil = Date.now() + AuthService.LOCKOUT_DURATION_MS;
       entry.count = 0; // Counter zurücksetzen nach Sperre
+      this.logger.warn(
+        `Account-Lockout ausgelöst für "${username}". ` +
+        "HINWEIS: Lockout ist In-Memory und geht bei Server-Neustart verloren. " +
+        "Für persistente Lockouts: failed_login_attempts-Tabelle (DB-Migration) implementieren.",
+      );
     }
     AuthService.failedAttempts.set(key, entry);
   }

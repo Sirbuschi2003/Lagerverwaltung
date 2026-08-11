@@ -19,6 +19,7 @@ import {
   Analytics,
   AdminPanelSettings,
   CorporateFare,
+  HelpOutline,
 } from '@mui/icons-material';
 
 export interface RouteConfig {
@@ -50,6 +51,7 @@ const pages = {
   AccessControl: () => import('../pages/AccessControlPage').then((m) => ({ default: m.default })),
   Branches: () => import('../pages/BranchesPage').then((m) => ({ default: m.default })),
   Maintenance: () => import('../pages/AdminMaintenancePage').then((m) => ({ default: m.default })),
+  Help: () => import('../pages/HelpPage').then((m) => ({ default: m.default })),
 };
 
 // React.lazy equivalents – werden beim ersten Rendern geladen
@@ -74,6 +76,7 @@ const LiveLogsPage = React.lazy(pages.LiveLogs);
 const AccessControlPage = React.lazy(pages.AccessControl);
 const BranchesPage = React.lazy(pages.Branches);
 const AdminMaintenancePage = React.lazy(pages.Maintenance);
+const HelpPage = React.lazy(pages.Help);
 
 export const ROUTE_CONFIGS: RouteConfig[] = [
   { path: '/dashboard',          label: 'Dashboard',              Icon: Dashboard,          component: DashboardPage },
@@ -96,6 +99,7 @@ export const ROUTE_CONFIGS: RouteConfig[] = [
   { path: '/access-control',     label: 'Benutzer & Fahrzeuge',   Icon: AdminPanelSettings, component: AccessControlPage },
   { path: '/branches',           label: 'Niederlassungen',        Icon: CorporateFare,      component: BranchesPage },
   { path: '/settings/maintenance', label: 'Wartung & Update',     Icon: Build,              component: AdminMaintenancePage },
+  { path: '/help',                 label: 'Benutzerhandbuch',      Icon: HelpOutline,        component: HelpPage },
 ];
 
 export const ROUTE_CONFIG_MAP: Record<string, RouteConfig> = Object.fromEntries(

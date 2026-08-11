@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from "@nestjs/common";
+import { ForbiddenException, Injectable, NotFoundException } from "@nestjs/common";
 import { InjectRepository } from "@nestjs/typeorm";
 import * as bcrypt from "bcrypt";
 import { In, Repository } from "typeorm";
@@ -7,14 +7,19 @@ import { CreateUserDto } from "./dto/create-user.dto";
 import { UpdateUserDto } from "./dto/update-user.dto";
 import { User } from "./entities/user.entity";
 import { Location } from "../locations/entities/location.entity";
+import { PasswordHistory } from "../auth/entities/password-history.entity";
 
 @Injectable()
 export class UsersService {
+  private static readonly PASSWORD_HISTORY_LIMIT = 5;
+
   constructor(
     @InjectRepository(User)
     private readonly repository: Repository<User>,
     @InjectRepository(Location)
     private readonly locationRepository: Repository<Location>,
+    @InjectRepository(PasswordHistory)
+    private readonly passwordHistoryRepository: Repository<PasswordHistory>,
   ) {}
 
   findAll(branchId?: string | null): Promise<User[]> {
@@ -147,18 +152,59 @@ export class UsersService {
   }
 
   async changePassword(userId: string, currentPassword: string, newPassword: string): Promise<void> {
-    // TODO (Fix A5): AuthService.changePassword() enthält vollständige Passwort-Historie-Prüfung
-    // (isPasswordInHistory / addToPasswordHistory). Eine direkte Injektion von AuthService hier
-    // ist nicht möglich, da AuthModule → UsersModule eine zirkuläre Abhängigkeit entstehen würde.
-    // Lösung: PasswordHistory-Entity in UsersModule registrieren, PasswordHistoryRepository
-    // hier injizieren und die Logik aus auth.service.ts (Zeilen 78–106, 328–379) übertragen.
     const user = await this.repository.findOne({ where: { id: userId } });
     if (!user) throw new NotFoundException("Benutzer nicht gefunden");
 
     const isCurrentPasswordValid = await bcrypt.compare(currentPassword, user.passwordHash);
     if (!isCurrentPasswordValid) throw new Error("Aktuelles Passwort ist falsch");
 
+    if (!newPassword || newPassword.length < 8) {
+      throw new Error("Neues Passwort muss mindestens 8 Zeichen lang sein");
+    }
+
+    // Prüfen ob das neue Passwort mit dem aktuellen oder einem der letzten N Passwörter übereinstimmt
+    const isSameAsCurrent = await bcrypt.compare(newPassword, user.passwordHash);
+    const isInHistory = await this.isPasswordInHistory(userId, newPassword);
+    if (isSameAsCurrent || isInHistory) {
+      throw new ForbiddenException(
+        `Das neue Passwort darf nicht eines der letzten ${UsersService.PASSWORD_HISTORY_LIMIT} Passwörter sein`,
+      );
+    }
+
     const newPasswordHash = await bcrypt.hash(newPassword, 12);
+
+    // Aktuellen Hash in Passwort-Historie aufnehmen, dann Passwort wechseln
+    await this.addToPasswordHistory(userId, user.passwordHash);
     await this.repository.update(userId, { passwordHash: newPasswordHash });
+  }
+
+  /** Prüft ob das neue Passwort in den letzten N gespeicherten Hashes vorkommt */
+  private async isPasswordInHistory(userId: string, newPassword: string): Promise<boolean> {
+    const history = await this.passwordHistoryRepository.find({
+      where: { user: { id: userId } },
+      order: { createdAt: "DESC" },
+      take: UsersService.PASSWORD_HISTORY_LIMIT,
+      relations: ["user"],
+    });
+    for (const entry of history) {
+      if (await bcrypt.compare(newPassword, entry.passwordHash)) return true;
+    }
+    return false;
+  }
+
+  /** Speichert einen neuen Hash in der Passwort-Historie und bereinigt ältere Einträge */
+  private async addToPasswordHistory(userId: string, passwordHash: string): Promise<void> {
+    await this.passwordHistoryRepository.save(
+      this.passwordHistoryRepository.create({ user: { id: userId }, passwordHash }),
+    );
+    const all = await this.passwordHistoryRepository.find({
+      where: { user: { id: userId } },
+      order: { createdAt: "DESC" },
+      relations: ["user"],
+    });
+    if (all.length > UsersService.PASSWORD_HISTORY_LIMIT) {
+      const toDelete = all.slice(UsersService.PASSWORD_HISTORY_LIMIT);
+      await this.passwordHistoryRepository.remove(toDelete);
+    }
   }
 }

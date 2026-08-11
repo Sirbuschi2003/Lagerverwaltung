@@ -36,6 +36,7 @@ import {
   Inventory2,
   QrCodeScanner,
   CorporateFare,
+  HelpOutline,
 } from "@mui/icons-material";
 import { useNavigate, useLocation } from "react-router-dom";
 import useAuthStore from "../store/useAuthStore";
@@ -343,6 +344,18 @@ const NavigationDrawer: React.FC<NavigationDrawerProps> = ({ open, onClose, widt
 
         <Box sx={{ borderTop: 1, borderColor: "divider" }}>
           <List>
+            <ListItem disablePadding>
+              <ListItemButton
+                selected={location.pathname === "/help"}
+                onClick={() => handleNavigation("/help")}
+                sx={drawerStyles.selectedItem}
+              >
+                <ListItemIcon sx={{ color: "text.secondary" }}>
+                  <HelpOutline />
+                </ListItemIcon>
+                <ListItemText primary="Benutzerhandbuch" />
+              </ListItemButton>
+            </ListItem>
             <ListItem disablePadding>
               <ListItemButton
                 onClick={handleLogout}

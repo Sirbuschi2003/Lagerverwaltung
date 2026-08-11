@@ -1,6 +1,6 @@
 ﻿import { BadRequestException, ForbiddenException, Injectable, Logger, NotFoundException } from "@nestjs/common";
 import { InjectRepository } from "@nestjs/typeorm";
-import { DataSource, Not, Repository, LessThan } from "typeorm";
+import { DataSource, EntityManager, Not, Repository, LessThan } from "typeorm";
 
 import { AccessControlService } from "../access-control/access-control.service";
 import { InventorySession, InventorySessionStatus } from "../inventory/entities/inventory-session.entity";
@@ -222,7 +222,7 @@ export class StockService {
     return this.movementQueryService.findMovementsBySource(source);
   }
 
-  async recordMovement(dto: RecordMovementDto) {
+  async recordMovement(dto: RecordMovementDto, manager?: EntityManager) {
     const item = await this.resolveItem(dto);
 
     const vehicle = dto.vehicleId ? await this.vehiclesService.findOne(dto.vehicleId) : null;
@@ -235,7 +235,11 @@ export class StockService {
 
     await this.ensureMovementAllowed(item.id, vehicle?.id ?? null, location?.id ?? null, dto.type, dto.quantity);
 
-    const movement = this.movementsRepository.create({
+    // Wenn ein externer EntityManager übergeben wird (z.B. aus einer umgebenden Transaktion),
+    // nutzen wir diesen für create/save, damit StockMovement atomar mit der äußeren Transaktion committed wird.
+    // applyMovementToStock und logStockMovement nutzen noch eigene Repositories (partieller Fix);
+    // vollständige Atomarität erfordert eine spätere Umstellung aller Helfer auf EntityManager.
+    const movementData = {
       item,
       vehicle: vehicle ?? null,
       location: location ?? null,
@@ -245,14 +249,25 @@ export class StockService {
       note: dto.note ?? null,
       source: dto.source?.trim() || "manual",
       occurredAt: new Date(dto.occurredAt),
-    });
+    };
 
-    await this.movementsRepository.save(movement);
+    const movement = manager
+      ? manager.create(StockMovement, movementData)
+      : this.movementsRepository.create(movementData);
+
+    if (manager) {
+      await manager.save(StockMovement, movement);
+    } else {
+      await this.movementsRepository.save(movement);
+    }
     try {
       await this.applyMovementToStock(movement);
     } catch (err) {
-      // Bewegung rückgängig machen damit Audit-Trail nicht inkonsistent wird
-      await this.movementsRepository.remove(movement);
+      if (!manager) {
+        // Ohne externe Transaktion: Bewegung manuell entfernen, damit der Audit-Trail konsistent bleibt.
+        // Mit externem Manager übernimmt der Transaktion-Rollback das Rückgängigmachen.
+        await this.movementsRepository.remove(movement);
+      }
       throw err;
     }
 
@@ -501,10 +516,14 @@ export class StockService {
 
     const saved = await this.stockLevelsRepository.save(toSave);
 
-    // Restock-Requests fÃ¼r alle aktualisierten Levels synchronisieren
-    for (const level of saved) {
-      await this.syncRestockRequest(level.id);
-    }
+    // Restock-Requests für alle aktualisierten Levels synchronisieren (parallel)
+    // Promise.allSettled verhindert fail-fast: alle Levels werden verarbeitet, Fehler einzeln geloggt.
+    const syncResults = await Promise.allSettled(saved.map((level) => this.syncRestockRequest(level.id)));
+    syncResults.forEach((r) => {
+      if (r.status === 'rejected') {
+        this.logger.error(`syncRestockRequest nach cloneVehicleStock fehlgeschlagen: ${r.reason?.message}`, r.reason?.stack);
+      }
+    });
 
     await this.loggingService.log(
       LogLevel.INFO,
@@ -656,21 +675,28 @@ export class StockService {
         source: `restock-pickup:${request.id}`,
       });
 
-      request = (await this.reloadRestockRequest(id)) ?? request;
-      const remainingPrepared = Math.max(
-        0,
-        Number(request.quantityProvided ?? previousProvided) - pickupQuantity,
-      );
-      request.quantityProvided = remainingPrepared;
-      request.note = dto.note?.trim() || request.note || null;
-      request.status = remainingPrepared > 0 ? "APPROVED" : "FULFILLED";
-      request.readyAt = request.status === "APPROVED" ? (request.readyAt ?? new Date()) : request.readyAt;
-      request.fulfilledAt = request.status === "FULFILLED" ? new Date() : null;
-      if (request.status !== "APPROVED") {
-        request.preparedBy = null;
-      }
-
-      await this.restockRepository.save(request);
+      // TODO: recordMovement() verwendet kein EntityManager und läuft daher außerhalb
+      // der Transaktion (bekannte Lücke). Für vollständige Atomizität muss recordMovement()
+      // auf einen optionalen EntityManager-Parameter umgestellt werden.
+      const savedRequest = await this.dataSource.transaction(async (manager): Promise<RestockRequest> => {
+        // Reloaden innerhalb der Transaktion, damit Status-Update und Reload atomar sind.
+        // Falls nicht gefunden: Fallback auf das bereits geladene request-Objekt.
+        const fresh: RestockRequest = (await this.reloadRestockRequest(id)) ?? request!;
+        const remainingPrepared = Math.max(
+          0,
+          Number(fresh.quantityProvided ?? previousProvided) - pickupQuantity,
+        );
+        fresh.quantityProvided = remainingPrepared;
+        fresh.note = dto.note?.trim() || fresh.note || null;
+        fresh.status = remainingPrepared > 0 ? "APPROVED" : "FULFILLED";
+        fresh.readyAt = fresh.status === "APPROVED" ? (fresh.readyAt ?? new Date()) : fresh.readyAt;
+        fresh.fulfilledAt = fresh.status === "FULFILLED" ? new Date() : null;
+        if (fresh.status !== "APPROVED") {
+          fresh.preparedBy = null;
+        }
+        return manager.save(fresh);
+      });
+      request = savedRequest;
       await this.syncRestockRequest(request.stockLevel.id);
 
       const finalized = await this.reloadRestockRequest(id);

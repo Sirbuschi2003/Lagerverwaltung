@@ -13,6 +13,7 @@ export interface OfflineMovement {
   vehicleId?: string;
   locationId?: string;
   userId?: string;
+  retryCount?: number;
 }
 
 interface OfflineQueueState {
@@ -39,6 +40,7 @@ interface NavigatorWithConnection extends Navigator {
 
 const DB_NAME = "lagerverwaltung-offline";
 const STORE_NAME = "movements";
+const MAX_RETRIES = 5;
 
 const getDb = async (): Promise<IDBPDatabase> => {
   return openDB(DB_NAME, 1, {
@@ -318,31 +320,59 @@ const useOfflineQueue = create<OfflineQueueState>()(
               await tx.objectStore(STORE_NAME).delete(ts);
             }
             await tx.done;
-            const remainingMovements = movements.filter((m) => conflictTimestamps.has(m.timestamp));
+
+            // retryCount für Konflikt-Bewegungen inkrementieren; Überschreiter verwerfen
+            const conflictMovements = movements.filter((m) => conflictTimestamps.has(m.timestamp));
+            const retainedAfterConflict: OfflineMovement[] = [];
+            let discardedConflictCount = 0;
+            for (const movement of conflictMovements) {
+              const updated: OfflineMovement = { ...movement, retryCount: (movement.retryCount ?? 0) + 1 };
+              if ((updated.retryCount ?? 0) >= MAX_RETRIES) {
+                await db.delete(STORE_NAME, movement.timestamp);
+                discardedConflictCount++;
+              } else {
+                await db.put(STORE_NAME, updated);
+                retainedAfterConflict.push(updated);
+              }
+            }
+
+            const discardMsg = discardedConflictCount > 0
+              ? ` ${discardedConflictCount} Buchung(en) nach ${MAX_RETRIES} Fehlversuchen verworfen.`
+              : '';
             set({
-              movements: remainingMovements,
-              lastError: `${conflictTimestamps.size} Buchung(en) konnten nicht synchronisiert werden: ${conflictReasons.join("; ")}`,
+              movements: retainedAfterConflict,
+              lastError: `${conflictTimestamps.size} Buchung(en) konnten nicht synchronisiert werden: ${conflictReasons.join("; ")}${discardMsg}`,
             });
           }
         }
         
+        let offlineTargetError: string | null = null;
+
         if (hasOfflineTargets && vehicleId) {
           const { updateVehicleTarget } = await import('../utils/api');
           const { useOfflineStorage } = await import('../hooks/useOfflineStorage');
           const offlineStorage = useOfflineStorage();
-          
+
+          const failedTargets: string[] = [];
+
           for (const [itemId, targetQuantity] of Object.entries(offlineTargets)) {
             try {
               await updateVehicleTarget(vehicleId, { itemId, targetQuantity });
             } catch (err) {
-              // Error ignored
+              failedTargets.push(itemId);
             }
           }
-          
-          await offlineStorage.clearOfflineTargets(vehicleId);
+
+          if (failedTargets.length === 0) {
+            // Alle erfolgreich — Queue leeren
+            await offlineStorage.clearOfflineTargets(vehicleId);
+          } else {
+            // Fehlgeschlagene Einträge verbleiben für den nächsten Sync-Versuch
+            offlineTargetError = `${failedTargets.length} Fahrzeugziel(e) konnten nicht synchronisiert werden und werden erneut versucht.`;
+          }
         }
 
-        set({ isSyncing: false, requiresReauth: false, lastError: null });
+        set({ isSyncing: false, requiresReauth: false, lastError: offlineTargetError });
       } catch (error: any) {
         const status = error?.response?.status;
         if (status === 401) {
@@ -353,9 +383,43 @@ const useOfflineQueue = create<OfflineQueueState>()(
           });
           return;
         }
+
+        const errorMsg = (error?.response?.data?.message as string) || error?.message || "Synchronisation fehlgeschlagen";
+
+        // Bei nicht-auth Fehlern: retryCount aller Bewegungen inkrementieren; Überschreiter verwerfen
+        try {
+          const currentMovements = get().movements;
+          if (currentMovements.length > 0) {
+            const db = await getDb();
+            const retainedMovements: OfflineMovement[] = [];
+            let discardedCount = 0;
+            for (const movement of currentMovements) {
+              const updated: OfflineMovement = { ...movement, retryCount: (movement.retryCount ?? 0) + 1 };
+              if ((updated.retryCount ?? 0) >= MAX_RETRIES) {
+                await db.delete(STORE_NAME, movement.timestamp);
+                discardedCount++;
+              } else {
+                await db.put(STORE_NAME, updated);
+                retainedMovements.push(updated);
+              }
+            }
+            const discardMsg = discardedCount > 0
+              ? ` ${discardedCount} Buchung(en) nach ${MAX_RETRIES} Fehlversuchen verworfen.`
+              : '';
+            set({
+              isSyncing: false,
+              movements: retainedMovements,
+              lastError: errorMsg + discardMsg,
+            });
+            return;
+          }
+        } catch {
+          // Fehler beim DB-Zugriff im Catch-Handler ignorieren
+        }
+
         set({
           isSyncing: false,
-          lastError: (error?.response?.data?.message as string) || error?.message || "Synchronisation fehlgeschlagen",
+          lastError: errorMsg,
         });
       }
     },

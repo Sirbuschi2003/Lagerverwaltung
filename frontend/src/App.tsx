@@ -135,6 +135,7 @@ const AppContent = () => {
               {hasPermission("logs.view")        && <Route path="settings/logs"   element={<></>} />}
               {hasPermission("access.manage")    && <Route path="access-control"  element={<></>} />}
               {hasPermission("branches.manage")  && <Route path="branches"        element={<></>} />}
+              <Route path="help" element={<></>} />
 
               <Route path="*" element={<Navigate to="/" replace />} />
             </Route>
