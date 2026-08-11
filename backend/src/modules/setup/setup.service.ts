@@ -992,7 +992,16 @@ export class SetupService {
   async streamFullArchive(res: import('express').Response): Promise<void> {
     // eslint-disable-next-line @typescript-eslint/no-require-imports, @typescript-eslint/no-explicit-any
     const archiverLib: any = require('archiver');
-    const archive: import('archiver').Archiver = (archiverLib.create ?? archiverLib.default?.create ?? archiverLib)('zip', { zlib: { level: 6 } });
+    // archiver v8 (ESM): require() → { default: fn, create: fn } — kein callable top-level export
+    // archiver v4-v7 (CJS): require() → fn direkt
+    const archiverFn: (fmt: string, opts: object) => import('archiver').Archiver =
+      typeof archiverLib === 'function'
+        ? archiverLib
+        : (archiverLib.default ?? archiverLib.create?.bind(archiverLib));
+    if (typeof archiverFn !== 'function') {
+      throw new Error('archiver-Modul konnte nicht initialisiert werden');
+    }
+    const archive = archiverFn('zip', { zlib: { level: 6 } });
     const timestamp = new Date().toISOString().slice(0, 19).replace(/:/g, '-');
     const filename = `lagerverwaltung-vollbackup-${timestamp}.zip`;
 
