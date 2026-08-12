@@ -372,7 +372,11 @@ const MovementHistoryTab: React.FC = () => {
                           <Tooltip title="Lieferschein öffnen">
                             <IconButton
                               size="small"
-                              onClick={() => openDeliveryNotePdf(extractAuftragsnummer(m.source)!)}
+                              onClick={() =>
+                                openDeliveryNotePdf(extractAuftragsnummer(m.source)!).catch(() =>
+                                  setError(`Lieferschein ${extractAuftragsnummer(m.source)} nicht gefunden – PDF möglicherweise nicht mehr auf dem Server.`)
+                                )
+                              }
                               sx={{ color: "error.main", p: 0.25 }}
                             >
                               <PictureAsPdfIcon fontSize="small" />
