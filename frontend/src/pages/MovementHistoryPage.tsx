@@ -26,7 +26,7 @@ import {
   IconButton,
 } from "@mui/material";
 import PictureAsPdfIcon from "@mui/icons-material/PictureAsPdf";
-import { startOfDay, endOfDay, parseISO } from "date-fns";
+import { startOfDay, endOfDay, parseISO, format } from "date-fns";
 import useItemsStore from "../store/useItemsStore";
 import useUsersStore from "../store/useUsersStore";
 import useAuthStore from "../store/useAuthStore";
@@ -120,8 +120,8 @@ const MovementHistoryTab: React.FC = () => {
         vehicleId: filters.vehicleId || undefined,
         userId: filters.userId || undefined,
         type: filters.type ? (filters.type as "CHECKIN" | "CHECKOUT") : undefined,
-        from: fromDate?.isValid() ? fromDate.toDate().toISOString() : undefined,
-        to: toDate?.isValid() ? toDate.toDate().toISOString() : undefined,
+        from: fromDate ? fromDate.toISOString() : undefined,
+        to: toDate ? toDate.toISOString() : undefined,
         limit: rpp,
         offset: currentPage * rpp,
         warehouseId: warehouseId || undefined,
@@ -355,7 +355,7 @@ const MovementHistoryTab: React.FC = () => {
               <TableBody>
                 {data.map((m) => (
                   <TableRow key={m.id}>
-                    <TableCell>{dayjs(m.occurredAt).format("DD.MM.YYYY HH:mm")}</TableCell>
+                    <TableCell>{format(new Date(m.occurredAt), "dd.MM.yyyy HH:mm")}</TableCell>
                     <TableCell sx={{ color: m.type === "CHECKIN" ? "success.main" : "error.main", fontWeight: 600 }}>
                       {m.type === "CHECKIN" ? "Einbuchung" : "Ausbuchung"}
                     </TableCell>
