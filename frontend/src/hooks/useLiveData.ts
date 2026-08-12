@@ -38,18 +38,20 @@ export function useLiveData<T>({
   
   const intervalRef = useRef<number | null>(null);
   const fetcherRef = useRef(fetcher);
-  
+  const loadingRef = useRef(false);
+
   // Fetcher-Referenz aktuell halten
   useEffect(() => {
     fetcherRef.current = fetcher;
   }, [fetcher]);
-  
+
   const refresh = useCallback(async () => {
-    if (!enabled || loading) return;
-    
+    if (!enabled || loadingRef.current) return;
+
+    loadingRef.current = true;
     setLoading(true);
     setError(null);
-    
+
     try {
       const result = await fetcherRef.current();
       setData(result);
@@ -60,9 +62,10 @@ export function useLiveData<T>({
       setError(err);
       onError?.(err);
     } finally {
+      loadingRef.current = false;
       setLoading(false);
     }
-  }, [enabled, loading, onSuccess, onError]);
+  }, [enabled, onSuccess, onError]);
   
   // Initial load
   useEffect(() => {
@@ -99,7 +102,7 @@ export function useLiveData<T>({
         intervalRef.current = null;
       }
     };
-  }, [enabled, settings.enabled, settings.interval, isOnline]);
+  }, [enabled, settings.enabled, settings.interval, isOnline, refresh]);
   
   // Cleanup on unmount
   useEffect(() => {

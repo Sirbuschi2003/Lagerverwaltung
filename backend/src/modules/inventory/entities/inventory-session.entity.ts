@@ -2,6 +2,7 @@
   Column,
   CreateDateColumn,
   Entity,
+  Index,
   JoinColumn,
   ManyToOne,
   OneToMany,
@@ -55,6 +56,7 @@ export class InventorySession {
   @Column({ type: "varchar", length: 120, nullable: true })
   finalizedBy!: string | null;
 
+  @Index()
   @Column({ type: "timestamp", nullable: true })
   finalizedAt!: Date | null;
 

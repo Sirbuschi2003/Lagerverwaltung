@@ -673,32 +673,36 @@ export class InventoryService {
     const previousStatus = vehicleStatus.status;
     const previousSubmittedBy = vehicleStatus.submittedBy;
 
-    // Fahrzeug auf DRAFT zurücksetzen → Techniker kann wieder editieren
+    // KRITISCH: Aktualisiere expectedQuantity für alle Lines dieses Fahrzeugs.
+    // Die expectedQuantity muss der aktuellen Fahrzeug-Bestand sein (nach den Buchungen).
+    const vehicleLines = session.lines.filter((line) => line.vehicle?.id === vehicleId);
+
+    // Alle StockLevels für das Fahrzeug in einem Query laden (P-01: N+1 vermieden)
+    const itemIds = vehicleLines.map((l) => l.item.id);
+    const stockLevels = itemIds.length > 0
+      ? await this.stockLevelsRepository.find({
+          where: itemIds.map((itemId) => ({ item: { id: itemId }, vehicle: { id: vehicleId } })),
+          relations: ["item"],
+        })
+      : [];
+    const stockByItemId = new Map(stockLevels.map((sl) => [sl.item.id, sl.quantity]));
+
+    // Fahrzeug auf DRAFT und Lines in einer Transaktion speichern (D-01)
     vehicleStatus.status = InventoryVehicleStatusState.DRAFT;
     vehicleStatus.submittedBy = null;
     vehicleStatus.submittedAt = null;
     // WICHTIG: adjustmentsApplied NICHT zurücksetzen! Delta-Buchungen merken sich die gebuchten Werte in inventory_lines.bookedDelta
 
-    await this.vehicleStatusRepository.save(vehicleStatus);
-
-    // KRITISCH: Aktualisiere expectedQuantity für alle Lines dieses Fahrzeugs
-    // Die expectedQuantity muss der aktuellen Fahrzeug-Bestand sein (nach den Buchungen)!
-    const vehicleLines = session.lines.filter((line) => line.vehicle?.id === vehicleId);
-    
     for (const line of vehicleLines) {
-      // Hole aktuellen Bestand des Artikels auf dem Fahrzeug
-      const currentStockLevel = await this.stockLevelsRepository.findOne({
-        where: {
-          item: { id: line.item.id },
-          vehicle: { id: vehicleId },
-        },
-      });
-      
-      // Setze expectedQuantity auf aktuellen Bestand
-      // Das ist jetzt der "Sollwert" für die erneute Zählung
-      line.expectedQuantity = currentStockLevel?.quantity ?? 0;
-      await this.linesRepository.save(line);
+      line.expectedQuantity = stockByItemId.get(line.item.id) ?? 0;
     }
+
+    await this.dataSource.transaction(async (manager) => {
+      await manager.save(vehicleStatus);
+      if (vehicleLines.length > 0) {
+        await manager.save(vehicleLines);
+      }
+    });
 
     // User für Logging holen
     const user = await this.usersRepository.findOne({ where: { username } });

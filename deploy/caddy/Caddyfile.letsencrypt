@@ -30,6 +30,7 @@ kfz-hannover.example.com:443 {
 }
 
 # Globale Einstellungen für Let's Encrypt
+# WICHTIG: Eigene E-Mail-Adresse eintragen (wird für Let's Encrypt-Benachrichtigungen genutzt)
 {
-  email thomas.busche@rr-hannover.de
+  email deine-email@example.com
 }

@@ -326,7 +326,10 @@ export class SetupService {
       if (data.users?.length > 0) {
         await mgr.getRepository(User).save(data.users.map((u: any) => ({
           id: u.id, username: u.username, displayName: u.displayName,
-          email: u.email ?? null, passwordHash: u.passwordHash, role: u.role,
+          email: u.email ?? null,
+          // passwordHash fehlt in Download-Backups (SEC-013); Konto wird gesperrt → Admin muss PW zurücksetzen
+          passwordHash: u.passwordHash ?? '$LOCKED$NO_PW_SET_RESET_REQUIRED$',
+          role: u.role,
           vehicleId: u.vehicleId ?? null, branchId: u.branchId ?? null,
           refreshInterval: u.refreshInterval, locations: [],
         })));
@@ -514,7 +517,9 @@ export class SetupService {
       if (sections.includes('users') && data.users?.length > 0) {
         await mgr.getRepository(User).save(data.users.map((u: any) => ({
           id: u.id, username: u.username, displayName: u.displayName,
-          email: u.email ?? null, passwordHash: u.passwordHash, role: u.role,
+          email: u.email ?? null,
+          passwordHash: u.passwordHash ?? '$LOCKED$NO_PW_SET_RESET_REQUIRED$',
+          role: u.role,
           vehicleId: u.vehicleId ?? null, branchId: u.branchId ?? null,
           refreshInterval: u.refreshInterval, locations: [],
         })));
@@ -997,7 +1002,13 @@ export class SetupService {
     const filename = `lagerverwaltung-vollbackup-${timestamp}.zip`;
 
     const backup = await this.createBackup();
-    zip.addFile('data.json', Buffer.from(JSON.stringify(backup, null, 2), 'utf8'));
+    // Passwort-Hashes werden aus dem Download-Backup entfernt (SEC-013, DSGVO)
+    // Server-seitige Auto-Backups behalten die Hashes für Disaster-Recovery
+    const sanitizedBackup = {
+      ...backup,
+      users: (backup.users ?? []).map(({ passwordHash: _ph, ...rest }: any) => rest),
+    };
+    zip.addFile('data.json', Buffer.from(JSON.stringify(sanitizedBackup, null, 2), 'utf8'));
 
     const imageDir = this.getItemImageStoragePath();
     if (fs.existsSync(imageDir)) {

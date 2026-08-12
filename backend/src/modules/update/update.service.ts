@@ -193,14 +193,15 @@ export class UpdateService {
     // Helper-Container startet das eigentliche Compose-Up NACHDEM unser Prozess beendet ist.
     // Volume wird am GLEICHEN Pfad wie auf dem Host gemountet → relative Pfade im
     // Compose-File (./deploy/caddy/...) lösen sich korrekt zum Host-Pfad auf.
+    const safePath = this.shellEscapePath(hostProjectPath);
     const helperCmd = [
       "docker run --rm -d",
       "-v /var/run/docker.sock:/var/run/docker.sock",
-      `-v ${hostProjectPath}:${hostProjectPath}:ro`,
+      `-v ${safePath}:${safePath}:ro`,
       `-e COMPOSE_PROJECT_NAME=${projectName}`,
       "--name lager-update-helper",
       backendImage,
-      `sh /app/update.sh ${hostProjectPath}`,
+      `sh /app/update.sh ${safePath}`,
     ].join(" ");
 
     const { code: helperCode, stderr: helperErr } = await this.execShell(helperCmd);
@@ -210,9 +211,8 @@ export class UpdateService {
     } else {
       this.addLog(`Helper-Start fehlgeschlagen (Code ${helperCode}): ${helperErr.trim()}`);
       this.addLog("Fallback: Direkter detached Neustart…");
-      // Letzter Ausweg: detached spawnen
       const fallback = spawn("sh", ["-c",
-        `sh /app/update.sh ${hostProjectPath}`,
+        `sh /app/update.sh ${safePath}`,
       ], { detached: true, stdio: "ignore" });
       fallback.unref();
     }
@@ -267,6 +267,11 @@ export class UpdateService {
         resolve(false);
       });
     });
+  }
+
+  /** Escaped einen Pfad für sichere Verwendung in Single-Quote Shell-Argumenten. */
+  private shellEscapePath(p: string): string {
+    return `'${p.replace(/'/g, "'\\''")}'`;
   }
 
   /** Führt einen Shell-Befehl aus und gibt Exit-Code + stderr zurück. */

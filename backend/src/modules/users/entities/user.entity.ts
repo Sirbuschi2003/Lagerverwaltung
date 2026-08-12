@@ -65,4 +65,10 @@ export class User {
 
   @Column({ type: "json", nullable: true, default: null })
   settings!: object | null;
+
+  @Column({ type: "int", default: 0 })
+  failedLoginAttempts!: number;
+
+  @Column({ type: "datetime", nullable: true, default: null })
+  lockedUntil!: Date | null;
 }

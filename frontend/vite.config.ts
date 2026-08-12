@@ -64,7 +64,7 @@ export default defineConfig({
           'idb-vendor': ['idb'],
           
           // Workbox
-          'workbox-vendor': ['workbox-background-sync', 'workbox-window'],
+          'workbox-vendor': ['workbox-window'],
         },
         // Nur Hash verwenden – keine Modulnamen in Production-Artefakten
         chunkFileNames: 'assets/[hash].js',
@@ -100,7 +100,7 @@ export default defineConfig({
     strictPort: true,
     proxy: {
       "/api": {
-        target: process.env.VITE_API_URL || "http://192.168.3.113:3000",  // NAS IP
+        target: process.env.VITE_API_URL || "http://localhost:3000",
         changeOrigin: true,
         secure: false,
       }

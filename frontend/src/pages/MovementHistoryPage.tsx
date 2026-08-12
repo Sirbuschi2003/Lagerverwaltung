@@ -26,7 +26,7 @@ import {
   IconButton,
 } from "@mui/material";
 import PictureAsPdfIcon from "@mui/icons-material/PictureAsPdf";
-import dayjs from "dayjs";
+import { startOfDay, endOfDay, parseISO } from "date-fns";
 import useItemsStore from "../store/useItemsStore";
 import useUsersStore from "../store/useUsersStore";
 import useAuthStore from "../store/useAuthStore";
@@ -112,8 +112,8 @@ const MovementHistoryTab: React.FC = () => {
   const loadData = async (currentPage = page, rpp = rowsPerPage) => {
     setLoading(true);
     setError(null);
-    const fromDate = filters.from ? dayjs(filters.from, "YYYY-MM-DD").startOf("day") : null;
-    const toDate = filters.to ? dayjs(filters.to, "YYYY-MM-DD").endOf("day") : null;
+    const fromDate = filters.from ? startOfDay(parseISO(filters.from)) : null;
+    const toDate = filters.to ? endOfDay(parseISO(filters.to)) : null;
     try {
       const res = await fetchMovementHistory({
         itemId: filters.itemId || undefined,
@@ -300,7 +300,7 @@ const MovementHistoryTab: React.FC = () => {
               setCleanupLoading(true);
               try {
                 const res = await cleanupMovements({
-                  before: dayjs(cleanupDate, "YYYY-MM-DD").endOf("day").toISOString(),
+                  before: endOfDay(parseISO(cleanupDate)).toISOString(),
                   type: cleanupType ? (cleanupType as "CHECKIN" | "CHECKOUT") : undefined,
                 });
                 setSnackbar(`Bereinigt: ${res.deleted} Bewegungen gelöscht.`);

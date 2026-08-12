@@ -67,9 +67,7 @@ export class LogArchiveService {
         details: log.details,
         metadata: log.metadata,
         userId: log.userId,
-        username: (log as any).user?.username,
-        ipAddress: log.ipAddress,
-        userAgent: log.userAgent,
+        // username, ipAddress und userAgent werden nicht archiviert (DSGVO: Datensparsamkeit)
       }));
       fs.writeFileSync(filePath, JSON.stringify(serialized, null, 2), 'utf-8');
       result[category] = entries.length;

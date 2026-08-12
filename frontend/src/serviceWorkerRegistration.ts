@@ -7,6 +7,8 @@ declare global {
   }
 }
 
+let pendingReload = false;
+
 export function registerSW() {
   if ("serviceWorker" in navigator) {
     window.addEventListener("load", async () => {
@@ -24,7 +26,8 @@ export function registerSW() {
             newWorker.addEventListener("statechange", () => {
               if (newWorker.state === "installed") {
                 if (navigator.serviceWorker.controller) {
-                  // Automatisch aktualisieren ohne Rückfrage
+                  // Reload nur nach explizitem SKIP_WAITING (nicht bei jedem controllerchange)
+                  pendingReload = true;
                   newWorker.postMessage({ type: "SKIP_WAITING" });
                 } else {
                   console.log("Service Worker erfolgreich installiert - PWA bereit!");
@@ -35,19 +38,17 @@ export function registerSW() {
         });
 
         console.log("Service Worker registriert");
-        
-        // Check for background sync support
-        if ('sync' in window.ServiceWorkerRegistration?.prototype) {
-          console.log("Background Sync wird unterstützt");
-        }
       } catch (error) {
         console.error("Service Worker Registrierung fehlgeschlagen:", error);
       }
     });
 
-    // Handle controller change
+    // Reload nur wenn wir selbst ein Update angestoßen haben
     navigator.serviceWorker.addEventListener("controllerchange", () => {
-      window.location.reload();
+      if (pendingReload) {
+        pendingReload = false;
+        window.location.reload();
+      }
     });
   }
 }

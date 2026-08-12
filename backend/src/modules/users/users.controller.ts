@@ -47,7 +47,16 @@ export class UsersController {
 
   @Put("me/settings")
   updateMySettings(@Body() settings: Record<string, unknown>, @CurrentUser() user: User) {
-    return this.usersService.updateUserSettings(user.id, settings);
+    const sanitized: Record<string, unknown> = {};
+    for (const [key, value] of Object.entries(settings ?? {})) {
+      if (!/^[a-zA-Z0-9._-]{1,100}$/.test(key)) continue;
+      if (typeof value === "string") {
+        sanitized[key] = value.slice(0, 1000);
+      } else if (typeof value === "number" || typeof value === "boolean" || value === null) {
+        sanitized[key] = value;
+      }
+    }
+    return this.usersService.updateUserSettings(user.id, sanitized);
   }
 
   @Get("technicians")

@@ -38,55 +38,56 @@ export class AuthService {
     private readonly passwordHistoryRepository: Repository<PasswordHistory>,
     @InjectRepository(RefreshToken)
     private readonly refreshTokenRepo: Repository<RefreshToken>,
+    @InjectRepository(User)
+    private readonly userRepo: Repository<User>,
   ) {}
 
   private readonly logger = new Logger(AuthService.name);
 
-  /**
-   * In-Memory-Tracking fehlgeschlagener Login-Versuche für Account-Lockout.
-   *
-   * BEKANNTE EINSCHRÄNKUNG: Der Map-Inhalt geht bei jedem Server-Neustart verloren.
-   * Das bedeutet: Ein gesperrtes Konto ist nach einem Neustart sofort wieder entsperrt.
-   * Für persistente Lockouts muss eine `failed_login_attempts`-Tabelle (DB-Migration)
-   * implementiert werden, die Zähler und `locked_until` pro Benutzer speichert.
-   */
-  private static readonly failedAttempts = new Map<string, { count: number; lockedUntil: number | null }>();
   private static readonly MAX_FAILED_ATTEMPTS = 10;
   private static readonly LOCKOUT_DURATION_MS = 15 * 60 * 1000; // 15 Minuten
 
-  private checkLockout(username: string): void {
-    const key = `user:${username.toLowerCase()}`;
-    const entry = AuthService.failedAttempts.get(key);
-    if (entry?.lockedUntil && Date.now() < entry.lockedUntil) {
-      const remaining = Math.ceil((entry.lockedUntil - Date.now()) / 60000);
+  private async checkLockout(username: string): Promise<void> {
+    const user = await this.userRepo.findOne({
+      where: { username: username.toLowerCase() },
+      select: ["id", "username", "lockedUntil"],
+    });
+    if (user?.lockedUntil && new Date() < user.lockedUntil) {
+      const remaining = Math.ceil((user.lockedUntil.getTime() - Date.now()) / 60000);
       throw new UnauthorizedException(
         `Konto temporär gesperrt – zu viele Fehlversuche. Bitte in ${remaining} Minute(n) erneut versuchen.`,
       );
     }
-    // Abgelaufene Sperren aufräumen
-    if (entry?.lockedUntil && Date.now() >= entry.lockedUntil) {
-      AuthService.failedAttempts.delete(key);
+    // Abgelaufene Sperre in DB bereinigen
+    if (user?.lockedUntil && new Date() >= user.lockedUntil) {
+      await this.userRepo.update(user.id, { lockedUntil: null, failedLoginAttempts: 0 });
     }
   }
 
-  private recordFailedAttempt(username: string): void {
-    const key = `user:${username.toLowerCase()}`;
-    const entry = AuthService.failedAttempts.get(key) ?? { count: 0, lockedUntil: null };
-    entry.count++;
-    if (entry.count >= AuthService.MAX_FAILED_ATTEMPTS) {
-      entry.lockedUntil = Date.now() + AuthService.LOCKOUT_DURATION_MS;
-      entry.count = 0; // Counter zurücksetzen nach Sperre
-      this.logger.warn(
-        `Account-Lockout ausgelöst für "${username}". ` +
-        "HINWEIS: Lockout ist In-Memory und geht bei Server-Neustart verloren. " +
-        "Für persistente Lockouts: failed_login_attempts-Tabelle (DB-Migration) implementieren.",
-      );
+  private async recordFailedAttempt(username: string): Promise<void> {
+    const user = await this.userRepo.findOne({
+      where: { username: username.toLowerCase() },
+      select: ["id", "username", "failedLoginAttempts"],
+    });
+    if (!user) return; // Unbekannter User – kein DB-Eintrag nötig (Timing-Attack-Schutz im Aufrufer)
+    const newCount = (user.failedLoginAttempts ?? 0) + 1;
+    if (newCount >= AuthService.MAX_FAILED_ATTEMPTS) {
+      const lockedUntil = new Date(Date.now() + AuthService.LOCKOUT_DURATION_MS);
+      await this.userRepo.update(user.id, { failedLoginAttempts: 0, lockedUntil });
+      this.logger.warn(`Account-Lockout ausgelöst für "${username}" bis ${lockedUntil.toISOString()}.`);
+    } else {
+      await this.userRepo.update(user.id, { failedLoginAttempts: newCount });
     }
-    AuthService.failedAttempts.set(key, entry);
   }
 
-  private clearFailedAttempts(username: string): void {
-    AuthService.failedAttempts.delete(`user:${username.toLowerCase()}`);
+  private async clearFailedAttempts(username: string): Promise<void> {
+    const user = await this.userRepo.findOne({
+      where: { username: username.toLowerCase() },
+      select: ["id", "failedLoginAttempts", "lockedUntil"],
+    });
+    if (user && (user.failedLoginAttempts > 0 || user.lockedUntil)) {
+      await this.userRepo.update(user.id, { failedLoginAttempts: 0, lockedUntil: null });
+    }
   }
 
   /** SHA-256-Hash eines Refresh-Tokens (kein Klartext in der DB) */
@@ -114,7 +115,7 @@ export class AuthService {
 
   async validateUser(username: string, password: string, context?: { ipAddress?: string; userAgent?: string }): Promise<User> {
     // Lockout prüfen BEVOR Datenbankzugriff (verhindert Enumeration + DoS)
-    this.checkLockout(username);
+    await this.checkLockout(username);
 
     const user = await this.usersService.findOneByUsername(username);
 
@@ -123,7 +124,7 @@ export class AuthService {
     const isMatch = await bcrypt.compare(password, hashToCompare);
 
     if (!user) {
-      this.recordFailedAttempt(username);
+      await this.recordFailedAttempt(username);
       await this.loggingService.logSecurity(
         'LOGIN_FAILED_USER_NOT_FOUND',
         `Login-Versuch mit unbekanntem Benutzernamen: ${username}`,
@@ -133,7 +134,7 @@ export class AuthService {
     }
 
     if (!isMatch) {
-      this.recordFailedAttempt(username);
+      await this.recordFailedAttempt(username);
       await this.loggingService.logSecurity(
         'LOGIN_FAILED_WRONG_PASSWORD',
         `Falsches Passwort für Benutzer: ${username}`,
@@ -143,7 +144,7 @@ export class AuthService {
     }
 
     // Erfolgreicher Login: Fehlversuche zurücksetzen
-    this.clearFailedAttempts(username);
+    await this.clearFailedAttempts(username);
     return user;
   }
 

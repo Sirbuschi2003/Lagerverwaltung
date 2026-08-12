@@ -2,6 +2,7 @@ import {
   Column,
   CreateDateColumn,
   Entity,
+  Index,
   ManyToOne,
   PrimaryGeneratedColumn,
   UpdateDateColumn,
@@ -40,6 +41,7 @@ export class RestockRequest {
   @ManyToOne(() => Location, { eager: false, nullable: true, onDelete: "SET NULL" })
   location!: Location | null;
 
+  @Index()
   @Column({ type: "enum", enum: RESTOCK_REQUEST_STATUSES, default: "PENDING" })
   status!: RestockRequestStatus;
 

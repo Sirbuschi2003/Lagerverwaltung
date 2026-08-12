@@ -131,7 +131,7 @@ export class PurchasingService {
         break;
     }
 
-    return qb.getMany();
+    return qb.take(500).getMany();
   }
 
   async findOne(id: string, branchId?: string | null) {

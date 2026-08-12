@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { Box, Chip, Stack, useTheme } from "@mui/material";
 import { DirectionsCar, WifiOff } from "@mui/icons-material";
 import { useNavigate } from "react-router-dom";
@@ -22,6 +22,8 @@ const AppLayout = () => {
   const layoutStyles = getAppLayoutStyles(theme);
   const { settings, loaded: settingsLoaded, loadSettings } = useUserSettingsStore();
   const { syncFromExternal } = useThemeMode();
+  const syncFromExternalRef = useRef(syncFromExternal);
+  useEffect(() => { syncFromExternalRef.current = syncFromExternal; });
 
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [vehicleData, setVehicleData] = useState<{ licensePlate?: string | null } | null>(null);
@@ -37,8 +39,8 @@ const AppLayout = () => {
   useEffect(() => {
     if (!settingsLoaded) return;
     const { themeMode, themePreset } = settings;
-    if (themeMode || themePreset) syncFromExternal(themeMode, themePreset);
-  }, [settingsLoaded]); // eslint-disable-line react-hooks/exhaustive-deps
+    if (themeMode || themePreset) syncFromExternalRef.current(themeMode, themePreset);
+  }, [settingsLoaded, settings]);
 
   const getVehicleId = () => {
     if (user?.vehicleId && user?.id) {

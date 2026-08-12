@@ -9,6 +9,8 @@ import { EmailModule } from "../email/email.module";
 import { LoggingModule } from "../logging/logging.module";
 import { UsersModule } from "../users/users.module";
 
+import { User } from "../users/entities/user.entity";
+
 import { AuthController } from "./auth.controller";
 import { AuthService } from "./auth.service";
 import { PasswordHistory } from "./entities/password-history.entity";
@@ -21,7 +23,7 @@ import { JwtStrategy } from "./strategies/jwt.strategy";
 @Module({
   imports: [
     ConfigModule,
-    TypeOrmModule.forFeature([PasswordResetToken, PasswordHistory, RefreshToken]),
+    TypeOrmModule.forFeature([PasswordResetToken, PasswordHistory, RefreshToken, User]),
     UsersModule,
     AccessControlModule,
     LoggingModule,

@@ -37,7 +37,6 @@ function isAllowedImageBuffer(buf: Buffer): boolean {
   return false;
 }
 
-@SkipThrottle()
 @Controller("items")
 @UseGuards(JwtAuthGuard, PermissionsGuard)
 export class ItemsController {
@@ -45,6 +44,7 @@ export class ItemsController {
 
   constructor(private readonly itemsService: ItemsService) {}
 
+  @SkipThrottle()
   @Get()
   @Permissions("items.view")
   async findAll(
@@ -129,6 +129,7 @@ export class ItemsController {
     }
   }
 
+  @SkipThrottle()
   @Post("bulk/preview")
   @Permissions("items.create")
   async previewBulk(
@@ -228,6 +229,7 @@ export class ItemsController {
     }
   }
 
+  @SkipThrottle()
   @Get("by-code/:code")
   @Permissions("items.view")
   async findByCode(@Req() req: ItemsRequest, @Param("code") code: string) {
@@ -282,6 +284,7 @@ export class ItemsController {
     }
   }
 
+  @SkipThrottle()
   @Get(":id/image")
   @Public()
   @Header("Cache-Control", "public, max-age=86400")
@@ -296,6 +299,7 @@ export class ItemsController {
     }
   }
 
+  @SkipThrottle()
   @Get(":id")
   @Permissions("items.view")
   async findOne(@Req() req: ItemsRequest, @Param("id") id: string) {

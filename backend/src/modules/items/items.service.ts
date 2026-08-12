@@ -528,35 +528,39 @@ export class ItemsService {
     for (let i = 0; i < entities.length; i += BATCH_SIZE) {
       const batch = entities.slice(i, i + BATCH_SIZE);
       try {
-        const savedBatch = await this.repository.save(batch);
-        result.created += savedBatch.length;
+        let batchCreated = 0;
+        await this.dataSource.transaction(async (manager) => {
+          const savedBatch = await manager.save(batch);
+          batchCreated = savedBatch.length;
 
-        // Alt-Codes separat einfügen (nach dem Save, damit itemId bekannt ist)
-        const codeEntries = savedBatch.flatMap((saved) => {
-          const altCodes = altCodesByCode.get(saved.code) ?? [];
-          return altCodes.map((code) => this.codesRepository.create({ code, branchId: branchId ?? null as any, item: { id: saved.id } as any }));
+          // Alt-Codes separat einfügen (nach dem Save, damit itemId bekannt ist)
+          const codeEntries = savedBatch.flatMap((saved) => {
+            const altCodes = altCodesByCode.get(saved.code) ?? [];
+            return altCodes.map((code) => this.codesRepository.create({ code, branchId: branchId ?? null as any, item: { id: saved.id } as any }));
+          });
+          if (codeEntries.length > 0) {
+            await manager.save(codeEntries);
+          }
+
+          const stockEntries: StockLevel[] = [];
+          for (const saved of savedBatch) {
+            const stock = initialStockByCode.get(saved.code);
+            if (!stock) continue;
+            stockEntries.push(
+              this.stockLevelsRepository.create({
+                item: { id: saved.id } as any,
+                location: { id: stock.locationId } as any,
+                vehicle: null,
+                quantity: stock.quantity,
+                targetQuantity: stock.targetQuantity,
+              }),
+            );
+          }
+          if (stockEntries.length > 0) {
+            await manager.save(stockEntries);
+          }
         });
-        if (codeEntries.length > 0) {
-          await this.codesRepository.save(codeEntries);
-        }
-
-        const stockEntries: StockLevel[] = [];
-        for (const saved of savedBatch) {
-          const stock = initialStockByCode.get(saved.code);
-          if (!stock) continue;
-          stockEntries.push(
-            this.stockLevelsRepository.create({
-              item: { id: saved.id } as any,
-              location: { id: stock.locationId } as any,
-              vehicle: null,
-              quantity: stock.quantity,
-              targetQuantity: stock.targetQuantity,
-            }),
-          );
-        }
-        if (stockEntries.length > 0) {
-          await this.stockLevelsRepository.save(stockEntries);
-        }
+        result.created += batchCreated;
       } catch (error) {
         result.errors.push(`Batch-Fehler (Neu): ${error instanceof Error ? error.message : String(error)}`);
       }

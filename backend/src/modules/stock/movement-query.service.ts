@@ -1,6 +1,6 @@
 import { BadRequestException, Injectable, Logger, NotFoundException } from "@nestjs/common";
 import { InjectRepository } from "@nestjs/typeorm";
-import { Repository } from "typeorm";
+import { Repository, SelectQueryBuilder } from "typeorm";
 
 import { LocationsService } from "../locations/locations.service";
 import { StockMovement, StockMovementType } from "./entities/stock-movement.entity";
@@ -58,6 +58,18 @@ export class MovementQueryService {
     }
   }
 
+  private applyTemporalFilters(
+    qb: SelectQueryBuilder<StockMovement>,
+    params: { type?: StockMovementType; from?: Date; to?: Date; source?: string },
+    excludeImports = true,
+  ): void {
+    if (params.type) qb.andWhere("movement.type = :type", { type: params.type });
+    if (params.from) qb.andWhere("movement.occurredAt >= :from", { from: params.from });
+    if (params.to) qb.andWhere("movement.occurredAt <= :to", { to: params.to });
+    if (excludeImports) qb.andWhere("movement.source NOT LIKE :importPattern", { importPattern: "%import%" });
+    if (params.source) qb.andWhere("movement.source LIKE :source", { source: `%${params.source}%` });
+  }
+
   async getMovements(params: {
     itemId?: string;
     vehicleId?: string;
@@ -108,11 +120,7 @@ export class MovementQueryService {
     if (params.itemId) qb.andWhere("item.id = :itemId", { itemId: params.itemId });
     if (params.vehicleId) qb.andWhere("vehicle.id = :vehicleId", { vehicleId: params.vehicleId });
     if (params.userId) qb.andWhere("user.id = :userId", { userId: params.userId });
-    if (params.type) qb.andWhere("movement.type = :type", { type: params.type });
-    if (params.from) qb.andWhere("movement.occurredAt >= :from", { from: params.from });
-    if (params.to) qb.andWhere("movement.occurredAt <= :to", { to: params.to });
-    qb.andWhere("movement.source NOT LIKE :importPattern", { importPattern: "%import%" });
-    if (params.source) qb.andWhere("movement.source LIKE :source", { source: `%${params.source}%` });
+    this.applyTemporalFilters(qb, params);
 
     const limit = Math.min(params.limit || 50, 500);
     const offset = params.offset || 0;
@@ -140,10 +148,7 @@ export class MovementQueryService {
     if (params.itemId) summaryQb.andWhere("movement.itemId = :itemId", { itemId: params.itemId });
     if (params.vehicleId) summaryQb.andWhere("movement.vehicleId = :vehicleId", { vehicleId: params.vehicleId });
     if (params.userId) summaryQb.andWhere("movement.userId = :userId", { userId: params.userId });
-    if (params.type) summaryQb.andWhere("movement.type = :type", { type: params.type });
-    if (params.from) summaryQb.andWhere("movement.occurredAt >= :from", { from: params.from });
-    if (params.to) summaryQb.andWhere("movement.occurredAt <= :to", { to: params.to });
-    summaryQb.andWhere("movement.source NOT LIKE :importPattern", { importPattern: "%import%" });
+    this.applyTemporalFilters(summaryQb, params);
 
     const raw = await summaryQb.groupBy("movement.type").getRawMany<MovementSummaryRow>();
     const summary = {
