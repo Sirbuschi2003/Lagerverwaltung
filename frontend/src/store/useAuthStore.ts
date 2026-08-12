@@ -19,12 +19,10 @@ interface AuthState {
   refreshToken: string | null;
   user: UserProfile | null;
   lastActivity: number;
-  authInitializing: boolean;
   login: (params: { username: string; password: string }) => Promise<void>;
   logout: () => void;
   refreshProfile: () => Promise<void>;
   refreshAccessToken: () => Promise<void>;
-  initializeAuth: () => Promise<void>;
   updateUserRefreshInterval: (userId: string, interval: number) => Promise<void>;
   checkTokenValidity: () => boolean;
   updateLastActivity: () => void;
@@ -59,7 +57,6 @@ const useAuthStore = create<AuthState>()(
       refreshToken: null,
       user: null,
       lastActivity: Date.now(),
-      authInitializing: true,
 
       login: async ({ username, password }) => {
         const sanitizedUsername = sanitizeInput(username);
@@ -264,44 +261,14 @@ const useAuthStore = create<AuthState>()(
         }
       },
 
-      initializeAuth: async () => {
-        const { user, isSessionExpired } = get();
-        if (!user || isSessionExpired()) {
-          set({ authInitializing: false });
-          return;
-        }
-        if (navigator.onLine) {
-          await get().refreshAccessToken();
-        } else {
-          // Offline: Token aus gecachtem User-Profil regenerieren.
-          // Kein Passwort noetig — User war zuletzt erfolgreich eingeloggt.
-          // Das Backend akzeptiert Offline-Token nicht, daher kein Sicherheitsproblem.
-          try {
-            const { generateOfflineTokenFromProfile } = await import('../utils/offlineAuth');
-            const offlineToken = generateOfflineTokenFromProfile({
-              userId: user.id,
-              username: user.username,
-              displayName: user.displayName,
-              role: user.role,
-              vehicleId: user.vehicleId ?? null,
-              permissions: user.permissions ?? [],
-            });
-            api.defaults.headers.common.Authorization = `Bearer ${offlineToken}`;
-            set({ token: offlineToken });
-          } catch {
-            // Fallback: Login-Seite (Offline-Login mit Passwort moeglich)
-          }
-        }
-        set({ authInitializing: false });
-      },
-
       refreshProfile: async () => {
         const token = get().token;
         if (!token) {
           set({ user: null });
           return;
         }
-        if (!validateAuthToken(token) || get().isSessionExpired()) {
+        const isOfflineToken = token.startsWith('offline.');
+        if ((!isOfflineToken && !validateAuthToken(token)) || get().isSessionExpired()) {
           SecurityLogger.logSecurityEvent('session_expired', { userId: get().user?.id });
           get().logout();
           return;
@@ -351,7 +318,8 @@ const useAuthStore = create<AuthState>()(
       checkTokenValidity: (): boolean => {
         const token = get().token;
         if (!token) return false;
-        return validateAuthToken(token) && !get().isSessionExpired();
+        const isOfflineToken = token.startsWith('offline.');
+        return (isOfflineToken || validateAuthToken(token)) && !get().isSessionExpired();
       },
 
       updateLastActivity: () => {
@@ -378,24 +346,21 @@ const useAuthStore = create<AuthState>()(
     }),
     {
       name: "auth-store",
-      version: 5, // Erhoehe Version fuer Session-Timeout-Aenderung (30 -> 7 Tage)
-      // SEC: only persist user profile and activity timestamp — never the access token
-      partialize: (state) => ({ user: state.user, lastActivity: state.lastActivity }),
+      version: 5,
+      // Token wird persistiert damit F5 und App-Reopen ohne Re-Login funktioniert.
+      // Abgelaufene JWTs werden beim ersten API-Call per 401-Interceptor via Cookie erneuert.
+      partialize: (state) => ({ token: state.token, user: state.user, lastActivity: state.lastActivity }),
       onRehydrateStorage: () => (state) => {
-        if (state?.token) {
-          if (validateAuthToken(state.token) && !state.isSessionExpired?.()) {
-            api.defaults.headers.common.Authorization = `Bearer ${state.token}`;
-          } else {
-            SecurityLogger.logSecurityEvent('invalid_token_on_startup', {});
-            SecureTokenManager.clearToken();
-            state.logout?.();
-          }
+        if (!state?.token || !state?.user) return;
+        const isOfflineToken = state.token.startsWith('offline.');
+        const tokenValid = isOfflineToken || validateAuthToken(state.token);
+        if (tokenValid && !state.isSessionExpired?.()) {
+          api.defaults.headers.common.Authorization = `Bearer ${state.token}`;
+        } else {
+          SecurityLogger.logSecurityEvent('invalid_token_on_startup', {});
+          SecureTokenManager.clearToken();
+          state.logout?.();
         }
-        // Token ist nach Reload immer null (in-memory only).
-        // initializeAuth() holt per HttpOnly-Cookie einen neuen Access-Token vom Backend.
-        setTimeout(() => {
-          useAuthStore.getState().initializeAuth();
-        }, 0);
       },
     },
   ),
