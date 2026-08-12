@@ -210,11 +210,6 @@ export class AuthService {
         throw new UnauthorizedException("User not found");
       }
 
-      // Alten Token invalidieren (Token-Rotation)
-      stored.isRevoked = true;
-      stored.revokedAt = new Date();
-      await this.refreshTokenRepo.save(stored);
-
       const payload = {
         sub: user.id,
         username: user.username,
@@ -223,28 +218,14 @@ export class AuthService {
         branchId: user.branchId ?? null,
         locationIds: user.locations?.map(l => l.id) ?? [],
       };
-      const refreshPayload = { ...payload, tokenType: "refresh" };
-      const refreshExpiresIn =
-        this.configService.get<string>("auth.jwtRefreshExpiresIn") || "30d";
 
-      const newRefreshToken = await this.jwtService.signAsync(refreshPayload, { expiresIn: refreshExpiresIn });
-
-      // Neuen Token persistieren
-      try {
-        await this.refreshTokenRepo.save({
-          userId: user.id,
-          tokenHash: this.hashToken(newRefreshToken),
-          expiresAt: this.parseExpiryToDate(refreshExpiresIn),
-          revokedAt: null,
-          isRevoked: false,
-        });
-      } catch (err: any) {
-        if (err?.code !== "ER_DUP_ENTRY") throw err;
-      }
-
+      // Kein Token-Rotation: gleicher Refresh-Token bleibt gültig bis zu seinem natürlichen Ablauf.
+      // Rotation wurde entfernt weil Firefox Set-Cookie-Antworten nicht zuverlässig speichert,
+      // was nach jedem Refresh zu einem stale/revoked Cookie und damit Logout-Loops führte.
+      // Explizite Revocation beim Logout bleibt erhalten (SEC-002 DB-Validierung aktiv).
       return {
         accessToken: await this.jwtService.signAsync(payload),
-        refreshToken: newRefreshToken,
+        refreshToken,
         user: await this.buildProfile(user),
       };
     } catch (err) {
