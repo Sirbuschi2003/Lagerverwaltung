@@ -13,6 +13,7 @@ import { AuthController } from "./auth.controller";
 import { AuthService } from "./auth.service";
 import { PasswordHistory } from "./entities/password-history.entity";
 import { PasswordResetToken } from "./entities/password-reset-token.entity";
+import { RefreshToken } from "./entities/refresh-token.entity";
 import { JwtAuthGuard } from "./guards/jwt-auth.guard";
 import { RolesGuard } from "./guards/roles.guard";
 import { JwtStrategy } from "./strategies/jwt.strategy";
@@ -20,7 +21,7 @@ import { JwtStrategy } from "./strategies/jwt.strategy";
 @Module({
   imports: [
     ConfigModule,
-    TypeOrmModule.forFeature([PasswordResetToken, PasswordHistory]),
+    TypeOrmModule.forFeature([PasswordResetToken, PasswordHistory, RefreshToken]),
     UsersModule,
     AccessControlModule,
     LoggingModule,

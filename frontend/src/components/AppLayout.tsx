@@ -4,7 +4,7 @@ import { DirectionsCar, WifiOff } from "@mui/icons-material";
 import { useNavigate } from "react-router-dom";
 import TabBar from "./TabBar";
 import KeepAliveOutlet from "./KeepAliveOutlet";
-import axios from "axios";
+import api from "../utils/api";
 
 import useAuthStore from "../store/useAuthStore";
 import { useUserSettingsStore } from "../store/useUserSettingsStore";
@@ -58,7 +58,7 @@ const AppLayout = () => {
       const vehicleId = getVehicleId();
       if (!vehicleId) { setVehicleData(null); return; }
       try {
-        const response = await axios.get(`/api/vehicles/${vehicleId}`);
+        const response = await api.get(`/api/vehicles/${vehicleId}`);
         setVehicleData(response.data ?? null);
       } catch {
         setVehicleData(null);

@@ -13,8 +13,10 @@ import { LoggingService } from "../logging/services/logging.service";
 import { User } from "../users/entities/user.entity";
 import { UsersService } from "../users/users.service";
 
+import { addToPasswordHistory, isPasswordInHistory, PASSWORD_HISTORY_LIMIT } from "../../common/utils/password-history.util";
 import { PasswordHistory } from "./entities/password-history.entity";
 import { PasswordResetToken } from "./entities/password-reset-token.entity";
+import { RefreshToken } from "./entities/refresh-token.entity";
 
 interface RefreshTokenPayload {
   sub: string;
@@ -34,11 +36,11 @@ export class AuthService {
     private readonly passwordResetTokenRepository: Repository<PasswordResetToken>,
     @InjectRepository(PasswordHistory)
     private readonly passwordHistoryRepository: Repository<PasswordHistory>,
+    @InjectRepository(RefreshToken)
+    private readonly refreshTokenRepo: Repository<RefreshToken>,
   ) {}
 
   private readonly logger = new Logger(AuthService.name);
-
-  private static readonly PASSWORD_HISTORY_LIMIT = 5;
 
   /**
    * In-Memory-Tracking fehlgeschlagener Login-Versuche für Account-Lockout.
@@ -87,35 +89,23 @@ export class AuthService {
     AuthService.failedAttempts.delete(`user:${username.toLowerCase()}`);
   }
 
-  /** Prüft ob das neue Passwort in der Passwort-Historie vorkommt */
-  private async isPasswordInHistory(userId: string, newPassword: string): Promise<boolean> {
-    const history = await this.passwordHistoryRepository.find({
-      where: { user: { id: userId } },
-      order: { createdAt: "DESC" },
-      take: AuthService.PASSWORD_HISTORY_LIMIT,
-      relations: ["user"],
-    });
-    for (const entry of history) {
-      if (await bcrypt.compare(newPassword, entry.passwordHash)) return true;
-    }
-    return false;
+  /** SHA-256-Hash eines Refresh-Tokens (kein Klartext in der DB) */
+  private hashToken(token: string): string {
+    return crypto.createHash("sha256").update(token).digest("hex");
   }
 
-  /** Speichert einen neuen Hash in der Passwort-Historie und bereinigt ältere Einträge */
-  private async addToPasswordHistory(userId: string, passwordHash: string): Promise<void> {
-    await this.passwordHistoryRepository.save(
-      this.passwordHistoryRepository.create({ user: { id: userId }, passwordHash })
-    );
-    // Nur die letzten N Hashes behalten
-    const all = await this.passwordHistoryRepository.find({
-      where: { user: { id: userId } },
-      order: { createdAt: "DESC" },
-      relations: ["user"],
-    });
-    if (all.length > AuthService.PASSWORD_HISTORY_LIMIT) {
-      const toDelete = all.slice(AuthService.PASSWORD_HISTORY_LIMIT);
-      await this.passwordHistoryRepository.remove(toDelete);
+  /**
+   * Parst eine JWT-ExpiresIn-Angabe (z.B. "30d", "1h") in ein absolutes Ablaufdatum.
+   * Unterstuetzte Einheiten: s (Sekunden), m (Minuten), h (Stunden), d (Tage).
+   */
+  private parseExpiryToDate(expiresIn: string): Date {
+    const match = /^(\d+)([smhd])$/.exec(expiresIn);
+    if (!match) {
+      throw new Error(`Ungueltiges expiresIn-Format: ${expiresIn}`);
     }
+    const value = parseInt(match[1], 10);
+    const unitMs: Record<string, number> = { s: 1_000, m: 60_000, h: 3_600_000, d: 86_400_000 };
+    return new Date(Date.now() + value * unitMs[match[2]]);
   }
 
   // Dummy-Hash fuer Timing-Attack-Schutz: verhindert, dass Angreifer anhand der
@@ -174,9 +164,20 @@ export class AuthService {
     // Log erfolgreichen Login
     await this.loggingService.logUserLogin(user, context);
 
+    const refreshToken = await this.jwtService.signAsync(refreshPayload, { expiresIn: refreshExpiresIn });
+
+    // Refresh-Token in Datenbank persistieren (SEC-002)
+    await this.refreshTokenRepo.save({
+      userId: user.id,
+      tokenHash: this.hashToken(refreshToken),
+      expiresAt: this.parseExpiryToDate(refreshExpiresIn),
+      revokedAt: null,
+      isRevoked: false,
+    });
+
     return {
       accessToken: await this.jwtService.signAsync(payload),
-      refreshToken: await this.jwtService.signAsync(refreshPayload, { expiresIn: refreshExpiresIn }),
+      refreshToken,
       user: await this.buildProfile(user),
     };
   }
@@ -191,11 +192,23 @@ export class AuthService {
         throw new UnauthorizedException("Invalid refresh token");
       }
 
+      // DB-seitige Validierung: Token muss existieren, aktiv und nicht abgelaufen sein (SEC-002)
+      const hash = this.hashToken(refreshToken);
+      const stored = await this.refreshTokenRepo.findOne({ where: { tokenHash: hash, isRevoked: false } });
+      if (!stored || stored.expiresAt < new Date()) {
+        throw new UnauthorizedException("Refresh token ungueltig oder abgelaufen");
+      }
+
       const userId = decoded.sub;
       const user = await this.usersService.findOneById(userId);
       if (!user) {
         throw new UnauthorizedException("User not found");
       }
+
+      // Alten Token invalidieren (Token-Rotation)
+      stored.isRevoked = true;
+      stored.revokedAt = new Date();
+      await this.refreshTokenRepo.save(stored);
 
       const payload = {
         sub: user.id,
@@ -209,9 +222,20 @@ export class AuthService {
       const refreshExpiresIn =
         this.configService.get<string>("auth.jwtRefreshExpiresIn") || "30d";
 
+      const newRefreshToken = await this.jwtService.signAsync(refreshPayload, { expiresIn: refreshExpiresIn });
+
+      // Neuen Token persistieren
+      await this.refreshTokenRepo.save({
+        userId: user.id,
+        tokenHash: this.hashToken(newRefreshToken),
+        expiresAt: this.parseExpiryToDate(refreshExpiresIn),
+        revokedAt: null,
+        isRevoked: false,
+      });
+
       return {
         accessToken: await this.jwtService.signAsync(payload),
-        refreshToken: await this.jwtService.signAsync(refreshPayload, { expiresIn: refreshExpiresIn }),
+        refreshToken: newRefreshToken,
         user: await this.buildProfile(user),
       };
     } catch (err) {
@@ -224,6 +248,17 @@ export class AuthService {
     }
   }
 
+  async logout(refreshToken?: string): Promise<void> {
+    if (!refreshToken) return;
+    const hash = this.hashToken(refreshToken);
+    const stored = await this.refreshTokenRepo.findOne({ where: { tokenHash: hash, isRevoked: false } });
+    if (stored) {
+      stored.isRevoked = true;
+      stored.revokedAt = new Date();
+      await this.refreshTokenRepo.save(stored);
+    }
+  }
+
   async getProfile(userId: string) {
     const user = await this.usersService.findOneById(userId);
     if (!user) {
@@ -233,7 +268,7 @@ export class AuthService {
   }
 
   async requestPasswordReset(
-    email: string, 
+    email: string,
     context?: { ipAddress?: string; userAgent?: string }
   ): Promise<{ message: string }> {
     const user = await this.usersService.findOneByEmail(email);
@@ -366,11 +401,11 @@ export class AuthService {
     }
 
     // Prüfe ob neues Passwort in der Passwort-Historie vorkommt (inkl. aktuelles Passwort)
-    const isInHistory = await this.isPasswordInHistory(user.id, newPassword);
+    const isInHistory = await isPasswordInHistory(this.passwordHistoryRepository, user.id, newPassword);
     const isSameAsCurrent = await bcrypt.compare(newPassword, user.passwordHash);
     if (isSameAsCurrent || isInHistory) {
       throw new BadRequestException(
-        `Das neue Passwort darf nicht eines der letzten ${AuthService.PASSWORD_HISTORY_LIMIT} Passwörter sein`
+        `Das neue Passwort darf nicht eines der letzten ${PASSWORD_HISTORY_LIMIT} Passwörter sein`
       );
     }
 
@@ -379,7 +414,7 @@ export class AuthService {
     const passwordHash = await bcrypt.hash(newPassword, saltRounds);
 
     // Aktuellen Hash in Historie speichern, dann updaten
-    await this.addToPasswordHistory(user.id, user.passwordHash);
+    await addToPasswordHistory(this.passwordHistoryRepository, user.id, user.passwordHash);
     await this.usersService.updatePassword(user.id, passwordHash);
 
     // Log erfolgreiche Passwort-Änderung
@@ -409,7 +444,3 @@ export class AuthService {
     };
   }
 }
-
-
-
-

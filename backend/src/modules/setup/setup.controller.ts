@@ -10,6 +10,7 @@ import { Roles } from "../auth/decorators/roles.decorator";
 
 import { UsersService } from "../users/users.service";
 
+import { AutoBackupConfigDto } from "./dto/auto-backup-config.dto";
 import { CreateInitialAdminDto } from "./dto/create-admin.dto";
 import { SetupService } from "./setup.service";
 import { PermissionsGuard } from "../access-control/guards/permissions.guard";
@@ -149,11 +150,7 @@ export class SetupController {
   @UseGuards(JwtAuthGuard, RolesGuard, PermissionsGuard)
   @Roles("MANAGER")
   @Permissions("backup.access")
-  async setAutoBackupConfig(@Body() config: {
-    enabled: boolean;
-    frequency: 'daily' | 'weekly' | 'monthly';
-    time: string;
-  }) {
+  async setAutoBackupConfig(@Body() config: AutoBackupConfigDto) {
     await this.setupService.setAutoBackupConfig(config);
     return { success: true, config };
   }

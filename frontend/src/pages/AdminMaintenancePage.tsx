@@ -77,6 +77,7 @@ import {
 } from '../utils/api';
 import api from '../utils/api';
 import useAuthStore from '../store/useAuthStore';
+import ConfirmDialog from '../components/ConfirmDialog';
 
 const RETENTION_YEARS = 10;
 
@@ -123,6 +124,11 @@ const AdminMaintenancePage = () => {
   const [changelog, setChangelog] = useState<string | null>(null);
   const [changelogOpen, setChangelogOpen] = useState(false);
   const [changelogLoading, setChangelogLoading] = useState(false);
+
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [confirmTitle, setConfirmTitle] = useState('');
+  const [confirmMessage, setConfirmMessage] = useState('');
+  const [pendingAction, setPendingAction] = useState<() => void>(() => () => {});
 
   // Bestellarchiv
   const [purgePreview, setPurgePreview] = useState<{ count: number; oldestDate: string | null; cutoffDate: string } | null>(null);
@@ -467,21 +473,23 @@ const AdminMaintenancePage = () => {
     }
   };
 
-  const handlePurge = async () => {
+  const handlePurge = () => {
     if (!purgePreview || purgePreview.count === 0) return;
-    if (!window.confirm(
-      `Möchten Sie wirklich ${purgePreview.count} Bestellung(en) älter als ${RETENTION_YEARS} Jahre unwiderruflich löschen?\n\nDies löscht auch die zugehörigen PDF-Dateien.`
-    )) return;
-    setPurgeLoading(true);
-    try {
-      const result = await purgeOldOrders(RETENTION_YEARS);
-      setPurgeResult(`${result.deleted} Bestellung(en) erfolgreich gelöscht.`);
-      setPurgePreview(null);
-    } catch (error: any) {
-      alert('Fehler beim Löschen: ' + (error.response?.data?.message || error.message));
-    } finally {
-      setPurgeLoading(false);
-    }
+    setConfirmTitle('Bestellungen unwiderruflich löschen');
+    setConfirmMessage(`Möchten Sie wirklich ${purgePreview.count} Bestellung(en) älter als ${RETENTION_YEARS} Jahre unwiderruflich löschen? Dies löscht auch die zugehörigen PDF-Dateien.`);
+    setPendingAction(() => async () => {
+      setPurgeLoading(true);
+      try {
+        const result = await purgeOldOrders(RETENTION_YEARS);
+        setPurgeResult(`${result.deleted} Bestellung(en) erfolgreich gelöscht.`);
+        setPurgePreview(null);
+      } catch (error: any) {
+        alert('Fehler beim Löschen: ' + (error.response?.data?.message || error.message));
+      } finally {
+        setPurgeLoading(false);
+      }
+    });
+    setConfirmOpen(true);
   };
 
   const handleWarehouseResetPreview = async () => {
@@ -574,24 +582,26 @@ const AdminMaintenancePage = () => {
     }
   };
 
-  const handleMovementCleanupRun = async () => {
+  const handleMovementCleanupRun = () => {
     const days = parseInt(movementRetentionInput, 10);
     if (!movementCleanupPreview || movementCleanupPreview.count === 0 || isNaN(days)) return;
-    if (!window.confirm(
-      `Möchten Sie ${movementCleanupPreview.count.toLocaleString('de-DE')} Buchungen, die älter als ${days} Tage sind, unwiderruflich löschen?`
-    )) return;
-    setMovementCleanupRunning(true);
-    setMovementCleanupResult(null);
-    setMovementCleanupError(null);
-    try {
-      const result = await runMovementCleanup(days);
-      setMovementCleanupResult(`${result.deleted.toLocaleString('de-DE')} Buchungen erfolgreich gelöscht.`);
-      setMovementCleanupPreview(null);
-    } catch (error: any) {
-      setMovementCleanupError('Fehler beim Löschen: ' + (error.response?.data?.message || error.message));
-    } finally {
-      setMovementCleanupRunning(false);
-    }
+    setConfirmTitle('Buchungen unwiderruflich löschen');
+    setConfirmMessage(`Möchten Sie ${movementCleanupPreview.count.toLocaleString('de-DE')} Buchungen, die älter als ${days} Tage sind, unwiderruflich löschen?`);
+    setPendingAction(() => async () => {
+      setMovementCleanupRunning(true);
+      setMovementCleanupResult(null);
+      setMovementCleanupError(null);
+      try {
+        const result = await runMovementCleanup(days);
+        setMovementCleanupResult(`${result.deleted.toLocaleString('de-DE')} Buchungen erfolgreich gelöscht.`);
+        setMovementCleanupPreview(null);
+      } catch (error: any) {
+        setMovementCleanupError('Fehler beim Löschen: ' + (error.response?.data?.message || error.message));
+      } finally {
+        setMovementCleanupRunning(false);
+      }
+    });
+    setConfirmOpen(true);
   };
 
   const isUpdating = updateStarting || (updateStatus?.updateRunning ?? false) || waitingForRestart || waitingForCaddy;
@@ -1409,6 +1419,14 @@ const AdminMaintenancePage = () => {
           </Button>
         </DialogActions>
       </Dialog>
+      <ConfirmDialog
+        open={confirmOpen}
+        title={confirmTitle}
+        message={confirmMessage}
+        confirmLabel="Unwiderruflich löschen"
+        onConfirm={() => { pendingAction(); setConfirmOpen(false); }}
+        onCancel={() => setConfirmOpen(false)}
+      />
     </Box>
   );
 };

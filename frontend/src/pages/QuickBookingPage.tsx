@@ -654,6 +654,7 @@ const QuickBookingPage: React.FC = () => {
                             onClick={() => { setCameraScanTarget("barcode"); setCameraOpen(true); setCameraScanFeedback(null); }}
                             edge="end"
                             color="primary"
+                            aria-label="Kamera-Scanner öffnen"
                           >
                             <QrCodeScannerIcon />
                           </IconButton>
@@ -696,6 +697,7 @@ const QuickBookingPage: React.FC = () => {
                         edge="end"
                         color="primary"
                         onClick={() => { setCameraScanTarget("source"); setCameraOpen(true); setCameraScanFeedback(null); }}
+                        aria-label="Vorgangsnummer scannen"
                       >
                         <QrCodeScannerIcon />
                       </IconButton>
@@ -880,7 +882,7 @@ const QuickBookingPage: React.FC = () => {
             <Typography variant="h6" fontWeight={800} sx={{ flex: 1 }}>
               Duplikat-Warnung
             </Typography>
-            <IconButton size="small" onClick={() => setDuplicateWarnings([])} sx={{ color: "warning.contrastText" }}>
+            <IconButton size="small" onClick={() => setDuplicateWarnings([])} sx={{ color: "warning.contrastText" }} aria-label="Schliessen">
               <CloseIcon fontSize="small" />
             </IconButton>
           </Box>
@@ -1000,6 +1002,7 @@ const QuickBookingPage: React.FC = () => {
                       color="error"
                       onClick={() => { setBookingList((prev) => prev.filter((_, i) => i !== idx)); refocusBarcode(); }}
                       sx={{ ml: 1, flexShrink: 0 }}
+                      aria-label="Loeschen"
                     >
                       <DeleteIcon fontSize="small" />
                     </IconButton>
@@ -1170,7 +1173,7 @@ const QuickBookingPage: React.FC = () => {
       <Dialog open={qrDialogOpen} onClose={() => setQrDialogOpen(false)} maxWidth="sm" fullWidth>
         <DialogTitle sx={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
           QR-Aktionscodes drucken
-          <IconButton size="small" onClick={() => setQrDialogOpen(false)}><CloseIcon /></IconButton>
+          <IconButton size="small" onClick={() => setQrDialogOpen(false)} aria-label="Schliessen"><CloseIcon /></IconButton>
         </DialogTitle>
         <DialogContent>
           <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
@@ -1222,7 +1225,7 @@ const QuickBookingPage: React.FC = () => {
             <QrCodeScannerIcon />
             <span>{cameraScanTarget === "source" ? "Vorgangsnummer scannen" : "QR-Code / Barcode scannen"}</span>
           </Stack>
-          <IconButton size="small" onClick={closeCameraDialog}>
+          <IconButton size="small" onClick={closeCameraDialog} aria-label="Schliessen">
             <CloseIcon />
           </IconButton>
         </DialogTitle>

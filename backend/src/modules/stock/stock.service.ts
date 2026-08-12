@@ -664,21 +664,19 @@ export class StockService {
         throw new BadRequestException("Es ist keine bereitgestellte Menge zum Abholen vorhanden.");
       }
 
-      await this.recordMovement({
-        itemId: request.item.id,
-        vehicleId: request.vehicle.id,
-        userId: actor?.id ?? undefined,
-        type: "CHECKIN",
-        quantity: pickupQuantity,
-        occurredAt: new Date().toISOString(),
-        note: dto.note?.trim() || `Lagerausgabe uebernommen (${pickupQuantity} Stueck)`,
-        source: `restock-pickup:${request.id}`,
-      });
-
-      // TODO: recordMovement() verwendet kein EntityManager und läuft daher außerhalb
-      // der Transaktion (bekannte Lücke). Für vollständige Atomizität muss recordMovement()
-      // auf einen optionalen EntityManager-Parameter umgestellt werden.
+      const resolvedRequest = request;
       const savedRequest = await this.dataSource.transaction(async (manager): Promise<RestockRequest> => {
+        await this.recordMovement({
+          itemId: resolvedRequest.item.id,
+          vehicleId: resolvedRequest.vehicle.id,
+          userId: actor?.id ?? undefined,
+          type: "CHECKIN",
+          quantity: pickupQuantity,
+          occurredAt: new Date().toISOString(),
+          note: dto.note?.trim() || `Lagerausgabe uebernommen (${pickupQuantity} Stueck)`,
+          source: `restock-pickup:${resolvedRequest.id}`,
+        }, manager);
+
         // Reloaden innerhalb der Transaktion, damit Status-Update und Reload atomar sind.
         // Falls nicht gefunden: Fallback auf das bereits geladene request-Objekt.
         const fresh: RestockRequest = (await this.reloadRestockRequest(id)) ?? request!;
@@ -977,89 +975,95 @@ export class StockService {
         ? stockLevel.item.storageLocation
         : await this.getDefaultWarehouseLocation();
 
-    const shortage = Math.max(0, stockLevel.targetQuantity - stockLevel.quantity);
-
-    // WICHTIG: Finde ALLE RestockRequests fÃ¼r diesen StockLevel (nicht nur den ersten!)
-    const allRequests = await this.restockRepository.find({
-      where: { stockLevel: { id: stockLevel.id } },
-      order: { createdAt: 'ASC' },
-      relations: ["location"],
-    });
-
-    // Wenn mehrere Requests existieren, bereinigen wir Duplikate
-    if (allRequests.length > 1) {
-      this.logger.debug(`[RestockRequest] WARNUNG: ${allRequests.length} Duplikate fÃ¼r StockLevel ${stockLevel.id} gefunden - bereinige...`);
-      
-      // Behalte den ersten Request (Ã¤ltester), lÃ¶sche alle anderen
-      const duplicates = allRequests.slice(1);
-      
-      for (const dup of duplicates) {
-        this.logger.debug(`[RestockRequest] LÃ¶sche Duplikat-Request ${dup.id} fÃ¼r StockLevel ${stockLevel.id}`);
-        await this.restockRepository.remove(dup);
-      }
-      
-      // Verwende nur den primÃ¤ren Request weiter
-      allRequests.length = 1;
-    }
-
-    let request = allRequests.length > 0 ? allRequests[0] : null;
-
-    if (shortage <= 0) {
-      if (request && request.status !== "FULFILLED") {
-        request.status = "FULFILLED";
-        request.quantityNeeded = 0;
-        request.quantityProvided = 0;
-        request.readyAt = request.readyAt ?? new Date();
-        request.fulfilledAt = new Date();
-        request.preparedBy = null;
-        request.note = null;
-        await this.restockRepository.save(request);
-      }
-      return;
-    }
-
-    if (!request) {
-      this.logger.debug(`[RestockRequest] Erstelle neuen Request fÃ¼r StockLevel ${stockLevel.id}, Artikel ${stockLevel.item.code}, Fahrzeug ${stockLevel.vehicle.licensePlate}, Menge fehlt: ${shortage}`);
-      request = this.restockRepository.create({
-        stockLevel,
-        item: stockLevel.item,
-        vehicle: stockLevel.vehicle,
-        location: preferredSourceLocation ?? null,
-        status: "PENDING",
-        quantityNeeded: shortage,
-        note: null,
-        preparedBy: null,
-        readyAt: null,
-        fulfilledAt: null,
+    await this.dataSource.transaction(async (manager) => {
+      // Write lock serializes concurrent syncRestockRequest calls for the same
+      // StockLevel so that the SELECT + INSERT on RestockRequest is atomic.
+      const lockedStockLevel = await manager.findOne(StockLevel, {
+        where: { id: stockLevelId },
+        lock: { mode: "pessimistic_write" },
       });
-    } else {
-      this.logger.debug(`[RestockRequest] Aktualisiere Request fÃ¼r StockLevel ${stockLevel.id}, Artikel ${stockLevel.item.code}, Fahrzeug ${stockLevel.vehicle.licensePlate}, Menge fehlt: ${shortage}`);
-      request.quantityNeeded = shortage;
-      if ((!request.location || request.location.type === "VEHICLE") && preferredSourceLocation) {
-        request.location = preferredSourceLocation;
-      }
-      
-      // Status-Regeln fÃ¼r Synchronisation:
-      if (request.status === "FULFILLED") {
-        // FULFILLED â†’ PENDING: Nur wenn wieder Bedarf besteht
-        request.status = "PENDING";
-        request.readyAt = null;
-        request.fulfilledAt = null;
-        request.preparedBy = null;
-        request.note = null;
-        request.quantityProvided = 0;
-      } else if (request.status === "APPROVED") {
-        // SCHUTZ: APPROVED bleibt APPROVED - Lager hat bereitgestellt
-        // Bereitgestellte Menge bleibt erhalten (NICHT Ã¼berschreiben!)
-        this.logger.debug(`[RestockRequest] SCHUTZ: Status APPROVED beibehalten fÃ¼r ${stockLevel.item.code} - quantityProvided: ${request.quantityProvided} bleibt erhalten`);
-        // NICHT request.quantityProvided = 0; - das wÃ¼rde das Problem verursachen
-      } else if (request.status === "CANCELLED") {
-        this.logger.debug(`[RestockRequest] Status CANCELLED beibehalten fÃ¼r ${stockLevel.item.code}`);
-      }
-      // PENDING bleibt PENDING (Standardfall)
-    }
+      if (!lockedStockLevel) return;
 
-    await this.restockRepository.save(request);
+      const shortage = Math.max(0, lockedStockLevel.targetQuantity - lockedStockLevel.quantity);
+
+      // WICHTIG: Finde ALLE RestockRequests fÃ¼r diesen StockLevel (nicht nur den ersten!)
+      const allRequests = await manager.find(RestockRequest, {
+        where: { stockLevel: { id: stockLevelId } },
+        order: { createdAt: "ASC" },
+        relations: ["location"],
+      });
+
+      // Wenn mehrere Requests existieren, bereinigen wir Duplikate
+      if (allRequests.length > 1) {
+        this.logger.debug(`[RestockRequest] WARNUNG: ${allRequests.length} Duplikate fÃ¼r StockLevel ${stockLevelId} gefunden - bereinige...`);
+
+        const duplicates = allRequests.slice(1);
+        for (const dup of duplicates) {
+          this.logger.debug(`[RestockRequest] LÃ¶sche Duplikat-Request ${dup.id} fÃ¼r StockLevel ${stockLevelId}`);
+          await manager.remove(dup);
+        }
+        allRequests.length = 1;
+      }
+
+      let request = allRequests.length > 0 ? allRequests[0] : null;
+
+      if (shortage <= 0) {
+        if (request && request.status !== "FULFILLED") {
+          request.status = "FULFILLED";
+          request.quantityNeeded = 0;
+          request.quantityProvided = 0;
+          request.readyAt = request.readyAt ?? new Date();
+          request.fulfilledAt = new Date();
+          request.preparedBy = null;
+          request.note = null;
+          await manager.save(request);
+        }
+        return;
+      }
+
+      if (!request) {
+        this.logger.debug(`[RestockRequest] Erstelle neuen Request fÃ¼r StockLevel ${stockLevel.id}, Artikel ${stockLevel.item.code}, Fahrzeug ${stockLevel.vehicle?.licensePlate}, Menge fehlt: ${shortage}`);
+        request = manager.create(RestockRequest, {
+          stockLevel,
+          item: stockLevel.item,
+          vehicle: stockLevel.vehicle ?? undefined,
+          location: preferredSourceLocation ?? null,
+          status: "PENDING",
+          quantityNeeded: shortage,
+          note: null,
+          preparedBy: null,
+          readyAt: null,
+          fulfilledAt: null,
+        });
+      } else {
+        this.logger.debug(`[RestockRequest] Aktualisiere Request fÃ¼r StockLevel ${stockLevel.id}, Artikel ${stockLevel.item.code}, Fahrzeug ${stockLevel.vehicle?.licensePlate}, Menge fehlt: ${shortage}`);
+        request.quantityNeeded = shortage;
+        if ((!request.location || request.location.type === "VEHICLE") && preferredSourceLocation) {
+          request.location = preferredSourceLocation;
+        }
+
+        // Status-Regeln fÃ¼r Synchronisation:
+        if (request.status === "FULFILLED") {
+          // FULFILLED â†’ PENDING: Nur wenn wieder Bedarf besteht
+          request.status = "PENDING";
+          request.readyAt = null;
+          request.fulfilledAt = null;
+          request.preparedBy = null;
+          request.note = null;
+          request.quantityProvided = 0;
+        } else if (request.status === "APPROVED") {
+          // SCHUTZ: APPROVED bleibt APPROVED - Lager hat bereitgestellt
+          // Bereitgestellte Menge bleibt erhalten (NICHT Ã¼berschreiben!)
+          this.logger.debug(`[RestockRequest] SCHUTZ: Status APPROVED beibehalten fÃ¼r ${stockLevel.item.code} - quantityProvided: ${request.quantityProvided} bleibt erhalten`);
+          // NICHT request.quantityProvided = 0; - das wÃ¼rde das Problem verursachen
+        } else if (request.status === "CANCELLED") {
+          this.logger.debug(`[RestockRequest] Status CANCELLED beibehalten fÃ¼r ${stockLevel.item.code}`);
+        }
+        // PENDING bleibt PENDING (Standardfall)
+      }
+
+      await manager.save(request);
+    });
   }
 
   private mapRestockRequest(

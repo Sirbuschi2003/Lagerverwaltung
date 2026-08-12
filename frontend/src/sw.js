@@ -57,39 +57,13 @@ self.addEventListener('message', async (event) => {
     return;
   }
 
+  // PROCESS_QUEUE: intentionally not handled here.
+  // The React app manages the offline queue via useOfflineQueue.syncNow() which
+  // uses the correct IDB name ("lagerverwaltung-offline"), data structure, and
+  // auth headers. A redundant SW-side handler would use a stale DB name and
+  // have no access to the auth token — so we simply acknowledge and let React drive.
   if (event.data?.type === 'PROCESS_QUEUE') {
-    try {
-      const db = await openMovementDb();
-      try {
-        const tx = db.transaction('movements', 'readwrite');
-        const store = tx.objectStore('movements');
-        const movements = await getAllFromStore(store);
-
-        for (const movement of movements) {
-          try {
-            const response = await fetchWithTimeout('/api/stock/movement', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify(movement),
-              timeout: 4000,
-            });
-            if (!response.ok) {
-              break;
-            }
-            store.delete(movement.id);
-          } catch {
-            break;
-          }
-        }
-
-        await waitForTransaction(tx);
-        event.ports?.[0]?.postMessage({ type: 'QUEUE_PROCESSED' });
-      } finally {
-        db.close();
-      }
-    } catch (err) {
-      event.ports?.[0]?.postMessage({ type: 'QUEUE_PROCESS_ERROR', error: String(err) });
-    }
+    event.ports?.[0]?.postMessage({ type: 'QUEUE_PROCESSED' });
   }
 });
 
@@ -266,36 +240,6 @@ function fetchWithTimeout(request, options = {}) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeout);
   return fetch(request, { ...rest, signal: controller.signal }).finally(() => clearTimeout(timer));
-}
-
-function openMovementDb() {
-  return new Promise((resolve, reject) => {
-    const req = indexedDB.open('kfz-teilelager', 1);
-    req.onerror = () => reject(req.error);
-    req.onsuccess = () => resolve(req.result);
-    req.onupgradeneeded = () => {
-      const db = req.result;
-      if (!db.objectStoreNames.contains('movements')) {
-        db.createObjectStore('movements', { keyPath: 'id', autoIncrement: true });
-      }
-    };
-  });
-}
-
-function getAllFromStore(store) {
-  return new Promise((resolve, reject) => {
-    const request = store.getAll();
-    request.onsuccess = () => resolve(request.result || []);
-    request.onerror = () => reject(request.error);
-  });
-}
-
-function waitForTransaction(tx) {
-  return new Promise((resolve, reject) => {
-    tx.oncomplete = () => resolve();
-    tx.onabort = () => reject(tx.error);
-    tx.onerror = () => reject(tx.error);
-  });
 }
 
 async function precacheImages(itemIds) {

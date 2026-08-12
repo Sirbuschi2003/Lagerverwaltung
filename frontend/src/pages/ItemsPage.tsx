@@ -2573,11 +2573,12 @@ TB-FC330,Toner Schwarz,Toshiba,Toner,5,89.90,Regal 3 / Fach 1`}
               size="small"
             />
             <Tooltip title="Barcode scannen">
-              <IconButton 
-                color="primary" 
+              <IconButton
+                color="primary"
                 onClick={() => setSearchScanOpen(true)}
                 size="small"
-                sx={{ 
+                aria-label="QR-Code scannen"
+                sx={{
                   border: '1px solid',
                   borderColor: 'primary.main',
                   borderRadius: 1
@@ -2648,17 +2649,19 @@ TB-FC330,Toner Schwarz,Toshiba,Toner,5,89.90,Regal 3 / Fach 1`}
                   {item.code}
                 </Typography>
                 <Box>
-                  <IconButton 
-                    size="small" 
+                  <IconButton
+                    size="small"
                     onClick={() => handleOpenEdit(item.id)}
                     sx={{ mr: 1 }}
+                    aria-label="Bearbeiten"
                   >
                     <EditIcon fontSize="small" />
                   </IconButton>
-                  <IconButton 
-                    size="small" 
+                  <IconButton
+                    size="small"
                     onClick={() => setDeleteTarget(item.id)}
                     color="error"
+                    aria-label="Loeschen"
                   >
                     <DeleteIcon fontSize="small" />
                   </IconButton>
@@ -2822,6 +2825,7 @@ TB-FC330,Toner Schwarz,Toshiba,Toner,5,89.90,Regal 3 / Fach 1`}
                     <IconButton
                       size="small"
                       onClick={() => handleOpenEdit(item.id)}
+                      aria-label="Bearbeiten"
                     >
                       <EditIcon fontSize="small" />
                     </IconButton>
@@ -2831,6 +2835,7 @@ TB-FC330,Toner Schwarz,Toshiba,Toner,5,89.90,Regal 3 / Fach 1`}
                       size="small"
                       color="error"
                       onClick={(e) => { e.stopPropagation(); setDeleteTarget(item.id); }}
+                      aria-label="Loeschen"
                     >
                       <DeleteIcon fontSize="small" />
                     </IconButton>
@@ -3230,10 +3235,11 @@ TB-FC330,Toner Schwarz,Toshiba,Toner,5,89.90,Regal 3 / Fach 1`}
                     helperText="Optional: getrennt durch Komma oder Leerzeichen"
                   />
                   <Tooltip title="Code scannen und hinzufügen">
-                    <IconButton 
+                    <IconButton
                       color="primary"
                       onClick={() => setAltCodeScanOpen(true)}
-                      sx={{ 
+                      aria-label="QR-Code scannen"
+                      sx={{
                         mt: 1,
                         border: '1px solid',
                         borderColor: 'primary.main',

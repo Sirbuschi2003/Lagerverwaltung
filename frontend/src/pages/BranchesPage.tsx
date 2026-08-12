@@ -24,6 +24,7 @@ import {
 } from "@mui/material";
 import { Add, Delete, Edit } from "@mui/icons-material";
 import { fetchBranches, createBranch, updateBranch, deleteBranch, type BranchDto } from "../utils/api";
+import ConfirmDialog from "../components/ConfirmDialog";
 
 const emptyForm = { name: "", externalCode: "", address: "", active: true };
 
@@ -36,6 +37,10 @@ const BranchesPage: React.FC = () => {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState(emptyForm);
   const [saving, setSaving] = useState(false);
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [confirmTitle, setConfirmTitle] = useState("");
+  const [confirmMessage, setConfirmMessage] = useState("");
+  const [pendingAction, setPendingAction] = useState<() => void>(() => () => {});
 
   const load = async () => {
     setLoading(true);
@@ -93,14 +98,18 @@ const BranchesPage: React.FC = () => {
     }
   };
 
-  const handleDelete = async (id: string, name: string) => {
-    if (!window.confirm(`Niederlassung "${name}" wirklich löschen?`)) return;
-    try {
-      await deleteBranch(id);
-      await load();
-    } catch {
-      setError("Löschen fehlgeschlagen. Die Niederlassung wird möglicherweise noch verwendet.");
-    }
+  const handleDelete = (id: string, name: string) => {
+    setConfirmTitle("Niederlassung löschen");
+    setConfirmMessage(`Niederlassung "${name}" wirklich löschen?`);
+    setPendingAction(() => async () => {
+      try {
+        await deleteBranch(id);
+        await load();
+      } catch {
+        setError("Löschen fehlgeschlagen. Die Niederlassung wird möglicherweise noch verwendet.");
+      }
+    });
+    setConfirmOpen(true);
   };
 
   return (
@@ -232,6 +241,13 @@ const BranchesPage: React.FC = () => {
           </Button>
         </DialogActions>
       </Dialog>
+      <ConfirmDialog
+        open={confirmOpen}
+        title={confirmTitle}
+        message={confirmMessage}
+        onConfirm={() => { pendingAction(); setConfirmOpen(false); }}
+        onCancel={() => setConfirmOpen(false)}
+      />
     </Box>
   );
 };

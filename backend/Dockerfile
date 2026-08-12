@@ -49,9 +49,8 @@ RUN addgroup -g 1001 -S nodejs && \
     adduser -S nestjs -u 1001 && \
     chown -R nestjs:nodejs /app
 
-# Update-Funktion: Backend laeuft als root damit docker-socket zugaenglich ist
-# (nur fuer in-app Update noetig, akzeptabel fuer self-hosted NAS-Betrieb)
-USER root
+# Run as non-root user; docker socket access is granted via group_add in docker-compose
+USER nestjs
 
 # Health check
 HEALTHCHECK --interval=15s --timeout=5s --retries=5 \

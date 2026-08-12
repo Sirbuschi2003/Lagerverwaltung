@@ -12,6 +12,7 @@ import { PurchaseOrderLine } from "./entities/purchase-order-line.entity";
 export class PurchaseSuggestionService {
   private suggestionsCacheMap = new Map<string, { data: unknown[]; timestamp: number }>();
   private readonly SUGGESTIONS_CACHE_TTL = 10_000;
+  private readonly MAX_CACHE_SIZE = 100;
 
   constructor(
     @InjectRepository(StockLevel)
@@ -231,6 +232,12 @@ export class PurchaseSuggestionService {
     }
 
     this.suggestionsCacheMap.set(cacheKey, { data: suggestions, timestamp: Date.now() });
+    if (this.suggestionsCacheMap.size > this.MAX_CACHE_SIZE) {
+      const firstKey = this.suggestionsCacheMap.keys().next().value;
+      if (firstKey !== undefined) {
+        this.suggestionsCacheMap.delete(firstKey);
+      }
+    }
     return suggestions;
   }
 

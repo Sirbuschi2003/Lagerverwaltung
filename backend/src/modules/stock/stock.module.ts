@@ -1,6 +1,9 @@
 import { Module } from "@nestjs/common";
+import { ConfigModule, ConfigService } from "@nestjs/config";
+import { JwtModule } from "@nestjs/jwt";
 import { TypeOrmModule } from "@nestjs/typeorm";
 
+import { WsJwtGuard } from "../../common/guards/ws-jwt.guard";
 import { AccessControlModule } from "../access-control/access-control.module";
 import { ItemsModule } from "../items/items.module";
 import { LocationsModule } from "../locations/locations.module";
@@ -22,6 +25,15 @@ import { MovementQueryService } from "./movement-query.service";
 
 @Module({
   imports: [
+    ConfigModule,
+    JwtModule.registerAsync({
+      imports: [ConfigModule],
+      inject: [ConfigService],
+      useFactory: (configService: ConfigService) => ({
+        secret: configService.get<string>("auth.jwtSecret"),
+        signOptions: { expiresIn: configService.get<string>("auth.jwtExpiresIn") },
+      }),
+    }),
     TypeOrmModule.forFeature([StockLevel, StockMovement, RestockRequest, InventorySession]),
     ItemsModule,
     LoggingModule,
@@ -32,7 +44,7 @@ import { MovementQueryService } from "./movement-query.service";
     LocationsModule,
   ],
   controllers: [StockController, StockAdminController],
-  providers: [StockService, StockGateway, StockDiagnosticsService, MovementQueryService],
+  providers: [StockService, StockGateway, StockDiagnosticsService, MovementQueryService, WsJwtGuard],
   exports: [StockService, StockDiagnosticsService, MovementQueryService],
 })
 export class StockModule {}

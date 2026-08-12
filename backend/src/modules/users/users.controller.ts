@@ -90,27 +90,32 @@ export class UsersController {
 
   @Patch(":id")
   @Permissions("users.edit")
-  update(@Param("id") id: string, @Body() dto: UpdateUserDto, @CurrentUser() currentUser: User) {
-    // Users can update themselves, managers can update anyone
+  async update(@Param("id") id: string, @Body() dto: UpdateUserDto, @CurrentUser() currentUser: User) {
     if (currentUser.role !== "MANAGER" && currentUser.id !== id) {
       throw new ForbiddenException("Keine Berechtigung");
     }
-
-    // Privilege escalation guard: only MANAGER may change sensitive fields
     if (currentUser.role !== "MANAGER") {
-      delete (dto as any).role;
-      delete (dto as any).branchId;
-      delete (dto as any).vehicleId;
-      delete (dto as any).locationIds;
+      delete (dto as any).role; delete (dto as any).branchId;
+      delete (dto as any).vehicleId; delete (dto as any).locationIds;
     }
-
-    return this.usersService.update(id, dto);
+    const currentData = await this.usersService.findOneById(id);
+    const result = await this.usersService.update(id, dto);
+    if (dto.role && currentData && currentData.role !== dto.role) {
+      await this.loggingService.logSecurity("USER_ROLE_CHANGED",
+        "Rolle von " + currentData.role + " zu " + dto.role + " geaendert fuer Benutzer " + id,
+        { userId: currentUser.id, metadata: { targetUserId: id, oldRole: currentData.role, newRole: dto.role } });
+    }
+    return result;
   }
 
   @Delete(":id")
   @Roles("MANAGER")
   @Permissions("users.delete")
-  remove(@Param("id") id: string) {
+  async remove(@Param("id") id: string, @CurrentUser() currentUser: User) {
+    const userToDelete = await this.usersService.findOneById(id);
+    await this.loggingService.logSecurity("USER_DELETED",
+      "Benutzer " + id + " wurde geloescht",
+      { userId: currentUser.id, metadata: { targetUserId: id, username: userToDelete?.username } });
     return this.usersService.remove(id);
   }
 

@@ -3,6 +3,7 @@ import { InjectRepository } from "@nestjs/typeorm";
 import * as bcrypt from "bcrypt";
 import { In, Repository } from "typeorm";
 
+import { addToPasswordHistory, isPasswordInHistory, PASSWORD_HISTORY_LIMIT } from "../../common/utils/password-history.util";
 import { CreateUserDto } from "./dto/create-user.dto";
 import { UpdateUserDto } from "./dto/update-user.dto";
 import { User } from "./entities/user.entity";
@@ -11,8 +12,6 @@ import { PasswordHistory } from "../auth/entities/password-history.entity";
 
 @Injectable()
 export class UsersService {
-  private static readonly PASSWORD_HISTORY_LIMIT = 5;
-
   constructor(
     @InjectRepository(User)
     private readonly repository: Repository<User>,
@@ -164,47 +163,17 @@ export class UsersService {
 
     // Prüfen ob das neue Passwort mit dem aktuellen oder einem der letzten N Passwörter übereinstimmt
     const isSameAsCurrent = await bcrypt.compare(newPassword, user.passwordHash);
-    const isInHistory = await this.isPasswordInHistory(userId, newPassword);
+    const isInHistory = await isPasswordInHistory(this.passwordHistoryRepository, userId, newPassword);
     if (isSameAsCurrent || isInHistory) {
       throw new ForbiddenException(
-        `Das neue Passwort darf nicht eines der letzten ${UsersService.PASSWORD_HISTORY_LIMIT} Passwörter sein`,
+        `Das neue Passwort darf nicht eines der letzten ${PASSWORD_HISTORY_LIMIT} Passwörter sein`,
       );
     }
 
     const newPasswordHash = await bcrypt.hash(newPassword, 12);
 
     // Aktuellen Hash in Passwort-Historie aufnehmen, dann Passwort wechseln
-    await this.addToPasswordHistory(userId, user.passwordHash);
+    await addToPasswordHistory(this.passwordHistoryRepository, userId, user.passwordHash);
     await this.repository.update(userId, { passwordHash: newPasswordHash });
-  }
-
-  /** Prüft ob das neue Passwort in den letzten N gespeicherten Hashes vorkommt */
-  private async isPasswordInHistory(userId: string, newPassword: string): Promise<boolean> {
-    const history = await this.passwordHistoryRepository.find({
-      where: { user: { id: userId } },
-      order: { createdAt: "DESC" },
-      take: UsersService.PASSWORD_HISTORY_LIMIT,
-      relations: ["user"],
-    });
-    for (const entry of history) {
-      if (await bcrypt.compare(newPassword, entry.passwordHash)) return true;
-    }
-    return false;
-  }
-
-  /** Speichert einen neuen Hash in der Passwort-Historie und bereinigt ältere Einträge */
-  private async addToPasswordHistory(userId: string, passwordHash: string): Promise<void> {
-    await this.passwordHistoryRepository.save(
-      this.passwordHistoryRepository.create({ user: { id: userId }, passwordHash }),
-    );
-    const all = await this.passwordHistoryRepository.find({
-      where: { user: { id: userId } },
-      order: { createdAt: "DESC" },
-      relations: ["user"],
-    });
-    if (all.length > UsersService.PASSWORD_HISTORY_LIMIT) {
-      const toDelete = all.slice(UsersService.PASSWORD_HISTORY_LIMIT);
-      await this.passwordHistoryRepository.remove(toDelete);
-    }
   }
 }

@@ -68,6 +68,7 @@ import {
   type LogStats,
 } from '../utils/api';
 import useAuthStore from '../store/useAuthStore';
+import ConfirmDialog from '../components/ConfirmDialog';
 
 // ─── Activity formatting ──────────────────────────────────────────────────────
 
@@ -402,6 +403,8 @@ const LogsPage: React.FC<{ isEmbedded?: boolean }> = ({ isEmbedded = false }) =>
   const [savingRetention, setSavingRetention] = useState(false);
   const [busyDeleteAll, setBusyDeleteAll] = useState(false);
   const [snackbar, setSnackbar] = useState<{ open: boolean; message: string }>({ open: false, message: '' });
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [pendingAction, setPendingAction] = useState<() => void>(() => () => {});
 
   const loadLogs = useCallback(async (filters: LogFilters, append = false) => {
     setLoading(true);
@@ -766,18 +769,20 @@ const LogsPage: React.FC<{ isEmbedded?: boolean }> = ({ isEmbedded = false }) =>
               size="small"
               color="error"
               disabled={busyDeleteAll}
-              onClick={async () => {
-                if (!window.confirm('Wirklich ALLE Logs löschen? Dieser Vorgang kann nicht rückgängig gemacht werden.')) return;
-                try {
-                  setBusyDeleteAll(true);
-                  const res = await deleteAllLogs();
-                  setSnackbar({ open: true, message: `Alle Logs gelöscht (${res.deletedCount})` });
-                  await Promise.all([loadLogs({ ...logFilters, offset: 0 }), loadStats()]);
-                } catch {
-                  setSnackbar({ open: true, message: 'Fehler beim Löschen aller Logs' });
-                } finally {
-                  setBusyDeleteAll(false);
-                }
+              onClick={() => {
+                setPendingAction(() => async () => {
+                  try {
+                    setBusyDeleteAll(true);
+                    const res = await deleteAllLogs();
+                    setSnackbar({ open: true, message: `Alle Logs gelöscht (${res.deletedCount})` });
+                    await Promise.all([loadLogs({ ...logFilters, offset: 0 }), loadStats()]);
+                  } catch {
+                    setSnackbar({ open: true, message: 'Fehler beim Löschen aller Logs' });
+                  } finally {
+                    setBusyDeleteAll(false);
+                  }
+                });
+                setConfirmOpen(true);
               }}
             >
               Alle Logs löschen
@@ -847,6 +852,15 @@ const LogsPage: React.FC<{ isEmbedded?: boolean }> = ({ isEmbedded = false }) =>
         autoHideDuration={4000}
         onClose={() => setSnackbar(s => ({ ...s, open: false }))}
         message={snackbar.message}
+      />
+
+      <ConfirmDialog
+        open={confirmOpen}
+        title="Alle Logs löschen"
+        message="Wirklich ALLE Logs löschen? Dieser Vorgang kann nicht rückgängig gemacht werden."
+        confirmLabel="Alle löschen"
+        onConfirm={() => { pendingAction(); setConfirmOpen(false); }}
+        onCancel={() => setConfirmOpen(false)}
       />
     </Container>
   );

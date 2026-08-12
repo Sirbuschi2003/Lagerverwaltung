@@ -39,6 +39,7 @@ import {
   updatePurchaseOrder,
 } from "../../utils/api";
 import useAuthStore from "../../store/useAuthStore";
+import ConfirmDialog from "../ConfirmDialog";
 
 type SortOption = "newest" | "oldest" | "supplierAsc" | "supplierDesc";
 
@@ -77,6 +78,10 @@ const ArchivedOrdersTab: React.FC = () => {
   const [supplierFilter, setSupplierFilter] = useState<string>("ALL");
   const [yearFilter, setYearFilter] = useState<string>("ALL");
   const [sortOption, setSortOption] = useState<SortOption>("newest");
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [confirmTitle, setConfirmTitle] = useState("");
+  const [confirmMessage, setConfirmMessage] = useState("");
+  const [pendingAction, setPendingAction] = useState<() => void>(() => () => {});
 
   const loadArchivedOrders = async () => {
     setLoading(true);
@@ -156,15 +161,19 @@ const ArchivedOrdersTab: React.FC = () => {
       .sort((a, b) => b.year - a.year);
   }, [filteredOrders]);
 
-  const handleDelete = async (order: PurchaseOrderDto) => {
-    if (!window.confirm(`Bestellung ${order.orderNumber || order.id} wirklich endgültig löschen? Das PDF bleibt auf dem Server erhalten.`)) return;
-    try {
-      await deletePurchaseOrder(order.id);
-      setSuccessMessage("Bestellung gelöscht.");
-      await loadArchivedOrders();
-    } catch (err: any) {
-      alert(`Fehler beim Löschen: ${err?.response?.data?.message || err?.message || "Unbekannt"}`);
-    }
+  const handleDelete = (order: PurchaseOrderDto) => {
+    setConfirmTitle("Bestellung endgültig löschen");
+    setConfirmMessage(`Bestellung ${order.orderNumber || order.id} wirklich endgültig löschen? Das PDF bleibt auf dem Server erhalten.`);
+    setPendingAction(() => async () => {
+      try {
+        await deletePurchaseOrder(order.id);
+        setSuccessMessage("Bestellung gelöscht.");
+        await loadArchivedOrders();
+      } catch (err: any) {
+        alert(`Fehler beim Löschen: ${err?.response?.data?.message || err?.message || "Unbekannt"}`);
+      }
+    });
+    setConfirmOpen(true);
   };
 
   const handleUnarchive = async (order: PurchaseOrderDto) => {
@@ -383,6 +392,13 @@ const ArchivedOrdersTab: React.FC = () => {
           ))}
         </Box>
       )}
+      <ConfirmDialog
+        open={confirmOpen}
+        title={confirmTitle}
+        message={confirmMessage}
+        onConfirm={() => { pendingAction(); setConfirmOpen(false); }}
+        onCancel={() => setConfirmOpen(false)}
+      />
     </Box>
   );
 };

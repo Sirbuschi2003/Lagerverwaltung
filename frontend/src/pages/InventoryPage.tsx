@@ -43,6 +43,7 @@ import {
   Description as DescriptionIcon,
 } from "@mui/icons-material";
 import { ScannerButton } from "../components/ScannerButton";
+import ConfirmDialog from "../components/ConfirmDialog";
 import { findItemByCode } from "../utils/itemLookup";
 import useScanSound from "../hooks/useScanSound";
 import useAuthStore from "../store/useAuthStore";
@@ -127,6 +128,11 @@ const InventoryPage = () => {
   const [editingLine, setEditingLine] = useState<any>(null);
   const [editQuantity, setEditQuantity] = useState("");
   
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [confirmTitle, setConfirmTitle] = useState('');
+  const [confirmMessage, setConfirmMessage] = useState('');
+  const [pendingAction, setPendingAction] = useState<() => void>(() => () => {});
+
   // Delete-Confirmation Dialog
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [sessionToDelete, setSessionToDelete] = useState<InventorySessionDto | null>(null);
@@ -582,44 +588,45 @@ const InventoryPage = () => {
     }
   };
 
-  const handleFinalizeSession = async (applyAdjustments: boolean) => {
+  const handleFinalizeSession = (applyAdjustments: boolean) => {
     if (!finalizeTargetSession) {
       return;
     }
 
     const confirmation = applyAdjustments
-      ? "Inventur finalisieren und Differenzen buchen?" 
+      ? "Inventur finalisieren und Differenzen buchen?"
       : "Inventur endgültig abschließen (ohne automatische Buchung)?";
 
-    if (!window.confirm(confirmation)) {
-      return;
-    }
-
-    try {
-      setLoading(true);
-      const checksum = calculateSessionChecksum(finalizeTargetSession);
-      await finalizeInventorySession(finalizeTargetSession.id, {
-        clientChecksum: checksum || undefined,
-        applyAdjustments,
-      });
-      await loadSessions();
-      setFinalizeDialogOpen(false);
-      setFinalizeTargetSession(null);
-      setError(null);
-    } catch (err: any) {
-      console.error(err);
-      if (err.response?.status === 403) {
-        setError("Keine Berechtigung zum Finalisieren (nur Manager).");
-      } else if (err.response?.status === 409) {
-        setError("Session kann nicht finalisiert werden: " + (err.response?.data?.message || "Konflikt"));
-      } else if (err.response?.status === 400) {
-        setError(err.response?.data?.message || "Fehler beim Finalisieren der Inventur.");
-      } else {
-        setError("Fehler beim Finalisieren der Inventur.");
+    setConfirmTitle("Inventur finalisieren");
+    setConfirmMessage(confirmation);
+    setPendingAction(() => async () => {
+      try {
+        setLoading(true);
+        const checksum = calculateSessionChecksum(finalizeTargetSession);
+        await finalizeInventorySession(finalizeTargetSession.id, {
+          clientChecksum: checksum || undefined,
+          applyAdjustments,
+        });
+        await loadSessions();
+        setFinalizeDialogOpen(false);
+        setFinalizeTargetSession(null);
+        setError(null);
+      } catch (err: any) {
+        console.error(err);
+        if (err.response?.status === 403) {
+          setError("Keine Berechtigung zum Finalisieren (nur Manager).");
+        } else if (err.response?.status === 409) {
+          setError("Session kann nicht finalisiert werden: " + (err.response?.data?.message || "Konflikt"));
+        } else if (err.response?.status === 400) {
+          setError(err.response?.data?.message || "Fehler beim Finalisieren der Inventur.");
+        } else {
+          setError("Fehler beim Finalisieren der Inventur.");
+        }
+      } finally {
+        setLoading(false);
       }
-    } finally {
-      setLoading(false);
-    }
+    });
+    setConfirmOpen(true);
   };
 
   const handleSubmitWithChoice = async (applyAdjustments: boolean, vehicleId?: string) => {
@@ -822,21 +829,23 @@ const InventoryPage = () => {
     setError(null);
   };
 
-  const handleDeleteLine = async (lineId: string) => {
-    if (!window.confirm("Diese Inventur-Position wirklich entfernen?")) {
-      return;
-    }
-    try {
-      setLoading(true);
-      await deleteInventoryLine(lineId);
-      await loadSessions();
-      setError(null);
-    } catch (err) {
-      console.error(err);
-      setError("Fehler beim Löschen der Inventur-Position.");
-    } finally {
-      setLoading(false);
-    }
+  const handleDeleteLine = (lineId: string) => {
+    setConfirmTitle("Inventur-Position entfernen");
+    setConfirmMessage("Diese Inventur-Position wirklich entfernen?");
+    setPendingAction(() => async () => {
+      try {
+        setLoading(true);
+        await deleteInventoryLine(lineId);
+        await loadSessions();
+        setError(null);
+      } catch (err) {
+        console.error(err);
+        setError("Fehler beim Löschen der Inventur-Position.");
+      } finally {
+        setLoading(false);
+      }
+    });
+    setConfirmOpen(true);
   };
 
   const handleEditLine = (line: any) => {
@@ -2147,6 +2156,16 @@ const InventoryPage = () => {
           </Button>
         </DialogActions>
       </Dialog>
+
+      <ConfirmDialog
+        open={confirmOpen}
+        title={confirmTitle}
+        message={confirmMessage}
+        confirmLabel="Bestätigen"
+        confirmColor="error"
+        onConfirm={() => { pendingAction(); setConfirmOpen(false); }}
+        onCancel={() => setConfirmOpen(false)}
+      />
     </Stack>
   );
 };

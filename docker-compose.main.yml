@@ -41,6 +41,7 @@ services:
       context: ./backend
       target: runner
     restart: unless-stopped
+    read_only: false
     depends_on:
       mysql:
         condition: service_healthy
@@ -85,6 +86,15 @@ services:
       timeout: 5s
       retries: 5
       start_period: 40s
+    # Security: non-root user, minimal capabilities, docker group for in-app update socket access
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      - NET_BIND_SERVICE
+    group_add:
+      - "121"   # docker group GID auf UGREEN NAS DATA-SRV-02 (ermittelt mit: cat /etc/group | grep docker)
     networks:
       lagerverwaltung:
         aliases:

@@ -27,6 +27,9 @@ export interface LogFilters {
 
 @Injectable()
 export class LoggingService {
+  private cachedLogLevel: string | null = null;
+  private logLevelCacheExpiry: number = 0;
+
   constructor(
     @InjectRepository(SystemLog)
     private readonly logRepository: Repository<SystemLog>,
@@ -198,6 +201,8 @@ export class LoggingService {
    * Löscht ALLE Logs (für Admin-Funktion)
    */
   async deleteAllLogs(): Promise<number> {
+    await this.logSecurity("LOGS_DELETED", "Alle System-Logs wurden geloescht", { metadata: { deletedAt: new Date().toISOString() } });
+
     const result = await this.logRepository
       .createQueryBuilder()
       .delete()
@@ -367,15 +372,24 @@ export class LoggingService {
    * Log-Level Konfiguration
    */
   private async getMinimumLogLevel(): Promise<LogLevel> {
+    if (this.cachedLogLevel !== null && Date.now() < this.logLevelCacheExpiry) {
+      return this.cachedLogLevel as LogLevel;
+    }
     try {
       const config = await this.configRepository.findOne({ where: { key: 'log.minimumLevel' } });
       if (config && config.value) {
-        return config.value as LogLevel;
+        const result = config.value as LogLevel;
+        this.cachedLogLevel = result;
+        this.logLevelCacheExpiry = Date.now() + 60000;
+        return result;
       }
     } catch (error) {
       // Fehler stillschweigend ignorieren, Standard-Level zurückgeben
     }
-    return LogLevel.INFO; // Standard-Level
+    const defaultLevel = LogLevel.INFO;
+    this.cachedLogLevel = defaultLevel;
+    this.logLevelCacheExpiry = Date.now() + 60000;
+    return defaultLevel;
   }
 
   private shouldLog(level: LogLevel, minimumLevel: LogLevel): boolean {
@@ -394,6 +408,7 @@ export class LoggingService {
    * Konfiguration setzen
    */
   async setLogLevel(level: LogLevel): Promise<void> {
+    this.cachedLogLevel = null;
     await this.setConfig('log.minimumLevel', level as unknown as string, 'Minimum Log-Level für System-Logs');
   }
 
@@ -473,7 +488,7 @@ export class LoggingService {
    */
   private sanitizeMetadata(metadata: any): any {
     if (typeof metadata !== 'object' || metadata === null) return metadata;
-    const sensitiveKeys = ['password', 'token', 'secret', 'key', 'hash', 'credential'];
+    const sensitiveKeys = ['password', 'token', 'secret', 'key', 'hash', 'credential', 'email', 'to'];
     const sanitized: Record<string, any> = {};
     for (const [k, v] of Object.entries(metadata)) {
       if (sensitiveKeys.some((s) => k.toLowerCase().includes(s))) {

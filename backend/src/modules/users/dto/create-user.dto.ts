@@ -1,4 +1,4 @@
-import { IsArray, IsEmail, IsNotEmpty, IsOptional, IsString, IsUUID, MaxLength } from "class-validator";
+import { IsArray, IsEmail, IsIn, IsNotEmpty, IsOptional, IsString, IsUUID, MaxLength } from "class-validator";
 
 import { UserRole } from "../entities/user.entity";
 
@@ -22,6 +22,7 @@ export class CreateUserDto {
   @IsEmail()
   email?: string;
 
+  @IsIn(["TECHNICIAN", "WAREHOUSE", "MANAGER"])
   @IsString()
   @IsNotEmpty()
   role!: UserRole;

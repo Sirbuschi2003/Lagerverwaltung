@@ -42,6 +42,7 @@ import SearchIcon from "@mui/icons-material/Search";
 import VisibilityIcon from "@mui/icons-material/Visibility";
 import { fetchArchives, downloadArchive, downloadArchiveZip, getArchiveStats, updateArchiveRetention, forceArchiveNow, getArchiveDayEntries, deleteArchiveDay, type LogEntry } from "../utils/api";
 import useAuthStore from "../store/useAuthStore";
+import ConfirmDialog from "../components/ConfirmDialog";
 
 interface ArchiveData {
   date: string;
@@ -72,6 +73,11 @@ const ArchiveManagementPage: React.FC<{ isEmbedded?: boolean }> = ({ isEmbedded 
   const [openRetentionDialog, setOpenRetentionDialog] = useState(false);
   const [newRetentionDays, setNewRetentionDays] = useState(30);
   const [downloading, setDownloading] = useState(false);
+
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [confirmTitle, setConfirmTitle] = useState("");
+  const [confirmMessage, setConfirmMessage] = useState("");
+  const [pendingAction, setPendingAction] = useState<() => void>(() => () => {});
 
   // Viewer-State
   const [viewerDate, setViewerDate] = useState<string | null>(null);
@@ -467,14 +473,18 @@ const ArchiveManagementPage: React.FC<{ isEmbedded?: boolean }> = ({ isEmbedded 
                           variant="outlined"
                           color="error"
                           startIcon={<DeleteIcon />}
-                          onClick={async () => {
-                            if (!window.confirm(`Archiv vom ${archive.date} wirklich löschen? Dieser Vorgang kann nicht rückgängig gemacht werden.`)) return;
-                            try {
-                              await deleteArchiveDay(archive.date);
-                              loadArchives();
-                            } catch {
-                              alert("Löschen fehlgeschlagen");
-                            }
+                          onClick={() => {
+                            setConfirmTitle("Archiv löschen");
+                            setConfirmMessage(`Archiv vom ${archive.date} wirklich löschen? Dieser Vorgang kann nicht rückgängig gemacht werden.`);
+                            setPendingAction(() => async () => {
+                              try {
+                                await deleteArchiveDay(archive.date);
+                                loadArchives();
+                              } catch {
+                                alert("Löschen fehlgeschlagen");
+                              }
+                            });
+                            setConfirmOpen(true);
                           }}
                         >
                           Löschen
@@ -614,6 +624,13 @@ const ArchiveManagementPage: React.FC<{ isEmbedded?: boolean }> = ({ isEmbedded 
       </Dialog>
 
 
+      <ConfirmDialog
+        open={confirmOpen}
+        title={confirmTitle}
+        message={confirmMessage}
+        onConfirm={() => { pendingAction(); setConfirmOpen(false); }}
+        onCancel={() => setConfirmOpen(false)}
+      />
     </Container>
   );
 };

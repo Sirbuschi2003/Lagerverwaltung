@@ -345,6 +345,8 @@ const useAuthStore = create<AuthState>()(
     {
       name: "auth-store",
       version: 5, // Erhoehe Version fuer Session-Timeout-Aenderung (30 -> 7 Tage)
+      // SEC: only persist user profile and activity timestamp — never the access token
+      partialize: (state) => ({ user: state.user, lastActivity: state.lastActivity }),
       onRehydrateStorage: () => (state) => {
         if (state?.token) {
           if (validateAuthToken(state.token) && !state.isSessionExpired?.()) {

@@ -85,7 +85,10 @@ export class AuthController {
   }
 
   @Post("logout")
-  logout(@Res({ passthrough: true }) res: Response) {
+  async logout(@Req() req: Request, @Res({ passthrough: true }) res: Response) {
+    const refreshToken: string | undefined =
+      (req.cookies as Record<string, string>)?.[REFRESH_COOKIE_NAME];
+    await this.authService.logout(refreshToken);
     clearRefreshCookie(res);
     return { success: true };
   }

@@ -1,4 +1,4 @@
-﻿import { Injectable } from "@nestjs/common";
+﻿import { Injectable, NotImplementedException } from "@nestjs/common";
 import PDFDocument from "pdfkit";
 import type PDFKit from "pdfkit";
 import puppeteer from 'puppeteer';
@@ -214,10 +214,8 @@ export class ExportService {
     return Buffer.from(buffer);
   }
 
-  // TODO: Implement PDF export with puppeteer when package is installed
-  // npm install puppeteer @types/puppeteer
-  async exportMovementsToPdf(movements: StockMovement[]): Promise<Buffer> {
-    throw new Error('PDF export not yet implemented. Install puppeteer package first.');
+  async exportMovementsToPdf(_movements: StockMovement[]): Promise<Buffer> {
+    throw new NotImplementedException("PDF-Export ist noch nicht implementiert.");
   }
 
 

@@ -1,4 +1,5 @@
 // Password Reset API functions
+import { SecureTokenManager } from "./securityUtils";
 
 export interface RequestPasswordResetDto {
   email: string;
@@ -56,8 +57,8 @@ export const passwordResetApi = {
   },
 
   async changePassword(currentPassword: string, newPassword: string): Promise<ApiResponse> {
-    const token = localStorage.getItem('token');
-    
+    const token = SecureTokenManager.getToken();
+
     const response = await fetch('/api/auth/change-password', {
       method: 'POST',
       headers: {

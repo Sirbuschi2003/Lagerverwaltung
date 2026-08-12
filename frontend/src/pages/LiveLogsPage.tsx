@@ -26,7 +26,7 @@ import RefreshIcon from '@mui/icons-material/Refresh';
 import DeleteIcon from '@mui/icons-material/Delete';
 import DownloadIcon from '@mui/icons-material/Download';
 import useFrontendLogStore, { FrontendLogEntry } from '../store/useFrontendLogStore';
-import { fetchSystemLogs } from '../utils/api';
+import api, { fetchSystemLogs } from '../utils/api';
 
 interface BackendLog {
   id: string;
@@ -162,19 +162,9 @@ const LiveLogsPage = () => {
   const handleCleanupInvalidLogs = async () => {
     if (window.confirm('Alle ungültigen Backend-Logs (mit "Invalid Date") löschen?\n\nDies betrifft nur alte Logs mit fehlerhaften Timestamps.')) {
       try {
-        const response = await fetch('/api/logs/cleanup/invalid', {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${localStorage.getItem('token')}`,
-            'Content-Type': 'application/json'
-          }
-        });
-        
-        if (!response.ok) {
-          throw new Error('Cleanup fehlgeschlagen');
-        }
-        
-        const result = await response.json();
+        // Use the configured api instance — auth headers are injected automatically
+        const response = await api.post<{ deletedCount: number }>('/api/logs/cleanup/invalid');
+        const result = response.data;
         alert(`${result.deletedCount} ungültige Logs gelöscht!`);
         await loadAllLogs();
       } catch (err) {

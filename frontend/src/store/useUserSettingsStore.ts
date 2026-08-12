@@ -26,6 +26,7 @@ export interface UserSettings {
   };
   quickActions: QuickActions;
   privacyAcceptedVersion?: string;
+  privacyAcceptedAt?: string | null;
   quickBookingWorkflow: boolean;
   quickBookingDuplicateCheck: boolean;
   quickBookingDuplicateCheckMonths: number;
@@ -102,6 +103,7 @@ function mergeWithDefaults(raw: Record<string, unknown>): UserSettings {
     },
     quickActions,
     privacyAcceptedVersion: typeof raw.privacyAcceptedVersion === "string" ? raw.privacyAcceptedVersion : undefined,
+    privacyAcceptedAt: typeof raw.privacyAcceptedAt === "string" ? raw.privacyAcceptedAt : null,
     quickBookingWorkflow: typeof raw.quickBookingWorkflow === "boolean" ? raw.quickBookingWorkflow : DEFAULT_SETTINGS.quickBookingWorkflow,
     quickBookingDuplicateCheck: typeof raw.quickBookingDuplicateCheck === "boolean" ? raw.quickBookingDuplicateCheck : DEFAULT_SETTINGS.quickBookingDuplicateCheck,
     quickBookingDuplicateCheckMonths: typeof raw.quickBookingDuplicateCheckMonths === "number" && raw.quickBookingDuplicateCheckMonths >= 1 ? raw.quickBookingDuplicateCheckMonths : DEFAULT_SETTINGS.quickBookingDuplicateCheckMonths,
@@ -188,7 +190,11 @@ export const useUserSettingsStore = create<UserSettingsState>((set, get) => ({
 
   acceptPrivacy: async (version: string) => {
     const current = get().settings;
-    const updated: UserSettings = { ...current, privacyAcceptedVersion: version };
+    const updated: UserSettings = {
+      ...current,
+      privacyAcceptedVersion: version,
+      privacyAcceptedAt: new Date().toISOString(),
+    };
     set({ settings: updated });
     localStorage.setItem(PRIVACY_LS_KEY, version);
     try {

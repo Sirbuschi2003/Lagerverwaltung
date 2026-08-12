@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, UseGuards } from '@nestjs/common';
 import {
   WebSocketGateway,
   WebSocketServer,
@@ -10,6 +10,7 @@ import {
 } from '@nestjs/websockets';
 import { Server, Socket } from 'socket.io';
 
+import { WsJwtGuard } from '../../common/guards/ws-jwt.guard';
 import { StockService } from './stock.service';
 
 export interface QuickBookingEntry {
@@ -23,7 +24,14 @@ export interface QuickBookingEntry {
   reference?: string;
 }
 
-@WebSocketGateway({ namespace: '/stock', cors: true })
+@WebSocketGateway({
+  namespace: '/stock',
+  cors: {
+    origin: (process.env.ALLOWED_ORIGINS || 'http://localhost:5173').split(','),
+    credentials: true,
+  },
+})
+@UseGuards(WsJwtGuard)
 @Injectable()
 export class StockGateway implements OnGatewayConnection, OnGatewayDisconnect {
   private readonly logger = new Logger(StockGateway.name);
@@ -38,6 +46,10 @@ export class StockGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
   handleConnection(client: Socket) {
     void client;
+    const branchId: string | undefined = client.data?.user?.branchId;
+    if (branchId) {
+      void client.join('restock:' + branchId);
+    }
   }
 
   handleDisconnect(client: Socket) {
@@ -53,14 +65,10 @@ export class StockGateway implements OnGatewayConnection, OnGatewayDisconnect {
   }
 
   broadcastRestockUpdate() {
-    // TODO: Branch-Room-Routing für WebSocket-Events implementieren.
-    // Der Gateway kennt den Branch des empfangenden Clients nicht – getRestockOverview()
-    // ohne branchId würde Daten aller Niederlassungen an alle Clients senden (Cross-Branch-Leak).
-    // Temporärer Fix: leeres Array senden, bis Branch-Rooms korrekt implementiert sind.
     if (this.server) {
-      this.server.emit('restockUpdate', []);
+      this.server.emit('restock:updated', { refresh: true });
     } else {
-      this.logger.warn('Kein Socket-Server verfuegbar, restockUpdate nicht gesendet');
+      this.logger.warn('Kein Socket-Server verfuegbar, restock:updated nicht gesendet');
     }
   }
 
