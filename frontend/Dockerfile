@@ -6,7 +6,7 @@ COPY package*.json ./
 RUN npm install
 
 # Copy config files
-COPY tsconfig*.json vite.config.ts vite.config_optimized.ts index.html ./
+COPY tsconfig*.json vite.config.ts index.html ./
 
 # Copy source files
 COPY public ./public
