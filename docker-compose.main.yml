@@ -56,8 +56,8 @@ services:
       DB_SYNCHRONIZE: false
       DB_MIGRATIONS_RUN: true
       JWT_SECRET: ${BACKEND_JWT_SECRET}
-      JWT_EXPIRES_IN: ${BACKEND_JWT_EXPIRES_IN:-1d}
-      JWT_REFRESH_EXPIRES_IN: ${BACKEND_JWT_REFRESH_EXPIRES_IN:-30d}
+      JWT_EXPIRES_IN: ${BACKEND_JWT_EXPIRES_IN:-8h}
+      JWT_REFRESH_EXPIRES_IN: ${BACKEND_JWT_REFRESH_EXPIRES_IN:-90d}
       INVENTORY_HMAC_SECRET: ${INVENTORY_HMAC_SECRET}
       ALLOWED_ORIGINS: "http://${APP_HOST:-localhost},https://${APP_HOST:-localhost}"
       # Update-Funktion: Projekt- und Compose-Datei-Pfad fuer docker compose pull/up
