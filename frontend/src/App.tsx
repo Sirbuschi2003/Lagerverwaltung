@@ -1,5 +1,5 @@
 ﻿import React, { useEffect, useRef, useMemo } from "react";
-import { Box, CssBaseline, ThemeProvider, Typography } from "@mui/material";
+import { Box, CircularProgress, CssBaseline, ThemeProvider, Typography } from "@mui/material";
 import { Navigate, Route, Routes } from "react-router-dom";
 import ErrorBoundary from "./components/ErrorBoundary";
 import AppLayout from "./components/AppLayout";
@@ -22,6 +22,7 @@ import { initializeNetworkStatus } from "./store/useNetworkStore";
 
 const AppContent = () => {
   const token = useAuthStore((state) => state.token);
+  const authInitializing = useAuthStore((state) => state.authInitializing);
   const hasPermission = useAuthStore((state) => state.hasPermission);
   const refreshAccessToken = useAuthStore((state) => state.refreshAccessToken);
   const { mode, preset } = useThemeMode();
@@ -88,6 +89,11 @@ const AppContent = () => {
     <ThemeProvider theme={theme}>
       <CssBaseline />
       <ErrorBoundary>
+        {authInitializing ? (
+          <Box sx={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100vh" }}>
+            <CircularProgress />
+          </Box>
+        ) : (
         <Routes>
           {!token ? (
             <>
@@ -141,6 +147,7 @@ const AppContent = () => {
             </Route>
           )}
         </Routes>
+        )}
         {token && <RestockNotifier />}
         <PrivacyNoticeDialog />
         <PWAInstallPrompt />

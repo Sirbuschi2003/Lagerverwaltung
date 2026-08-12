@@ -19,10 +19,12 @@ interface AuthState {
   refreshToken: string | null;
   user: UserProfile | null;
   lastActivity: number;
+  authInitializing: boolean;
   login: (params: { username: string; password: string }) => Promise<void>;
   logout: () => void;
   refreshProfile: () => Promise<void>;
   refreshAccessToken: () => Promise<void>;
+  initializeAuth: () => Promise<void>;
   updateUserRefreshInterval: (userId: string, interval: number) => Promise<void>;
   checkTokenValidity: () => boolean;
   updateLastActivity: () => void;
@@ -57,6 +59,7 @@ const useAuthStore = create<AuthState>()(
       refreshToken: null,
       user: null,
       lastActivity: Date.now(),
+      authInitializing: true,
 
       login: async ({ username, password }) => {
         const sanitizedUsername = sanitizeInput(username);
@@ -261,6 +264,19 @@ const useAuthStore = create<AuthState>()(
         }
       },
 
+      initializeAuth: async () => {
+        const { user, isSessionExpired } = get();
+        if (!user || isSessionExpired()) {
+          set({ authInitializing: false });
+          return;
+        }
+        if (navigator.onLine) {
+          await get().refreshAccessToken();
+        }
+        // Offline: token bleibt null → Login-Seite zeigt Offline-Login-Option
+        set({ authInitializing: false });
+      },
+
       refreshProfile: async () => {
         const token = get().token;
         if (!token) {
@@ -357,6 +373,11 @@ const useAuthStore = create<AuthState>()(
             state.logout?.();
           }
         }
+        // Token ist nach Reload immer null (in-memory only).
+        // initializeAuth() holt per HttpOnly-Cookie einen neuen Access-Token vom Backend.
+        setTimeout(() => {
+          useAuthStore.getState().initializeAuth();
+        }, 0);
       },
     },
   ),
