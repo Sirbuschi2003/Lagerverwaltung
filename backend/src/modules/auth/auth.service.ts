@@ -167,13 +167,18 @@ export class AuthService {
     const refreshToken = await this.jwtService.signAsync(refreshPayload, { expiresIn: refreshExpiresIn });
 
     // Refresh-Token in Datenbank persistieren (SEC-002)
-    await this.refreshTokenRepo.save({
-      userId: user.id,
-      tokenHash: this.hashToken(refreshToken),
-      expiresAt: this.parseExpiryToDate(refreshExpiresIn),
-      revokedAt: null,
-      isRevoked: false,
-    });
+    // orIgnore: verhindert Fehler bei doppeltem Login (gleicher Hash durch Race Condition)
+    try {
+      await this.refreshTokenRepo.save({
+        userId: user.id,
+        tokenHash: this.hashToken(refreshToken),
+        expiresAt: this.parseExpiryToDate(refreshExpiresIn),
+        revokedAt: null,
+        isRevoked: false,
+      });
+    } catch (err: any) {
+      if (err?.code !== "ER_DUP_ENTRY") throw err;
+    }
 
     return {
       accessToken: await this.jwtService.signAsync(payload),
@@ -225,13 +230,17 @@ export class AuthService {
       const newRefreshToken = await this.jwtService.signAsync(refreshPayload, { expiresIn: refreshExpiresIn });
 
       // Neuen Token persistieren
-      await this.refreshTokenRepo.save({
-        userId: user.id,
-        tokenHash: this.hashToken(newRefreshToken),
-        expiresAt: this.parseExpiryToDate(refreshExpiresIn),
-        revokedAt: null,
-        isRevoked: false,
-      });
+      try {
+        await this.refreshTokenRepo.save({
+          userId: user.id,
+          tokenHash: this.hashToken(newRefreshToken),
+          expiresAt: this.parseExpiryToDate(refreshExpiresIn),
+          revokedAt: null,
+          isRevoked: false,
+        });
+      } catch (err: any) {
+        if (err?.code !== "ER_DUP_ENTRY") throw err;
+      }
 
       return {
         accessToken: await this.jwtService.signAsync(payload),
