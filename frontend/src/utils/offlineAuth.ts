@@ -206,6 +206,34 @@ export function generateOfflineToken(credentials: OfflineCredentials): string {
 }
 
 /**
+ * Generiert einen Offline-Token aus dem gecachten User-Profil.
+ * Kein Passwort noetig — fuer automatische Session-Wiederherstellung nach F5 im Offline-Modus.
+ * Das Backend akzeptiert diesen Token NICHT.
+ */
+export function generateOfflineTokenFromProfile(profile: {
+  userId: string;
+  username: string;
+  displayName: string;
+  role: string;
+  vehicleId: string | null;
+  permissions: string[];
+}): string {
+  const payload = {
+    sub: profile.userId,
+    username: profile.username,
+    role: profile.role,
+    displayName: profile.displayName,
+    vehicleId: profile.vehicleId,
+    permissions: profile.permissions,
+    offline: true,
+    iat: Date.now(),
+    exp: Date.now() + 30 * 24 * 60 * 60 * 1000,
+  };
+  const token = btoa(encodeURIComponent(JSON.stringify(payload)));
+  return `offline.${token}`;
+}
+
+/**
  * Validiert Offline-Token (nur fuer Offline-Betrieb).
  */
 export function validateOfflineToken(token: string): OfflineTokenPayload | null {

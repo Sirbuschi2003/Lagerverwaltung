@@ -272,8 +272,26 @@ const useAuthStore = create<AuthState>()(
         }
         if (navigator.onLine) {
           await get().refreshAccessToken();
+        } else {
+          // Offline: Token aus gecachtem User-Profil regenerieren.
+          // Kein Passwort noetig — User war zuletzt erfolgreich eingeloggt.
+          // Das Backend akzeptiert Offline-Token nicht, daher kein Sicherheitsproblem.
+          try {
+            const { generateOfflineTokenFromProfile } = await import('../utils/offlineAuth');
+            const offlineToken = generateOfflineTokenFromProfile({
+              userId: user.id,
+              username: user.username,
+              displayName: user.displayName,
+              role: user.role,
+              vehicleId: user.vehicleId ?? null,
+              permissions: user.permissions ?? [],
+            });
+            api.defaults.headers.common.Authorization = `Bearer ${offlineToken}`;
+            set({ token: offlineToken });
+          } catch {
+            // Fallback: Login-Seite (Offline-Login mit Passwort moeglich)
+          }
         }
-        // Offline: token bleibt null → Login-Seite zeigt Offline-Login-Option
         set({ authInitializing: false });
       },
 
