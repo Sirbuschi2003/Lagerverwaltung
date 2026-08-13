@@ -507,8 +507,8 @@ export class LoggingController {
       totalArchived += count;
     }
 
-    const retentionDays = await this.loggingService.getLogRetentionDays();
-    const removedOldArchiveDirs = this.archiveService.cleanupOldArchives(retentionDays);
+    const archiveRetentionDays = await this.loggingService.getArchiveRetentionDays();
+    const removedOldArchiveDirs = this.archiveService.cleanupOldArchives(archiveRetentionDays);
 
     if (req?.user && (totalArchived > 0 || removedOldArchiveDirs > 0)) {
       await this.loggingService.logInfo(
@@ -641,7 +641,7 @@ export class LoggingController {
   @Roles('MANAGER')
   async getArchiveRetention(@Req() req: Request) {
     this.requireSuperAdmin(req);
-    const days = await this.loggingService.getLogRetentionDays();
+    const days = await this.loggingService.getArchiveRetentionDays();
     return { retentionDays: days };
   }
 
@@ -650,10 +650,10 @@ export class LoggingController {
   async setArchiveRetention(@Body() body: { retentionDays: number }, @Req() req: Request) {
     this.requireSuperAdmin(req);
     const days = body.retentionDays;
-    if (!days || isNaN(days) || days < 1 || days > 3650) {
-      throw new BadRequestException('Aufbewahrungsdauer muss zwischen 1 und 3650 Tagen liegen');
+    if (!days || isNaN(days) || days < 1 || days > 36500) {
+      throw new BadRequestException('Archiv-Aufbewahrungsdauer muss zwischen 1 und 36500 Tagen liegen');
     }
-    await this.archiveService.setRetention(days);
+    await this.archiveService.setArchiveRetention(days);
     return { success: true, retentionDays: days };
   }
 
@@ -661,8 +661,8 @@ export class LoggingController {
   @Roles('MANAGER')
   async cleanupArchives(@Body() body: { daysToKeep?: number }, @Req() req: Request) {
     this.requireSuperAdmin(req);
-    const days = body.daysToKeep ?? (await this.loggingService.getLogRetentionDays());
-    if (days < 1 || days > 3650) throw new BadRequestException('daysToKeep muss zwischen 1 und 3650 liegen');
+    const days = body.daysToKeep ?? (await this.loggingService.getArchiveRetentionDays());
+    if (days < 1 || days > 36500) throw new BadRequestException('daysToKeep muss zwischen 1 und 36500 liegen');
     const removed = this.archiveService.cleanupOldArchives(days);
     return { success: true, removedCount: removed };
   }

@@ -2036,6 +2036,7 @@ export interface ArchiveStats {
   totalSize: number;
   byCategory: Record<string, { count: number; size: number }>;
   retentionDays: number;
+  archiveRetentionDays: number;
   lastCleanupDate?: string;
 }
 

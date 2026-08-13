@@ -55,7 +55,9 @@ import {
   Archive as ArchiveIcon,
   Delete as DeleteIcon,
   FolderOpen as FolderOpenIcon,
+  Save as SaveIcon,
 } from '@mui/icons-material';
+import { MenuItem } from '@mui/material';
 import { InputAdornment } from '@mui/material';
 import {
   getLogs,
@@ -69,6 +71,7 @@ import {
   getArchiveStats,
   deleteArchiveDay,
   archiveAllLogs,
+  updateArchiveRetention,
   type LogFilters,
   type LogEntry,
   type LogStats,
@@ -495,6 +498,9 @@ const LogsPage: React.FC<{ isEmbedded?: boolean }> = ({ isEmbedded = false }) =>
   const [archiveStats, setArchiveStats] = useState<ArchiveStats | null>(null);
   const [archiveLoading, setArchiveLoading] = useState(false);
   const [busyArchiveAll, setBusyArchiveAll] = useState(false);
+  const [archiveRetentionValue, setArchiveRetentionValue] = useState<number>(1);
+  const [archiveRetentionUnit, setArchiveRetentionUnit] = useState<'days' | 'months' | 'years'>('years');
+  const [savingArchiveRetention, setSavingArchiveRetention] = useState(false);
 
   const loadLogs = useCallback(async (filters: LogFilters, append = false) => {
     setLoading(true);
@@ -525,6 +531,13 @@ const LogsPage: React.FC<{ isEmbedded?: boolean }> = ({ isEmbedded = false }) =>
       const [entries, stats] = await Promise.all([fetchArchives(), getArchiveStats()]);
       setArchiveList(entries);
       setArchiveStats(stats);
+      // Archiv-Retention in Anzeigeeinheit umrechnen
+      if (stats.archiveRetentionDays) {
+        const d = stats.archiveRetentionDays;
+        if (d % 365 === 0) { setArchiveRetentionValue(d / 365); setArchiveRetentionUnit('years'); }
+        else if (d % 30 === 0) { setArchiveRetentionValue(d / 30); setArchiveRetentionUnit('months'); }
+        else { setArchiveRetentionValue(d); setArchiveRetentionUnit('days'); }
+      }
     } catch (e) {
       console.error('Fehler beim Laden der Archive:', e);
     } finally {
@@ -828,11 +841,11 @@ const LogsPage: React.FC<{ isEmbedded?: boolean }> = ({ isEmbedded = false }) =>
             <TextField
               type="number"
               size="small"
-              label="Aufbewahrung (Tage)"
+              label="Aktiv-Aufbewahrung (Tage bis Archiv)"
               value={retentionDays}
               onChange={(e) => setRetentionDaysState(Math.max(1, Math.min(3650, Number(e.target.value) || 1)))}
               inputProps={{ min: 1, max: 3650 }}
-              sx={{ width: 200 }}
+              sx={{ width: 230 }}
             />
             <Button
               variant="contained"
@@ -994,6 +1007,63 @@ const LogsPage: React.FC<{ isEmbedded?: boolean }> = ({ isEmbedded = false }) =>
             </Box>
           </AccordionSummary>
           <AccordionDetails sx={{ p: 0 }}>
+            {/* Archiv-Aufbewahrung konfigurieren */}
+            <Box sx={{ px: 2.5, py: 2, borderBottom: `1px solid`, borderColor: 'divider' }}>
+              <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1.5, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                Archiv-Aufbewahrung (bis zur endgültigen Löschung)
+              </Typography>
+              <Stack direction="row" spacing={1.5} alignItems="center" flexWrap="wrap" useFlexGap>
+                <TextField
+                  type="number"
+                  size="small"
+                  label="Dauer"
+                  value={archiveRetentionValue}
+                  onChange={(e) => setArchiveRetentionValue(Math.max(1, Number(e.target.value) || 1))}
+                  inputProps={{ min: 1 }}
+                  sx={{ width: 100 }}
+                />
+                <TextField
+                  select
+                  size="small"
+                  label="Einheit"
+                  value={archiveRetentionUnit}
+                  onChange={(e) => setArchiveRetentionUnit(e.target.value as 'days' | 'months' | 'years')}
+                  sx={{ width: 120 }}
+                >
+                  <MenuItem value="days">Tage</MenuItem>
+                  <MenuItem value="months">Monate</MenuItem>
+                  <MenuItem value="years">Jahre</MenuItem>
+                </TextField>
+                <Button
+                  variant="contained"
+                  size="small"
+                  startIcon={<SaveIcon />}
+                  disabled={savingArchiveRetention}
+                  onClick={async () => {
+                    const multiplier = archiveRetentionUnit === 'years' ? 365 : archiveRetentionUnit === 'months' ? 30 : 1;
+                    const days = archiveRetentionValue * multiplier;
+                    try {
+                      setSavingArchiveRetention(true);
+                      await updateArchiveRetention(days);
+                      setSnackbar({ open: true, message: `Archiv-Aufbewahrung gespeichert: ${archiveRetentionValue} ${archiveRetentionUnit === 'years' ? 'Jahr(e)' : archiveRetentionUnit === 'months' ? 'Monat(e)' : 'Tag(e)'}` });
+                      await loadArchives();
+                    } catch {
+                      setSnackbar({ open: true, message: 'Fehler beim Speichern der Archiv-Aufbewahrung' });
+                    } finally {
+                      setSavingArchiveRetention(false);
+                    }
+                  }}
+                >
+                  Speichern
+                </Button>
+                {archiveStats && (
+                  <Typography variant="caption" color="text.secondary">
+                    aktuell: {archiveStats.archiveRetentionDays} Tage
+                  </Typography>
+                )}
+              </Stack>
+            </Box>
+
             {archiveLoading ? (
               <Box sx={{ p: 3, textAlign: 'center' }}>
                 <CircularProgress size={24} />

@@ -232,10 +232,34 @@ export class LoggingService {
    * Setzt die Log-Aufbewahrungsdauer in der Konfiguration
    */
   async setLogRetentionDays(days: number): Promise<void> {
-    if (days < 1 || days > 3650) { // Max 10 Jahre
+    if (days < 1 || days > 3650) {
       throw new Error('Aufbewahrungsdauer muss zwischen 1 und 3650 Tagen liegen');
     }
-    await this.setConfig('log.retentionDays', days.toString(), 'Anzahl der Tage, die Logs aufbewahrt werden sollen');
+    await this.setConfig('log.retentionDays', days.toString(), 'Anzahl der Tage, bis aktive Logs ins Archiv verschoben werden');
+  }
+
+  /**
+   * Holt die Archiv-Aufbewahrungsdauer (wie lange archivierte Logs vorgehalten werden, bevor sie gelöscht werden)
+   */
+  async getArchiveRetentionDays(): Promise<number> {
+    try {
+      const config = await this.configRepository.findOne({ where: { key: 'log.archiveRetentionDays' } });
+      if (config && config.value) {
+        const days = parseInt(config.value, 10);
+        return isNaN(days) ? 365 : days;
+      }
+    } catch {}
+    return 365; // Default: 1 Jahr
+  }
+
+  /**
+   * Setzt die Archiv-Aufbewahrungsdauer
+   */
+  async setArchiveRetentionDays(days: number): Promise<void> {
+    if (days < 1 || days > 36500) { // Max 100 Jahre
+      throw new Error('Archiv-Aufbewahrungsdauer muss zwischen 1 und 36500 Tagen liegen');
+    }
+    await this.setConfig('log.archiveRetentionDays', days.toString(), 'Anzahl der Tage, die archivierte Logs vorgehalten werden');
   }
 
   /**

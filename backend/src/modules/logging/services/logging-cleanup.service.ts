@@ -69,7 +69,10 @@ export class LoggingCleanupService implements OnModuleInit, OnModuleDestroy {
 
   private async runCleanupOnce(): Promise<void> {
     try {
-      const retentionDays = await this.loggingService.getLogRetentionDays();
+      const [logRetentionDays, archiveRetentionDays] = await Promise.all([
+        this.loggingService.getLogRetentionDays(),
+        this.loggingService.getArchiveRetentionDays(),
+      ]);
 
       // 1. Archive all past days still in DB (move to files, remove from DB)
       const pastDates = await this.archiveService.getPastDatesInDb();
@@ -79,16 +82,16 @@ export class LoggingCleanupService implements OnModuleInit, OnModuleDestroy {
         totalArchived += Object.values(result.byCategory).reduce((s, n) => s + n, 0);
       }
 
-      // 2. Remove archive files older than retentionDays
-      const removedDirs = this.archiveService.cleanupOldArchives(retentionDays);
+      // 2. Remove archive directories older than archiveRetentionDays
+      const removedDirs = this.archiveService.cleanupOldArchives(archiveRetentionDays);
 
-      // 3. Safety-net: delete any remaining old logs that slipped through
-      const deleted = await this.loggingService.cleanupOldLogs(retentionDays);
+      // 3. Safety-net: delete active logs older than logRetentionDays that weren't archived
+      const deleted = await this.loggingService.cleanupOldLogs(logRetentionDays);
 
       await this.loggingService.logInfo(
         LogCategory.SYSTEM,
         'AUTO_LOG_CLEANUP_COMPLETED',
-        `Tägliche Log-Archivierung: ${pastDates.length} Tage archiviert (${totalArchived} Einträge), ${removedDirs} alte Archive entfernt, ${deleted} Reste bereinigt (Aufbewahrung: ${retentionDays} Tage)`,
+        `Tägliche Log-Archivierung: ${pastDates.length} Tage archiviert (${totalArchived} Einträge), ${removedDirs} alte Archive entfernt, ${deleted} Reste bereinigt (Log-Aufbewahrung: ${logRetentionDays} Tage, Archiv-Aufbewahrung: ${archiveRetentionDays} Tage)`,
       );
     } catch (err: any) {
       await this.loggingService.logError(

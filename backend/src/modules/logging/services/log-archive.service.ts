@@ -110,7 +110,10 @@ export class LogArchiveService {
 
   async getStats() {
     const archives = this.listArchives();
-    const retentionDays = await this.loggingService.getLogRetentionDays();
+    const [logRetentionDays, archiveRetentionDays] = await Promise.all([
+      this.loggingService.getLogRetentionDays(),
+      this.loggingService.getArchiveRetentionDays(),
+    ]);
 
     const byCategory: Record<string, { count: number; size: number }> = {};
     let totalSize = 0;
@@ -124,12 +127,13 @@ export class LogArchiveService {
     }
 
     return {
-      totalArchives: dates.length,
-      oldestDate:    dates[0]                    ?? null,
-      newestDate:    dates[dates.length - 1]     ?? null,
+      totalArchives:      dates.length,
+      oldestDate:         dates[0]                ?? null,
+      newestDate:         dates[dates.length - 1] ?? null,
       totalSize,
       byCategory,
-      retentionDays,
+      retentionDays:      logRetentionDays,
+      archiveRetentionDays,
     };
   }
 
@@ -218,7 +222,7 @@ export class LogArchiveService {
     return removed;
   }
 
-  async setRetention(days: number): Promise<void> {
-    await this.loggingService.setLogRetentionDays(days);
+  async setArchiveRetention(days: number): Promise<void> {
+    await this.loggingService.setArchiveRetentionDays(days);
   }
 }
