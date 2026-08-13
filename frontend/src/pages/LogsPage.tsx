@@ -52,6 +52,9 @@ import {
   Search as SearchIcon,
   FiberManualRecord as LiveDotIcon,
   StopCircle as StopIcon,
+  Archive as ArchiveIcon,
+  Delete as DeleteIcon,
+  FolderOpen as FolderOpenIcon,
 } from '@mui/icons-material';
 import { InputAdornment } from '@mui/material';
 import {
@@ -62,10 +65,15 @@ import {
   getLogRetention,
   setLogRetention,
   deleteAllLogs,
-  cleanupOldLogs,
+  fetchArchives,
+  getArchiveStats,
+  deleteArchiveDay,
+  archiveAllLogs,
   type LogFilters,
   type LogEntry,
   type LogStats,
+  type ArchiveData,
+  type ArchiveStats,
 } from '../utils/api';
 import useAuthStore from '../store/useAuthStore';
 import ConfirmDialog from '../components/ConfirmDialog';
@@ -381,6 +389,84 @@ const CATEGORY_FILTERS = [
   { label: 'System', value: 'SYSTEM' },
 ];
 
+// ─── Archive date list ────────────────────────────────────────────────────────
+
+function formatBytes(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+interface ArchiveDateGroup {
+  date: string;
+  totalEntries: number;
+  totalSize: number;
+  categories: ArchiveData[];
+}
+
+function groupByDate(entries: ArchiveData[]): ArchiveDateGroup[] {
+  const map = new Map<string, ArchiveDateGroup>();
+  for (const e of entries) {
+    const g = map.get(e.date) ?? { date: e.date, totalEntries: 0, totalSize: 0, categories: [] };
+    g.totalEntries += e.entryCount;
+    g.totalSize += e.size;
+    g.categories.push(e);
+    map.set(e.date, g);
+  }
+  return [...map.values()].sort((a, b) => b.date.localeCompare(a.date));
+}
+
+const ArchiveDateList: React.FC<{
+  entries: ArchiveData[];
+  onDelete: (date: string) => void;
+}> = ({ entries, onDelete }) => {
+  const groups = groupByDate(entries);
+
+  return (
+    <List disablePadding>
+      {groups.map((g, idx) => (
+        <React.Fragment key={g.date}>
+          <ListItem
+            sx={{ px: 2.5, py: 1.25 }}
+            secondaryAction={
+              <Tooltip title={`Archiv ${g.date} löschen`}>
+                <IconButton size="small" color="error" onClick={() => onDelete(g.date)}>
+                  <DeleteIcon fontSize="small" />
+                </IconButton>
+              </Tooltip>
+            }
+          >
+            <ListItemAvatar sx={{ minWidth: 44 }}>
+              <Avatar sx={{ width: 34, height: 34, bgcolor: 'action.selected' }}>
+                <FolderOpenIcon fontSize="small" color="action" />
+              </Avatar>
+            </ListItemAvatar>
+            <ListItemText
+              primary={
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap', pr: 4 }}>
+                  <Typography variant="body2" fontWeight={600} sx={{ fontFamily: 'monospace' }}>
+                    {g.date}
+                  </Typography>
+                  <Chip label={`${g.totalEntries.toLocaleString()} Einträge`} size="small" sx={{ height: 20, fontSize: 11 }} />
+                  <Typography variant="caption" color="text.secondary">
+                    {formatBytes(g.totalSize)}
+                  </Typography>
+                </Box>
+              }
+              secondary={
+                <Typography variant="caption" color="text.secondary">
+                  {g.categories.map(c => c.category).join(' · ')}
+                </Typography>
+              }
+            />
+          </ListItem>
+          {idx < groups.length - 1 && <Divider component="li" sx={{ ml: '68px' }} />}
+        </React.Fragment>
+      ))}
+    </List>
+  );
+};
+
 // ─── Component ────────────────────────────────────────────────────────────────
 
 const LogsPage: React.FC<{ isEmbedded?: boolean }> = ({ isEmbedded = false }) => {
@@ -405,6 +491,10 @@ const LogsPage: React.FC<{ isEmbedded?: boolean }> = ({ isEmbedded = false }) =>
   const [snackbar, setSnackbar] = useState<{ open: boolean; message: string }>({ open: false, message: '' });
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [pendingAction, setPendingAction] = useState<() => void>(() => () => {});
+  const [archiveList, setArchiveList] = useState<ArchiveData[]>([]);
+  const [archiveStats, setArchiveStats] = useState<ArchiveStats | null>(null);
+  const [archiveLoading, setArchiveLoading] = useState(false);
+  const [busyArchiveAll, setBusyArchiveAll] = useState(false);
 
   const loadLogs = useCallback(async (filters: LogFilters, append = false) => {
     setLoading(true);
@@ -427,6 +517,20 @@ const LogsPage: React.FC<{ isEmbedded?: boolean }> = ({ isEmbedded = false }) =>
       console.error('Fehler beim Laden der Statistiken:', e);
     }
   }, []);
+
+  const loadArchives = useCallback(async () => {
+    if (!isSuperAdmin) return;
+    setArchiveLoading(true);
+    try {
+      const [entries, stats] = await Promise.all([fetchArchives(), getArchiveStats()]);
+      setArchiveList(entries);
+      setArchiveStats(stats);
+    } catch (e) {
+      console.error('Fehler beim Laden der Archive:', e);
+    } finally {
+      setArchiveLoading(false);
+    }
+  }, [isSuperAdmin]);
 
   useEffect(() => {
     loadLogs(logFilters);
@@ -752,17 +856,25 @@ const LogsPage: React.FC<{ isEmbedded?: boolean }> = ({ isEmbedded = false }) =>
               variant="outlined"
               size="small"
               color="warning"
-              onClick={async () => {
-                try {
-                  const res = await cleanupOldLogs(retentionDays);
-                  setSnackbar({ open: true, message: `${res.deletedCount} alte Logs gelöscht (> ${res.daysToKeep} Tage)` });
-                  await Promise.all([loadLogs({ ...logFilters, offset: 0 }), loadStats()]);
-                } catch {
-                  setSnackbar({ open: true, message: 'Fehler beim Bereinigen alter Logs' });
-                }
+              startIcon={<ArchiveIcon />}
+              disabled={busyArchiveAll}
+              onClick={() => {
+                setPendingAction(() => async () => {
+                  try {
+                    setBusyArchiveAll(true);
+                    const res = await archiveAllLogs();
+                    setSnackbar({ open: true, message: `${res.totalArchived} Logs archiviert (${res.archivedDays} Tage), ${res.removedOldArchiveDirs} alte Archive entfernt` });
+                    await Promise.all([loadLogs({ ...logFilters, offset: 0 }), loadStats(), loadArchives()]);
+                  } catch {
+                    setSnackbar({ open: true, message: 'Fehler beim Archivieren der Logs' });
+                  } finally {
+                    setBusyArchiveAll(false);
+                  }
+                });
+                setConfirmOpen(true);
               }}
             >
-              Alte Logs bereinigen
+              In Archiv verschieben
             </Button>
             <Button
               variant="contained"
@@ -856,12 +968,62 @@ const LogsPage: React.FC<{ isEmbedded?: boolean }> = ({ isEmbedded = false }) =>
 
       <ConfirmDialog
         open={confirmOpen}
-        title="Alle Logs löschen"
-        message="Wirklich ALLE Logs löschen? Dieser Vorgang kann nicht rückgängig gemacht werden."
-        confirmLabel="Alle löschen"
+        title="Aktion bestätigen"
+        message="Vorgang wirklich ausführen?"
+        confirmLabel="Ausführen"
         onConfirm={() => { pendingAction(); setConfirmOpen(false); }}
         onCancel={() => setConfirmOpen(false)}
       />
+
+      {/* Archiv-Sektion (nur Super-Admin) */}
+      {isSuperAdmin && (
+        <Accordion sx={{ mt: 1 }} onChange={(_e, expanded) => { if (expanded) loadArchives(); }}>
+          <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+              <ArchiveIcon fontSize="small" color="action" />
+              <Typography variant="body2" fontWeight={600}>
+                Archiv
+              </Typography>
+              {archiveStats && (
+                <Chip
+                  size="small"
+                  label={`${archiveStats.totalArchives} Tage`}
+                  sx={{ height: 20, fontSize: 11 }}
+                />
+              )}
+            </Box>
+          </AccordionSummary>
+          <AccordionDetails sx={{ p: 0 }}>
+            {archiveLoading ? (
+              <Box sx={{ p: 3, textAlign: 'center' }}>
+                <CircularProgress size={24} />
+              </Box>
+            ) : archiveList.length === 0 ? (
+              <Box sx={{ p: 3, textAlign: 'center' }}>
+                <Typography variant="body2" color="text.secondary">
+                  Kein Archiv vorhanden. Verwende „In Archiv verschieben" um alte Logs zu archivieren.
+                </Typography>
+              </Box>
+            ) : (
+              <ArchiveDateList
+                entries={archiveList}
+                onDelete={(date) => {
+                  setPendingAction(() => async () => {
+                    try {
+                      await deleteArchiveDay(date);
+                      setSnackbar({ open: true, message: `Archiv ${date} gelöscht` });
+                      await loadArchives();
+                    } catch {
+                      setSnackbar({ open: true, message: 'Fehler beim Löschen des Archivs' });
+                    }
+                  });
+                  setConfirmOpen(true);
+                }}
+              />
+            )}
+          </AccordionDetails>
+        </Accordion>
+      )}
     </Container>
   );
 };

@@ -2021,19 +2021,18 @@ export const runMovementCleanup = async (days: number): Promise<{ deleted: numbe
 };
 
 // Archive-Funktionen für Log-Archivierung
+// Flat entry as returned by the backend (one record per date+category)
 export interface ArchiveData {
   date: string;
-  categories: {
-    category: string;
-    count: number;
-    size: number;
-  }[];
+  category: string;
+  entryCount: number;
+  size: number;
 }
 
 export interface ArchiveStats {
   totalArchives: number;
-  oldestDate: string;
-  newestDate: string;
+  oldestDate: string | null;
+  newestDate: string | null;
   totalSize: number;
   byCategory: Record<string, { count: number; size: number }>;
   retentionDays: number;
@@ -2043,6 +2042,17 @@ export interface ArchiveStats {
 export const fetchArchives = async (): Promise<ArchiveData[]> => {
   const response = await api.get<{ archives: ArchiveData[] }>("/logs/archives");
   return response.data.archives;
+};
+
+export const archiveAllLogs = async (): Promise<{
+  success: boolean;
+  archivedDays: number;
+  totalArchived: number;
+  archivedByDate: Record<string, number>;
+  removedOldArchiveDirs: number;
+}> => {
+  const response = await api.post('/logs/cleanup/archive-all', {});
+  return response.data;
 };
 
 export const getArchiveStats = async (): Promise<ArchiveStats> => {

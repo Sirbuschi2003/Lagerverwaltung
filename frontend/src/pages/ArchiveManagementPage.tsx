@@ -55,8 +55,8 @@ interface ArchiveData {
 
 interface ArchiveStats {
   totalArchives: number;
-  oldestDate: string;
-  newestDate: string;
+  oldestDate: string | null;
+  newestDate: string | null;
   totalSize: number;
   byCategory: Record<string, { count: number; size: number }>;
   retentionDays: number;

@@ -20,6 +20,7 @@ import { Roles } from '../../auth/decorators/roles.decorator';
 import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../../auth/guards/roles.guard';
 import { LogLevel, LogCategory } from '../entities/system-log.entity';
+import { ArchiveEntry } from '../services/log-archive.service';
 import { LoggingService, LogFilters } from '../services/logging.service';
 import { LogArchiveService } from '../services/log-archive.service';
 
@@ -168,19 +169,6 @@ export class LoggingController {
     }
 
   const result = await this.loggingService.getLogs(filters, limitNum, offsetNum);
-
-    if (reqUser) {
-      await this.loggingService.logSecurity(
-        'ADMIN_LOGS_ACCESS',
-        `Admin ${reqUser.username} hat Logs abgerufen`,
-        {
-          userId: reqUser.id,
-          ipAddress: req.ip,
-          userAgent: req.get('User-Agent'),
-          metadata: { filters, limit: limitNum, offset: offsetNum }
-        }
-      );
-    }
 
     // Mappe auf API-DTO mit timestamp, username und source
     const mapped = result.logs.map((log) => ({
@@ -425,19 +413,6 @@ export class LoggingController {
       }
     });
 
-    // Log den Statistik-Zugriff
-    if (req?.user) {
-      await this.loggingService.logSecurity(
-        'ADMIN_STATS_ACCESS',
-        `Admin ${req.user.username} hat Log-Statistiken abgerufen`,
-        {
-          userId: req.user.id,
-          ipAddress: req.ip,
-          userAgent: req.get('User-Agent'),
-        }
-      );
-    }
-
     return stats;
   }
 
@@ -511,6 +486,45 @@ export class LoggingController {
     }
 
     return { success: true, deletedCount: deleted, daysToKeep };
+  }
+
+  /**
+   * Alle alten Logs ins Archiv verschieben (archiviert nach Datum, löscht alte Archive per Retention)
+   */
+  @Post('cleanup/archive-all')
+  @Roles('MANAGER')
+  async archiveAllAndCleanup(@Req() req?: any) {
+    this.requireSuperAdmin(req);
+
+    const pastDates = await this.archiveService.getPastDatesInDb();
+    const archivedByDate: Record<string, number> = {};
+    let totalArchived = 0;
+
+    for (const date of pastDates) {
+      const result = await this.archiveService.archiveLogs(date);
+      const count = Object.values(result.byCategory).reduce((s, n) => s + n, 0);
+      if (count > 0) archivedByDate[date] = count;
+      totalArchived += count;
+    }
+
+    const retentionDays = await this.loggingService.getLogRetentionDays();
+    const removedOldArchiveDirs = this.archiveService.cleanupOldArchives(retentionDays);
+
+    if (req?.user && (totalArchived > 0 || removedOldArchiveDirs > 0)) {
+      await this.loggingService.logInfo(
+        LogCategory.SYSTEM,
+        'LOGS_ARCHIVE_MANUAL',
+        `Admin ${req.user.username} hat ${totalArchived} Logs archiviert (${pastDates.length} Tage), ${removedOldArchiveDirs} alte Archive entfernt`,
+        {
+          userId: req.user.id,
+          ipAddress: req.ip,
+          userAgent: req.get('User-Agent'),
+          metadata: { totalArchived, archivedDays: pastDates.length, removedOldArchiveDirs },
+        },
+      );
+    }
+
+    return { success: true, archivedDays: pastDates.length, totalArchived, archivedByDate, removedOldArchiveDirs };
   }
 
   /**
