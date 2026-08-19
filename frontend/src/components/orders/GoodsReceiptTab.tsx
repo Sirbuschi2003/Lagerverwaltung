@@ -32,7 +32,8 @@ import {
   alpha,
   useTheme,
 } from "@mui/material";
-import { Check as CheckIcon, Refresh as RefreshIcon } from "@mui/icons-material";
+import { Check as CheckIcon, Print as PrintIcon, Refresh as RefreshIcon } from "@mui/icons-material";
+import { QRCodeSVG } from "qrcode.react";
 
 import {
   fetchPurchaseOrders,
@@ -194,6 +195,8 @@ const GoodsReceiptTab: React.FC = () => {
   const barcodeInputRef = useRef<HTMLInputElement | null>(null);
   const [itemDialogId, setItemDialogId] = useState<string | null>(null);
   const [confirmWithoutNoteOpen, setConfirmWithoutNoteOpen] = useState(false);
+  const [confirmQrDialogOpen, setConfirmQrDialogOpen] = useState(false);
+  const qrConfirmRef = useRef<HTMLDivElement | null>(null);
   const [draftRestored, setDraftRestored] = useState(false);
   const [draftOrderIds, setDraftOrderIds] = useState<Set<string>>(() => {
     const ids = new Set<string>();
@@ -371,6 +374,24 @@ const GoodsReceiptTab: React.FC = () => {
     setScanFeedback("Alle offenen Mengen wurden als Vorschlag übernommen.");
     setScanCandidate(null);
     focusBarcodeInput();
+  };
+
+  const handlePrintConfirmQr = () => {
+    const svg = qrConfirmRef.current?.innerHTML ?? "";
+    const win = window.open("", "_blank");
+    if (!win) return;
+    win.document.write(`<!DOCTYPE html><html><head><title>Wareneingang – CONFIRM QR-Code</title>
+      <style>
+        body{font-family:Arial,sans-serif;display:flex;justify-content:center;align-items:center;min-height:100vh;margin:0;background:#fff;}
+        .card{text-align:center;border:2px solid #ccc;border-radius:10px;padding:32px 40px;}
+        h2{margin:0 0 16px 0;font-size:20px;}
+        p{margin:12px 0 0 0;font-size:13px;color:#555;max-width:180px;}
+        @media print{@page{size:A6;margin:8mm;}}
+      </style></head><body>
+      <div class="card"><h2>✅ OK übernehmen</h2>${svg}<p>Scan-Treffer im Wareneingang bestätigen</p></div>
+    </body></html>`);
+    win.document.close();
+    setTimeout(() => { win.focus(); win.print(); }, 300);
   };
 
   const handleBarcodeScan = (incomingCode?: string) => {
@@ -694,6 +715,9 @@ const GoodsReceiptTab: React.FC = () => {
             <Button variant="outlined" onClick={handleFillRemaining}>
               Rest für alle
             </Button>
+            <Button variant="outlined" startIcon={<PrintIcon />} onClick={() => setConfirmQrDialogOpen(true)} sx={{ whiteSpace: "nowrap" }}>
+              CONFIRM-QR
+            </Button>
           </Stack>
 
           {scanFeedback && (
@@ -885,6 +909,24 @@ const GoodsReceiptTab: React.FC = () => {
             }}
           >
             Buchen
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog open={confirmQrDialogOpen} onClose={() => setConfirmQrDialogOpen(false)} maxWidth="xs" fullWidth>
+        <DialogTitle>CONFIRM – QR-Code drucken</DialogTitle>
+        <DialogContent sx={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 2, pt: 2 }}>
+          <Typography variant="body2" color="text.secondary" sx={{ textAlign: "center" }}>
+            Diesen QR-Code ausdrucken und im Lager aufhängen. Beim Scannen wird der aktive Scan-Treffer direkt bestätigt (entspricht „OK übernehmen").
+          </Typography>
+          <Box ref={qrConfirmRef} sx={{ p: 2, border: "1px solid", borderColor: "divider", borderRadius: 2 }}>
+            <QRCodeSVG value="CONFIRM" size={180} />
+          </Box>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setConfirmQrDialogOpen(false)}>Schließen</Button>
+          <Button variant="contained" startIcon={<PrintIcon />} onClick={handlePrintConfirmQr}>
+            Drucken
           </Button>
         </DialogActions>
       </Dialog>
