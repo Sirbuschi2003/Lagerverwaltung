@@ -1,6 +1,6 @@
 # KFZ Lagerverwaltung – Benutzerhandbuch
 
-**Version 3.9 · Stand: Juni 2026**
+**Version 3.9 · Stand: August 2026**
 
 ---
 
@@ -340,11 +340,35 @@ Klick auf die Artikelnummer öffnet den Artikeldialog direkt.
 
 ### 7.3 Wareneingang
 
-1. Bestellung öffnen
-2. „Wareneingang" buchen
-3. Lieferscheinnummer eingeben (Pflichtfeld, bei Fehlen erscheint ein Bestätigungsdialog)
-4. Mengen prüfen und bestätigen
-5. Bei vollständigem Eingang wird die Bestellung automatisch archiviert
+1. Bestellung öffnen → Button **„Eingang"**
+2. Lieferscheinnummer eingeben (optional, bei Fehlen erscheint ein Bestätigungsdialog)
+3. Artikel scannen oder Menge manuell eingeben
+4. Scan-Treffer mit **„OK übernehmen"** oder per **CONFIRM-QR-Code** bestätigen
+5. Am Ende **„Wareneingang buchen"** klicken
+6. Bei vollständigem Eingang wird die Bestellung automatisch archiviert
+
+**Ablauf mit Handscanner (empfohlene Methode):**
+
+| Schritt | Aktion |
+|---------|--------|
+| 1 | Artikel-Barcode scannen → Scan-Treffer erscheint mit Vorschlagsmenge |
+| 2 | Menge prüfen (ggf. anpassen) |
+| 3 | **CONFIRM-QR-Code** scannen → bestätigt den Treffer (= „OK übernehmen") |
+| 4 | Nächsten Artikel scannen |
+| 5 | „Wareneingang buchen" manuell klicken |
+
+**CONFIRM-QR-Code drucken:**
+- Im Wareneingang-Dialog auf **„CONFIRM-QR"** (Drucker-Symbol) klicken
+- QR-Code-Dialog öffnet sich → **„Drucken"** → A6-Ausdruck
+- Ausgedruckten Code im Lager aufhängen oder am Scanner-Arbeitsplatz anbringen
+- Der CONFIRM-Code bestätigt **nur den aktuellen Scan-Treffer** — er löst **nicht** die Gesamtbuchung aus
+
+**Draft-Persistenz (Tab-Wechsel):**
+- Vorgemerkte Positionen (nach „OK übernehmen") werden automatisch zwischengespeichert
+- Bei Tab-Wechsel oder Navigation zu einer anderen Seite bleibt der Stand erhalten
+- Nach Rückkehr: Orange-Banner **„Vorgemerkter Entwurf geladen"** erscheint
+- In der Bestellungsliste zeigt ein Chip **„Vorgemerkt"** an, welche Bestellung einen offenen Entwurf hat
+- Der Entwurf wird erst nach erfolgreichem **„Wareneingang buchen"** automatisch gelöscht
 
 ---
 
