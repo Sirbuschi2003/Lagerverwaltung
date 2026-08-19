@@ -66,6 +66,40 @@ const deliveryMetaMap: Record<DeliveryState, DeliveryMeta> = {
   COMPLETE: { label: "Vollständig", color: "success" },
 };
 
+const DRAFT_KEY_PREFIX = "goodsReceipt_draft_";
+
+type ReceiptDraft = {
+  receivedQuantities: Record<string, number>;
+  deliveryNoteNumber: string;
+};
+
+const loadDraft = (orderId: string): ReceiptDraft | null => {
+  try {
+    const raw = sessionStorage.getItem(DRAFT_KEY_PREFIX + orderId);
+    return raw ? (JSON.parse(raw) as ReceiptDraft) : null;
+  } catch {
+    return null;
+  }
+};
+
+const persistDraft = (orderId: string, quantities: Record<string, number>, noteNumber: string): boolean => {
+  const hasAny = Object.values(quantities).some((q) => q > 0);
+  try {
+    if (!hasAny) {
+      sessionStorage.removeItem(DRAFT_KEY_PREFIX + orderId);
+      return false;
+    }
+    sessionStorage.setItem(DRAFT_KEY_PREFIX + orderId, JSON.stringify({ receivedQuantities: quantities, deliveryNoteNumber: noteNumber }));
+    return true;
+  } catch {
+    return false;
+  }
+};
+
+const clearDraft = (orderId: string) => {
+  try { sessionStorage.removeItem(DRAFT_KEY_PREFIX + orderId); } catch {}
+};
+
 const getOrderYear = (order: PurchaseOrderDto) => {
   const reference = order.orderedAt || order.createdAt;
   const parsed = new Date(reference);
@@ -160,6 +194,17 @@ const GoodsReceiptTab: React.FC = () => {
   const barcodeInputRef = useRef<HTMLInputElement | null>(null);
   const [itemDialogId, setItemDialogId] = useState<string | null>(null);
   const [confirmWithoutNoteOpen, setConfirmWithoutNoteOpen] = useState(false);
+  const [draftRestored, setDraftRestored] = useState(false);
+  const [draftOrderIds, setDraftOrderIds] = useState<Set<string>>(() => {
+    const ids = new Set<string>();
+    try {
+      for (let i = 0; i < sessionStorage.length; i++) {
+        const key = sessionStorage.key(i);
+        if (key?.startsWith(DRAFT_KEY_PREFIX)) ids.add(key.slice(DRAFT_KEY_PREFIX.length));
+      }
+    } catch {}
+    return ids;
+  });
 
   const focusBarcodeInput = () => {
     window.setTimeout(() => {
@@ -192,6 +237,17 @@ const GoodsReceiptTab: React.FC = () => {
       focusBarcodeInput();
     }
   }, [dialogOpen]);
+
+  useEffect(() => {
+    if (!selectedOrder || !dialogOpen) return;
+    const hasDraft = persistDraft(selectedOrder.id, receivedQuantities, deliveryNoteNumber);
+    setDraftOrderIds((prev) => {
+      const next = new Set(prev);
+      if (hasDraft) next.add(selectedOrder.id);
+      else next.delete(selectedOrder.id);
+      return next;
+    });
+  }, [receivedQuantities, deliveryNoteNumber, selectedOrder, dialogOpen]);
 
   const supplierOptions = useMemo(() => {
     const map = new Map<string, string>();
@@ -270,12 +326,18 @@ const GoodsReceiptTab: React.FC = () => {
 
   const handleOpenReceiptDialog = (order: PurchaseOrderDto) => {
     setSelectedOrder(order);
-    const quantities: Record<string, number> = {};
-    order.lines.forEach((line) => {
-      quantities[line.id] = 0;
-    });
-    setReceivedQuantities(quantities);
-    setDeliveryNoteNumber("");
+    const draft = loadDraft(order.id);
+    if (draft) {
+      setReceivedQuantities(draft.receivedQuantities);
+      setDeliveryNoteNumber(draft.deliveryNoteNumber);
+      setDraftRestored(true);
+    } else {
+      const quantities: Record<string, number> = {};
+      order.lines.forEach((line) => { quantities[line.id] = 0; });
+      setReceivedQuantities(quantities);
+      setDeliveryNoteNumber("");
+      setDraftRestored(false);
+    }
     setBarcodeInput("");
     setScanCandidate(null);
     setScanFeedback(null);
@@ -316,6 +378,17 @@ const GoodsReceiptTab: React.FC = () => {
 
     const code = (incomingCode ?? barcodeInput).trim();
     if (!code) return;
+
+    if (code === "CONFIRM") {
+      if (scanCandidate) {
+        handleApplyScanCandidate();
+      } else {
+        setScanFeedback("Kein aktiver Scan-Treffer zum Bestätigen.");
+        setBarcodeInput("");
+        focusBarcodeInput();
+      }
+      return;
+    }
 
     const line = selectedOrder.lines.find((entry) => lineMatchesScannedCode(entry, code));
     if (!line) {
@@ -412,6 +485,8 @@ const GoodsReceiptTab: React.FC = () => {
       const allReceived = updated.lines.every(
         (line) => getRemainingQuantity(line.quantity, line.receivedQuantity) <= 0,
       );
+      clearDraft(selectedOrder.id);
+      setDraftOrderIds((prev) => { const next = new Set(prev); next.delete(selectedOrder.id); return next; });
       setSuccess(
         allReceived
           ? `Wareneingang für Bestellung ${updated.orderNumber || updated.id} vollständig gebucht.`
@@ -522,6 +597,9 @@ const GoodsReceiptTab: React.FC = () => {
                     <Box sx={{ display: "flex", alignItems: "center", gap: 1, flexWrap: "wrap", justifyContent: "flex-end" }}>
                       <Chip label={getStatusLabel(order.status)} color={getStatusColor(order.status)} size="small" />
                       <Chip label={deliveryMeta.label} color={deliveryMeta.color} size="small" variant="outlined" />
+                      {draftOrderIds.has(order.id) && (
+                        <Chip label="Vorgemerkt" color="warning" size="small" variant="outlined" />
+                      )}
                       <Chip
                         label={`${totalRemaining} offen`}
                         color={totalRemaining > 0 ? "warning" : "success"}
@@ -544,8 +622,13 @@ const GoodsReceiptTab: React.FC = () => {
         <DialogTitle>Wareneingang - Bestellung {selectedOrder?.orderNumber || selectedOrder?.id}</DialogTitle>
         <DialogContent>
           <Alert severity="info" sx={{ mt: 1, mb: 2 }}>
-            Ablauf: Artikel scannen, Vorschlagsmenge prüfen, mit "OK übernehmen" bestätigen und am Ende Wareneingang buchen.
+            Ablauf: Artikel scannen, Vorschlagsmenge prüfen, mit "OK übernehmen" oder CONFIRM-QR bestätigen und am Ende Wareneingang buchen.
           </Alert>
+          {draftRestored && (
+            <Alert severity="warning" sx={{ mb: 2 }} onClose={() => setDraftRestored(false)}>
+              Vorgemerkter Entwurf geladen – diese Positionen wurden noch nicht eingebucht.
+            </Alert>
+          )}
 
           <Box sx={{ mb: 2 }}>
             <TextField
