@@ -89,7 +89,8 @@ export class PurchasingService {
       .leftJoinAndSelect("order.supplier", "supplier")
       .leftJoinAndSelect("order.branch", "branch")
       .leftJoinAndSelect("order.lines", "line")
-      .leftJoinAndSelect("line.item", "item");
+      .leftJoinAndSelect("line.item", "item")
+      .leftJoinAndSelect("item.codes", "itemCodes");
 
     if (params?.branchId) {
       qb.andWhere("order.branchId = :branchId", { branchId: params.branchId });
@@ -139,7 +140,7 @@ export class PurchasingService {
     if (branchId) where.branchId = branchId;
     const order = await this.ordersRepository.findOne({
       where,
-      relations: ["supplier", "lines", "lines.item"],
+      relations: ["supplier", "lines", "lines.item", "lines.item.codes"],
     });
     if (!order) {
       throw new NotFoundException("Purchase order not found");
