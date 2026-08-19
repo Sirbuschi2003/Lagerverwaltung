@@ -70,6 +70,18 @@ const AppContent = () => {
     }
   }, [isOnline, token]);
 
+  // Proaktiver Token-Refresh wenn Tab wieder sichtbar wird (verhindert 401-Burst nach Tab-Sleep)
+  useEffect(() => {
+    if (!token) return;
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible" && navigator.onLine) {
+        void refreshAccessToken();
+      }
+    };
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    return () => document.removeEventListener("visibilitychange", handleVisibilityChange);
+  }, [token, refreshAccessToken]);
+
   // Erstelle Theme basierend auf aktuellem Mode
   const theme = useMemo(() => createAppTheme(mode, preset), [mode, preset]);
 

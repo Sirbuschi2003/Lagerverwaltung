@@ -137,8 +137,11 @@ export class StockController {
   @Post("movement")
   @SkipThrottle()
   @Permissions("stock.write")
-  async recordMovement(@Body() dto: RecordMovementDto) {
-    this.logger.log(`recordMovement vehicleId=${dto.vehicleId} itemId=${dto.itemId} type=${dto.type} qty=${dto.quantity}`);
+  async recordMovement(@Body() dto: RecordMovementDto, @Req() req: StockRequest) {
+    if (!dto.userId && req.user?.id) {
+      dto.userId = req.user.id;
+    }
+    this.logger.log(`recordMovement vehicleId=${dto.vehicleId} itemId=${dto.itemId} type=${dto.type} qty=${dto.quantity} userId=${dto.userId}`);
     const result = await this.stockService.recordMovement(dto);
     this.stockGateway.broadcastRestockUpdate();
     return result;
@@ -246,7 +249,11 @@ export class StockController {
 
   @Post("sync")
   @Permissions("stock.write")
-  syncMovements(@Body() dto: SyncPayloadDto) {
+  syncMovements(@Body() dto: SyncPayloadDto, @Req() req: StockRequest) {
+    const fallbackUserId = req.user?.id;
+    if (fallbackUserId && dto.movements) {
+      dto.movements = dto.movements.map((m) => (!m.userId ? { ...m, userId: fallbackUserId } : m));
+    }
     this.logger.log(`syncMovements count=${dto.movements?.length ?? 0}`);
     return this.stockService.syncMovements(dto);
   }
