@@ -1,4 +1,7 @@
 ﻿import React, { useEffect, useRef, useState, useMemo } from "react";
+import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors, type DragEndEvent } from "@dnd-kit/core";
+import { SortableContext, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy, arrayMove } from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
 import {
   Alert,
   Autocomplete,
@@ -42,6 +45,7 @@ import DraftsIcon from "@mui/icons-material/Drafts";
 import StorefrontIcon from "@mui/icons-material/Storefront";
 import AddIcon from "@mui/icons-material/Add";
 import DeleteIcon from "@mui/icons-material/Delete";
+import DragIndicatorIcon from "@mui/icons-material/DragIndicator";
 import ArrowForwardIcon from "@mui/icons-material/ArrowForward";
 import useAuthStore from "../../store/useAuthStore";
 import {
@@ -76,6 +80,49 @@ interface WizardGroup {
   supplierName: string;
   lines: WizardLine[];
 }
+
+const SortableWizardLineRow: React.FC<{
+  line: WizardLine;
+  supplierId: string;
+  wizardCreating: boolean;
+  onQtyChange: (supplierId: string, itemId: string, qty: number) => void;
+  onRemove: (supplierId: string, itemId: string) => void;
+}> = ({ line, supplierId, wizardCreating, onQtyChange, onRemove }) => {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: line.itemId });
+  return (
+    <TableRow ref={setNodeRef} style={{ transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.4 : 1 }}>
+      <TableCell sx={{ width: 28, px: 0.5, cursor: "grab", color: "text.disabled" }} {...attributes} {...listeners}>
+        <DragIndicatorIcon fontSize="small" />
+      </TableCell>
+      <TableCell>
+        <Typography variant="body2" fontWeight="medium">{line.code}</Typography>
+      </TableCell>
+      <TableCell>
+        <Typography variant="body2" fontWeight={600}>{line.description}</Typography>
+        {line.descriptionSecondary && (
+          <Typography variant="caption" color="text.secondary">{line.descriptionSecondary}</Typography>
+        )}
+      </TableCell>
+      <TableCell align="right">
+        <TextField
+          type="number"
+          size="small"
+          value={line.quantity}
+          onChange={(e) => onQtyChange(supplierId, line.itemId, Math.max(0, parseInt(e.target.value) || 0))}
+          onFocus={(e) => e.target.select()}
+          inputProps={{ min: 0, style: { textAlign: "right" } }}
+          sx={{ width: 80 }}
+          disabled={wizardCreating}
+        />
+      </TableCell>
+      <TableCell>
+        <IconButton size="small" color="error" disabled={wizardCreating} onClick={() => onRemove(supplierId, line.itemId)}>
+          <DeleteIcon fontSize="small" />
+        </IconButton>
+      </TableCell>
+    </TableRow>
+  );
+};
 
 const OrderSuggestionsTab: React.FC = () => {
   const theme = useTheme();
@@ -117,6 +164,24 @@ const OrderSuggestionsTab: React.FC = () => {
   const [addItems, setAddItems] = useState<Record<string, ItemDto | null>>({});
   const [addQtys, setAddQtys] = useState<Record<string, number>>({});
   const [addCounters, setAddCounters] = useState<Record<string, number>>({});
+
+  const wizardDndSensors = useSensors(
+    useSensor(PointerSensor),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
+  );
+
+  const handleWizardDragEnd = (supplierId: string, event: DragEndEvent) => {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+    setWizardGroups((prev) =>
+      prev.map((g) => {
+        if (g.supplierId !== supplierId) return g;
+        const oldIndex = g.lines.findIndex((l) => l.itemId === active.id);
+        const newIndex = g.lines.findIndex((l) => l.itemId === over.id);
+        return { ...g, lines: arrayMove(g.lines, oldIndex, newIndex) };
+      }),
+    );
+  };
 
   // Dialog für Bestellaktionen
   const [actionDialogOpen, setActionDialogOpen] = useState(false);
@@ -1136,6 +1201,7 @@ const OrderSuggestionsTab: React.FC = () => {
               <Table size="small">
                 <TableHead>
                   <TableRow>
+                    <TableCell sx={{ width: 28, px: 0.5 }} />
                     <TableCell>Artikelnummer</TableCell>
                     <TableCell>Bezeichnung</TableCell>
                     <TableCell align="right" sx={{ width: 100 }}>Menge</TableCell>
@@ -1143,60 +1209,38 @@ const OrderSuggestionsTab: React.FC = () => {
                   </TableRow>
                 </TableHead>
                 <TableBody>
-                  {group.lines.map((line) => (
-                    <TableRow key={line.itemId}>
-                      <TableCell>
-                        <Typography variant="body2" fontWeight="medium">{line.code}</Typography>
-                      </TableCell>
-                      <TableCell>
-                        <Typography variant="body2" fontWeight={600}>{line.description}</Typography>
-                        {line.descriptionSecondary && (
-                          <Typography variant="caption" color="text.secondary">{line.descriptionSecondary}</Typography>
-                        )}
-                      </TableCell>
-                      <TableCell align="right">
-                        <TextField
-                          type="number"
-                          size="small"
-                          value={line.quantity}
-                          onChange={(e) => {
-                            const qty = Math.max(0, parseInt(e.target.value) || 0);
+                  <DndContext sensors={wizardDndSensors} collisionDetection={closestCenter} onDragEnd={(e) => handleWizardDragEnd(group.supplierId, e)}>
+                    <SortableContext items={group.lines.map((l) => l.itemId)} strategy={verticalListSortingStrategy}>
+                      {group.lines.map((line) => (
+                        <SortableWizardLineRow
+                          key={line.itemId}
+                          line={line}
+                          supplierId={group.supplierId}
+                          wizardCreating={wizardCreating}
+                          onQtyChange={(sid, itemId, qty) =>
                             setWizardGroups((prev) =>
                               prev.map((g) =>
-                                g.supplierId === group.supplierId
-                                  ? { ...g, lines: g.lines.map((l) => l.itemId === line.itemId ? { ...l, quantity: qty } : l) }
+                                g.supplierId === sid
+                                  ? { ...g, lines: g.lines.map((l) => l.itemId === itemId ? { ...l, quantity: qty } : l) }
                                   : g,
                               ),
-                            );
-                          }}
-                          onFocus={(e) => e.target.select()}
-                          inputProps={{ min: 0, style: { textAlign: "right" } }}
-                          sx={{ width: 80 }}
-                          disabled={wizardCreating}
-                        />
-                      </TableCell>
-                      <TableCell>
-                        <IconButton
-                          size="small"
-                          color="error"
-                          disabled={wizardCreating}
-                          onClick={() =>
+                            )
+                          }
+                          onRemove={(sid, itemId) =>
                             setWizardGroups((prev) =>
                               prev
                                 .map((g) =>
-                                  g.supplierId === group.supplierId
-                                    ? { ...g, lines: g.lines.filter((l) => l.itemId !== line.itemId) }
+                                  g.supplierId === sid
+                                    ? { ...g, lines: g.lines.filter((l) => l.itemId !== itemId) }
                                     : g,
                                 )
                                 .filter((g) => g.lines.length > 0),
                             )
                           }
-                        >
-                          <DeleteIcon fontSize="small" />
-                        </IconButton>
-                      </TableCell>
-                    </TableRow>
-                  ))}
+                        />
+                      ))}
+                    </SortableContext>
+                  </DndContext>
                   {/* Artikel hinzufügen */}
                   <TableRow>
                     <TableCell colSpan={2}>
