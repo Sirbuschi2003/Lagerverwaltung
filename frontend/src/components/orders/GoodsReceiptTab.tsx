@@ -76,7 +76,7 @@ type ReceiptDraft = {
 
 const loadDraft = (orderId: string): ReceiptDraft | null => {
   try {
-    const raw = sessionStorage.getItem(DRAFT_KEY_PREFIX + orderId);
+    const raw = localStorage.getItem(DRAFT_KEY_PREFIX + orderId);
     return raw ? (JSON.parse(raw) as ReceiptDraft) : null;
   } catch {
     return null;
@@ -87,10 +87,10 @@ const persistDraft = (orderId: string, quantities: Record<string, number>, noteN
   const hasAny = Object.values(quantities).some((q) => q > 0);
   try {
     if (!hasAny) {
-      sessionStorage.removeItem(DRAFT_KEY_PREFIX + orderId);
+      localStorage.removeItem(DRAFT_KEY_PREFIX + orderId);
       return false;
     }
-    sessionStorage.setItem(DRAFT_KEY_PREFIX + orderId, JSON.stringify({ receivedQuantities: quantities, deliveryNoteNumber: noteNumber }));
+    localStorage.setItem(DRAFT_KEY_PREFIX + orderId, JSON.stringify({ receivedQuantities: quantities, deliveryNoteNumber: noteNumber }));
     return true;
   } catch {
     return false;
@@ -98,7 +98,7 @@ const persistDraft = (orderId: string, quantities: Record<string, number>, noteN
 };
 
 const clearDraft = (orderId: string) => {
-  try { sessionStorage.removeItem(DRAFT_KEY_PREFIX + orderId); } catch {}
+  try { localStorage.removeItem(DRAFT_KEY_PREFIX + orderId); } catch {}
 };
 
 const getOrderYear = (order: PurchaseOrderDto) => {
@@ -201,8 +201,8 @@ const GoodsReceiptTab: React.FC = () => {
   const [draftOrderIds, setDraftOrderIds] = useState<Set<string>>(() => {
     const ids = new Set<string>();
     try {
-      for (let i = 0; i < sessionStorage.length; i++) {
-        const key = sessionStorage.key(i);
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
         if (key?.startsWith(DRAFT_KEY_PREFIX)) ids.add(key.slice(DRAFT_KEY_PREFIX.length));
       }
     } catch {}

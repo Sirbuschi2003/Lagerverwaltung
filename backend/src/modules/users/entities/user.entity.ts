@@ -71,4 +71,11 @@ export class User {
 
   @Column({ type: "datetime", nullable: true, default: null })
   lockedUntil!: Date | null;
+
+  @Column({ type: "tinyint", default: 0 })
+  mfaEnabled!: boolean;
+
+  @Exclude()
+  @Column({ type: "varchar", length: 64, nullable: true, default: null })
+  mfaTotpSecret!: string | null;
 }

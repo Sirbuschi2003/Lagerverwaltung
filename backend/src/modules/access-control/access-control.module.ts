@@ -8,9 +8,10 @@ import { AccessControlService } from "./access-control.service";
 import { AccessControlController } from "./access-control.controller";
 import { PermissionsGuard } from "./guards/permissions.guard";
 import { UsersModule } from "../users/users.module";
+import { LoggingModule } from "../logging/logging.module";
 
 @Module({
-  imports: [TypeOrmModule.forFeature([Permission, Role, RolePermission, UserPermission]), forwardRef(() => UsersModule)],
+  imports: [TypeOrmModule.forFeature([Permission, Role, RolePermission, UserPermission]), forwardRef(() => UsersModule), LoggingModule],
   providers: [AccessControlService, PermissionsGuard],
   controllers: [AccessControlController],
   exports: [AccessControlService, PermissionsGuard],

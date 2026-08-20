@@ -4,6 +4,7 @@ import { devtools } from "zustand/middleware";
 import { syncOfflineMovements } from "../utils/api";
 
 export interface OfflineMovement {
+  id?: number; // IDB autoIncrement key — set after enqueue, undefined before first persist
   itemId: string;
   code: string;
   type: "CHECKIN" | "CHECKOUT" | "ADJUSTMENT";
@@ -43,10 +44,17 @@ const STORE_NAME = "movements";
 const MAX_RETRIES = 5;
 
 const getDb = async (): Promise<IDBPDatabase> => {
-  return openDB(DB_NAME, 1, {
-    upgrade(db) {
-      if (!db.objectStoreNames.contains(STORE_NAME)) {
-        db.createObjectStore(STORE_NAME, { keyPath: "timestamp" });
+  return openDB(DB_NAME, 2, {
+    upgrade(db, oldVersion) {
+      // v1 used keyPath:"timestamp" which silently overwrote concurrent entries.
+      // v2 uses autoIncrement so every entry gets a unique numeric id.
+      if (oldVersion < 2) {
+        if (db.objectStoreNames.contains(STORE_NAME)) {
+          // Drop old store — any pending movements from v1 are lost on first upgrade.
+          // This is acceptable: the timestamp-keyPath bug may have already silently lost them.
+          db.deleteObjectStore(STORE_NAME);
+        }
+        db.createObjectStore(STORE_NAME, { keyPath: "id", autoIncrement: true });
       }
     },
   });
@@ -131,15 +139,17 @@ const useOfflineQueue = create<OfflineQueueState>()(
     
     enqueueMovement: async (movement: OfflineMovement) => {
       const { hasServiceWorkerSync } = get();
-      
+
       if (hasServiceWorkerSync && navigator.serviceWorker?.controller) {
         return;
       }
-      
+
       try {
         const db = await getDb();
-        await db.put(STORE_NAME, movement);
-        set((state) => ({ movements: [...state.movements, movement] }));
+        // add() (not put!) generates the autoIncrement id and returns it
+        const generatedId = await db.add(STORE_NAME, movement);
+        const stored: OfflineMovement = { ...movement, id: generatedId as number };
+        set((state) => ({ movements: [...state.movements, stored] }));
       } catch (err) {
         set({ lastError: 'Offline-Speicher nicht verfügbar: ' + String(err) });
         throw err; // Aufrufer soll den Fehler anzeigen
@@ -311,13 +321,11 @@ const useOfflineQueue = create<OfflineQueueState>()(
             await tx.done;
             set({ movements: [] });
           } else {
-            // Nur erfolgreiche entfernen, Konflikte behalten
-            const successfulTimestamps = movements
-              .map((m) => m.timestamp)
-              .filter((ts) => !conflictTimestamps.has(ts));
+            // Nur erfolgreiche entfernen — identifiziert per timestamp, gelöscht per autoIncrement-id
+            const successfulMovements = movements.filter((m) => !conflictTimestamps.has(m.timestamp));
             const tx = db.transaction(STORE_NAME, "readwrite");
-            for (const ts of successfulTimestamps) {
-              await tx.objectStore(STORE_NAME).delete(ts);
+            for (const m of successfulMovements) {
+              if (m.id != null) await tx.objectStore(STORE_NAME).delete(m.id);
             }
             await tx.done;
 
@@ -328,7 +336,7 @@ const useOfflineQueue = create<OfflineQueueState>()(
             for (const movement of conflictMovements) {
               const updated: OfflineMovement = { ...movement, retryCount: (movement.retryCount ?? 0) + 1 };
               if ((updated.retryCount ?? 0) >= MAX_RETRIES) {
-                await db.delete(STORE_NAME, movement.timestamp);
+                if (movement.id != null) await db.delete(STORE_NAME, movement.id);
                 discardedConflictCount++;
               } else {
                 await db.put(STORE_NAME, updated);
@@ -396,7 +404,7 @@ const useOfflineQueue = create<OfflineQueueState>()(
             for (const movement of currentMovements) {
               const updated: OfflineMovement = { ...movement, retryCount: (movement.retryCount ?? 0) + 1 };
               if ((updated.retryCount ?? 0) >= MAX_RETRIES) {
-                await db.delete(STORE_NAME, movement.timestamp);
+                if (movement.id != null) await db.delete(STORE_NAME, movement.id);
                 discardedCount++;
               } else {
                 await db.put(STORE_NAME, updated);

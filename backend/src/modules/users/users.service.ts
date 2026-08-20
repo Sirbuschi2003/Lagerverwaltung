@@ -9,6 +9,7 @@ import { UpdateUserDto } from "./dto/update-user.dto";
 import { User } from "./entities/user.entity";
 import { Location } from "../locations/entities/location.entity";
 import { PasswordHistory } from "../auth/entities/password-history.entity";
+import { RefreshToken } from "../auth/entities/refresh-token.entity";
 
 @Injectable()
 export class UsersService {
@@ -19,6 +20,8 @@ export class UsersService {
     private readonly locationRepository: Repository<Location>,
     @InjectRepository(PasswordHistory)
     private readonly passwordHistoryRepository: Repository<PasswordHistory>,
+    @InjectRepository(RefreshToken)
+    private readonly refreshTokenRepository: Repository<RefreshToken>,
   ) {}
 
   findAll(branchId?: string | null): Promise<User[]> {
@@ -98,6 +101,8 @@ export class UsersService {
 
   /**
    * DSGVO Art. 17: Anonymisierung statt Hard-Delete.
+   * Löscht: Passwort, E-Mail, Namen, Einstellungen, alle Refresh-Tokens, Passwort-History.
+   * Behält: userId in system_logs (Audit-Trail), anonymisierter Datensatz für Revisionszwecke.
    */
   async anonymizeUser(id: string): Promise<{ message: string; anonymizedId: string }> {
     const user = await this.repository.findOne({ where: { id } });
@@ -112,6 +117,19 @@ export class UsersService {
       settings: null,
       vehicleId: null,
     });
+
+    // Alle aktiven Refresh-Tokens ungültig machen (sofortiger Logout auf allen Geräten)
+    await this.refreshTokenRepository.update(
+      { userId: id, isRevoked: false },
+      { isRevoked: true, revokedAt: new Date() },
+    );
+
+    // Passwort-History löschen (keine personenbezogenen Daten mehr nötig nach Anonymisierung)
+    await this.passwordHistoryRepository
+      .createQueryBuilder()
+      .delete()
+      .where('userId = :id', { id })
+      .execute();
 
     return {
       message: "Benutzerdaten wurden anonymisiert. Der Datensatz bleibt für Revisionszwecke erhalten.",

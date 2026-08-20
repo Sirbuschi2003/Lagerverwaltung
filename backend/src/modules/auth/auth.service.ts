@@ -5,6 +5,8 @@ import { ConfigService } from "@nestjs/config";
 import { JwtService } from "@nestjs/jwt";
 import { InjectRepository } from "@nestjs/typeorm";
 import * as bcrypt from "bcrypt";
+import { generateSecret as otpGenerateSecret, generateURI as otpGenerateURI, verifySync as otpVerifySync } from "otplib";
+import * as QRCode from "qrcode";
 import { Repository } from "typeorm";
 
 import { AccessControlService } from "../access-control/access-control.service";
@@ -149,6 +151,99 @@ export class AuthService {
   }
 
   async login(user: User, context?: { ipAddress?: string; userAgent?: string }) {
+    // If MFA is enabled, return a short-lived MFA challenge token instead of full auth tokens.
+    // The client must call POST /auth/mfa/verify with this token + the TOTP code to complete login.
+    if (user.mfaEnabled && user.mfaTotpSecret) {
+      const mfaToken = await this.jwtService.signAsync(
+        { sub: user.id, tokenType: 'mfa-challenge' },
+        { expiresIn: '5m' },
+      );
+      return { requiresMfa: true, mfaToken };
+    }
+
+    return this.issueTokens(user, context);
+  }
+
+  /** Called from /auth/mfa/verify — verifies TOTP code then issues real tokens. */
+  async completeMfaLogin(
+    mfaToken: string,
+    totpCode: string,
+    context?: { ipAddress?: string; userAgent?: string },
+  ) {
+    let payload: { sub: string; tokenType: string };
+    try {
+      payload = await this.jwtService.verifyAsync(mfaToken, {
+        secret: this.configService.get<string>('auth.jwtSecret'),
+      });
+    } catch {
+      throw new UnauthorizedException('MFA-Token ungültig oder abgelaufen');
+    }
+
+    if (payload.tokenType !== 'mfa-challenge') {
+      throw new UnauthorizedException('Ungültiger Token-Typ');
+    }
+
+    const user = await this.userRepo.findOne({ where: { id: payload.sub }, relations: ['locations'] });
+    if (!user || !user.mfaEnabled || !user.mfaTotpSecret) {
+      throw new UnauthorizedException('MFA nicht konfiguriert');
+    }
+
+    const verifyResult = otpVerifySync({ token: totpCode, secret: user.mfaTotpSecret });
+    if (!verifyResult.valid) {
+      await this.loggingService.logSecurity('MFA_FAILED', 'Falscher TOTP-Code bei Login', { userId: user.id, ...context });
+      throw new UnauthorizedException('Ungültiger Authenticator-Code');
+    }
+
+    return this.issueTokens(user, context);
+  }
+
+  /** Generates TOTP secret + QR code URI for setup. Does NOT enable MFA yet. */
+  async setupMfa(userId: string): Promise<{ secret: string; qrCodeDataUrl: string; otpAuthUrl: string }> {
+    const user = await this.userRepo.findOne({ where: { id: userId } });
+    if (!user) throw new UnauthorizedException('User not found');
+
+    const secret = otpGenerateSecret();
+    const appName = 'Lagerverwaltung';
+    const otpAuthUrl = otpGenerateURI({ issuer: appName, label: user.username, secret });
+    const qrCodeDataUrl = await QRCode.toDataURL(otpAuthUrl);
+
+    // Store secret tentatively — MFA is not active until verifyMfaSetup confirms with a valid code
+    await this.userRepo.update(userId, { mfaTotpSecret: secret, mfaEnabled: false });
+
+    return { secret, qrCodeDataUrl, otpAuthUrl };
+  }
+
+  /** Verifies TOTP code after scanning QR code, then activates MFA. */
+  async verifyMfaSetup(userId: string, totpCode: string): Promise<{ enabled: boolean }> {
+    const user = await this.userRepo.findOne({ where: { id: userId } });
+    if (!user || !user.mfaTotpSecret) {
+      throw new BadRequestException('Kein MFA-Secret gefunden. Bitte zuerst Setup starten.');
+    }
+
+    const verifyResult = otpVerifySync({ token: totpCode, secret: user.mfaTotpSecret });
+    if (!verifyResult.valid) {
+      throw new BadRequestException('Ungültiger Code. Bitte prüfen Sie die Uhrzeit Ihres Geräts und versuchen Sie es erneut.');
+    }
+
+    await this.userRepo.update(userId, { mfaEnabled: true });
+    await this.loggingService.logSecurity('MFA_ENABLED', 'MFA wurde aktiviert', { userId });
+    return { enabled: true };
+  }
+
+  /** Disables MFA for the user. */
+  async disableMfa(userId: string, password: string): Promise<{ disabled: boolean }> {
+    const user = await this.userRepo.findOne({ where: { id: userId } });
+    if (!user) throw new UnauthorizedException('User not found');
+
+    const isMatch = await bcrypt.compare(password, user.passwordHash);
+    if (!isMatch) throw new UnauthorizedException('Falsches Passwort');
+
+    await this.userRepo.update(userId, { mfaEnabled: false, mfaTotpSecret: null });
+    await this.loggingService.logSecurity('MFA_DISABLED', 'MFA wurde deaktiviert', { userId });
+    return { disabled: true };
+  }
+
+  private async issueTokens(user: User, context?: { ipAddress?: string; userAgent?: string }) {
     const payload = {
       sub: user.id,
       username: user.username,
@@ -162,13 +257,11 @@ export class AuthService {
     const refreshExpiresIn =
       this.configService.get<string>("auth.jwtRefreshExpiresIn") || "30d";
 
-    // Log erfolgreichen Login
     await this.loggingService.logUserLogin(user, context);
 
     const refreshToken = await this.jwtService.signAsync(refreshPayload, { expiresIn: refreshExpiresIn });
 
     // Refresh-Token in Datenbank persistieren (SEC-002)
-    // orIgnore: verhindert Fehler bei doppeltem Login (gleicher Hash durch Race Condition)
     try {
       await this.refreshTokenRepo.save({
         userId: user.id,
@@ -247,6 +340,7 @@ export class AuthService {
       stored.isRevoked = true;
       stored.revokedAt = new Date();
       await this.refreshTokenRepo.save(stored);
+      await this.loggingService.logUserLogout(stored.userId).catch(() => undefined);
     }
   }
 
@@ -432,6 +526,7 @@ export class AuthService {
       permissions: permissionBundle.permissions,
       permissionOverrides: permissionBundle.overrides,
       permissionDenials: permissionBundle.denials,
+      mfaEnabled: user.mfaEnabled ?? false,
     };
   }
 }

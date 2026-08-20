@@ -1,4 +1,5 @@
-import { Body, Controller, Delete, Get, Param, ParseIntPipe, Patch, Post, UseGuards } from "@nestjs/common";
+import { Body, Controller, Delete, Get, Param, ParseIntPipe, Patch, Post, Req, UseGuards } from "@nestjs/common";
+import type { Request } from "express";
 
 import { JwtAuthGuard } from "../auth/guards/jwt-auth.guard";
 import { Roles } from "../auth/decorators/roles.decorator";
@@ -10,6 +11,14 @@ import { UpdateRolePermissionsDto } from "./dto/update-role-permissions.dto";
 import { UpdateUserPermissionsDto } from "./dto/update-user-permissions.dto";
 import { CreateRoleDto } from "./dto/create-role.dto";
 import { UpdateRoleDto } from "./dto/update-role.dto";
+
+interface AuthReq extends Request {
+  user?: { id?: string; sub?: string };
+}
+
+function actorId(req: AuthReq): string | undefined {
+  return req.user?.id ?? req.user?.sub;
+}
 
 @Controller("access-control")
 @UseGuards(JwtAuthGuard, RolesGuard, PermissionsGuard)
@@ -40,30 +49,30 @@ export class AccessControlController {
   @Post("roles")
   @Roles("MANAGER")
   @Permissions("access.manage")
-  createRole(@Body() body: CreateRoleDto) {
-    return this.accessControlService.createRole(body.name, body.description);
+  createRole(@Body() body: CreateRoleDto, @Req() req: AuthReq) {
+    return this.accessControlService.createRole(body.name, body.description, actorId(req));
   }
 
   @Patch("roles/:roleId")
   @Roles("MANAGER")
   @Permissions("access.manage")
-  updateRole(@Param("roleId", ParseIntPipe) roleId: number, @Body() body: UpdateRoleDto) {
-    return this.accessControlService.updateRole(roleId, body.name, body.description);
+  updateRole(@Param("roleId", ParseIntPipe) roleId: number, @Body() body: UpdateRoleDto, @Req() req: AuthReq) {
+    return this.accessControlService.updateRole(roleId, body.name, body.description, actorId(req));
   }
 
   @Delete("roles/:roleId")
   @Roles("MANAGER")
   @Permissions("access.manage")
-  async deleteRole(@Param("roleId", ParseIntPipe) roleId: number) {
-    await this.accessControlService.deleteRole(roleId);
+  async deleteRole(@Param("roleId", ParseIntPipe) roleId: number, @Req() req: AuthReq) {
+    await this.accessControlService.deleteRole(roleId, actorId(req));
     return { message: "Role deleted" };
   }
 
   @Patch("roles/:role/permissions")
   @Roles("MANAGER")
   @Permissions("access.manage")
-  updateRolePermissions(@Param("role") role: string, @Body() body: UpdateRolePermissionsDto) {
-    return this.accessControlService.setRolePermissions(role, body.permissions ?? []);
+  updateRolePermissions(@Param("role") role: string, @Body() body: UpdateRolePermissionsDto, @Req() req: AuthReq) {
+    return this.accessControlService.setRolePermissions(role, body.permissions ?? [], actorId(req));
   }
 
   @Get("users/:userId/permissions")
@@ -77,7 +86,7 @@ export class AccessControlController {
   @Patch("users/:userId/permissions")
   @Roles("MANAGER")
   @Permissions("access.manage")
-  updateUserOverrides(@Param("userId") userId: string, @Body() body: UpdateUserPermissionsDto) {
-    return this.accessControlService.setUserOverrides(userId, body.overrides ?? [], body.denials ?? []);
+  updateUserOverrides(@Param("userId") userId: string, @Body() body: UpdateUserPermissionsDto, @Req() req: AuthReq) {
+    return this.accessControlService.setUserOverrides(userId, body.overrides ?? [], body.denials ?? [], actorId(req));
   }
 }

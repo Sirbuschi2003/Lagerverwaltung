@@ -25,6 +25,7 @@ import SettingsIcon from "@mui/icons-material/Settings";
 import PaletteIcon from "@mui/icons-material/Palette";
 import CheckIcon from "@mui/icons-material/Check";
 import SystemUpdateAltIcon from "@mui/icons-material/SystemUpdateAlt";
+import PhonelinkLockIcon from "@mui/icons-material/PhonelinkLock";
 import * as MuiIcons from "@mui/icons-material";
 import { useNavigate } from "react-router-dom";
 import { fetchUpdateStatus } from "../utils/api";
@@ -36,6 +37,7 @@ import { useThemeMode } from "../hooks/useThemeMode";
 import { getAppHeaderStyles } from "../styles/componentStyles";
 import { ThemePresetId } from "../styles/designTokens";
 import NotificationCenter from "./NotificationCenter";
+import MfaSettingsDialog from "./MfaSettingsDialog";
 
 interface AppHeaderProps {
   onMenuToggle: () => void;
@@ -69,6 +71,7 @@ const AppHeader: React.FC<AppHeaderProps> = ({ onMenuToggle, menuOpen }) => {
   const [userMenuAnchor, setUserMenuAnchor] = React.useState<null | HTMLElement>(null);
   const [themeMenuAnchor, setThemeMenuAnchor] = React.useState<null | HTMLElement>(null);
   const [updateAvailable, setUpdateAvailable] = React.useState(false);
+  const [mfaDialogOpen, setMfaDialogOpen] = React.useState(false);
 
   React.useEffect(() => {
     if (user?.role !== "MANAGER") return;
@@ -267,6 +270,11 @@ const AppHeader: React.FC<AppHeaderProps> = ({ onMenuToggle, menuOpen }) => {
                   <Typography variant="body2">Einstellungen</Typography>
                 </MenuItem>
 
+                <MenuItem onClick={() => { handleUserMenuClose(); setMfaDialogOpen(true); }}>
+                  <PhonelinkLockIcon sx={{ mr: 1.5 }} fontSize="small" />
+                  <Typography variant="body2">Konto-Sicherheit</Typography>
+                </MenuItem>
+
                 <Divider sx={{ my: 0.5 }} />
 
                 <MenuItem onClick={handleLogout} sx={{ color: theme.palette.error.main }}>
@@ -278,6 +286,8 @@ const AppHeader: React.FC<AppHeaderProps> = ({ onMenuToggle, menuOpen }) => {
           )}
         </Box>
       </Toolbar>
+
+      <MfaSettingsDialog open={mfaDialogOpen} onClose={() => setMfaDialogOpen(false)} />
     </AppBar>
   );
 };

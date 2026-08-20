@@ -4,6 +4,8 @@ import { In, Repository } from "typeorm";
 
 import { USER_ROLES } from "../users/entities/user.entity";
 import { UsersService } from "../users/users.service";
+import { LoggingService } from "../logging/services/logging.service";
+import { LogCategory } from "../logging/entities/system-log.entity";
 import { Permission } from "./entities/permission.entity";
 import { Role } from "./entities/role.entity";
 import { RolePermission } from "./entities/role-permission.entity";
@@ -168,6 +170,7 @@ export class AccessControlService implements OnModuleInit {
     @InjectRepository(UserPermission)
     private readonly userPermRepo: Repository<UserPermission>,
     private readonly usersService: UsersService,
+    private readonly loggingService: LoggingService,
   ) {}
 
   async onModuleInit() {
@@ -308,16 +311,22 @@ export class AccessControlService implements OnModuleInit {
     }));
   }
 
-  async createRole(name: string, description?: string): Promise<Role> {
+  async createRole(name: string, description?: string, actorId?: string): Promise<Role> {
     const existing = await this.roleRepo.findOne({ where: { name } });
     if (existing) {
       throw new BadRequestException(`Role ${name} already exists`);
     }
     const role = await this.roleRepo.save({ name, description: description ?? null, isSystem: false });
+    await this.loggingService.logInfo(
+      LogCategory.AUTH,
+      'ROLE_CREATED',
+      `Rolle "${name}" erstellt`,
+      { userId: actorId, metadata: { roleName: name } },
+    ).catch(() => undefined);
     return role;
   }
 
-  async updateRole(roleId: number, name?: string, description?: string): Promise<Role> {
+  async updateRole(roleId: number, name?: string, description?: string, actorId?: string): Promise<Role> {
     const role = await this.roleRepo.findOne({ where: { id: roleId } });
     if (!role) {
       throw new NotFoundException(`Role not found`);
@@ -325,12 +334,20 @@ export class AccessControlService implements OnModuleInit {
     if (role.isSystem && name && name !== role.name) {
       throw new BadRequestException(`Cannot rename system role ${role.name}`);
     }
+    const oldName = role.name;
     if (name) role.name = name;
     if (description !== undefined) role.description = description;
-    return this.roleRepo.save(role);
+    const saved = await this.roleRepo.save(role);
+    await this.loggingService.logInfo(
+      LogCategory.AUTH,
+      'ROLE_UPDATED',
+      `Rolle "${oldName}" aktualisiert`,
+      { userId: actorId, metadata: { roleId, oldName, newName: name } },
+    ).catch(() => undefined);
+    return saved;
   }
 
-  async deleteRole(roleId: number): Promise<void> {
+  async deleteRole(roleId: number, actorId?: string): Promise<void> {
     const role = await this.roleRepo.findOne({ where: { id: roleId } });
     if (!role) {
       throw new NotFoundException(`Role not found`);
@@ -338,19 +355,22 @@ export class AccessControlService implements OnModuleInit {
     if (role.isSystem) {
       throw new BadRequestException(`Cannot delete system role ${role.name}`);
     }
-    // Check if any users have this role
     const usersWithRole = await this.usersService.findAll();
     const hasUsers = usersWithRole.some((u) => u.role === role.name);
     if (hasUsers) {
       throw new BadRequestException(`Cannot delete role ${role.name}: users are still assigned to it`);
     }
-    // Delete role permissions
     await this.rolePermRepo.delete({ roleId: role.id });
-    // Delete role
     await this.roleRepo.delete(role.id);
+    await this.loggingService.logInfo(
+      LogCategory.AUTH,
+      'ROLE_DELETED',
+      `Rolle "${role.name}" gelöscht`,
+      { userId: actorId, metadata: { roleId, roleName: role.name } },
+    ).catch(() => undefined);
   }
 
-  async setRolePermissions(roleName: string, permissionKeys: string[]): Promise<string[]> {
+  async setRolePermissions(roleName: string, permissionKeys: string[], actorId?: string): Promise<string[]> {
     const role = await this.roleRepo.findOne({ where: { name: roleName } });
     if (!role) {
       throw new NotFoundException(`Role ${roleName} not found`);
@@ -378,6 +398,13 @@ export class AccessControlService implements OnModuleInit {
       await this.rolePermRepo.save(toAdd);
     }
 
+    await this.loggingService.logInfo(
+      LogCategory.AUTH,
+      'ROLE_PERMISSIONS_CHANGED',
+      `Berechtigungen für Rolle "${roleName}" aktualisiert`,
+      { userId: actorId, metadata: { roleName, permissionCount: uniqueKeys.length } },
+    ).catch(() => undefined);
+
     return permissions.map((p) => p.key);
   }
 
@@ -393,6 +420,7 @@ export class AccessControlService implements OnModuleInit {
     userId: string,
     grantKeys: string[],
     denyKeys: string[] = [],
+    actorId?: string,
   ): Promise<{ grants: string[]; denials: string[] }> {
     const user = await this.usersService.findOneById(userId);
     if (!user) {
@@ -427,6 +455,12 @@ export class AccessControlService implements OnModuleInit {
     }
 
     const saved = await this.userPermRepo.find({ where: { userId }, relations: ["permission"] });
+    await this.loggingService.logInfo(
+      LogCategory.AUTH,
+      'USER_PERMISSIONS_CHANGED',
+      `Individuelle Berechtigungen für Benutzer geändert`,
+      { userId: actorId ?? userId, metadata: { targetUserId: userId, grantCount: uniqueGrants.length, denyCount: uniqueDenials.length } },
+    ).catch(() => undefined);
     return {
       grants: saved.filter((up) => up.grant).map((up) => up.permission.key),
       denials: saved.filter((up) => !up.grant).map((up) => up.permission.key),

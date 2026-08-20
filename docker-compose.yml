@@ -52,7 +52,7 @@ services:
       DB_SYNCHRONIZE: false
       DB_MIGRATIONS_RUN: true
       JWT_SECRET: ${BACKEND_JWT_SECRET:-super-secret}
-      JWT_EXPIRES_IN: ${BACKEND_JWT_EXPIRES_IN:-30d}
+      JWT_EXPIRES_IN: ${BACKEND_JWT_EXPIRES_IN:-8h}
     volumes:
       - ./backups:/app/backups
       - ${PURCHASE_ORDER_STORAGE_HOST_PATH:-./purchase-orders}:/app/purchase-orders

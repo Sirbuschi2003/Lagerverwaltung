@@ -1,4 +1,4 @@
-import { Injectable, Logger } from "@nestjs/common";
+import { Injectable, Logger, OnModuleInit } from "@nestjs/common";
 import { InjectRepository } from "@nestjs/typeorm";
 import { Repository, DataSource } from "typeorm";
 import * as fs from 'fs';
@@ -27,7 +27,7 @@ import { ItemCode } from "../items/entities/item-code.entity";
 import { LoggingService } from "../logging/services/logging.service";
 
 @Injectable()
-export class SetupService {
+export class SetupService implements OnModuleInit {
   private readonly logger = new Logger(SetupService.name);
   private backupInterval: NodeJS.Timeout | null = null;
   private firstTimeout: NodeJS.Timeout | null = null;
@@ -74,9 +74,11 @@ export class SetupService {
     @InjectRepository(ItemCode)
     private readonly itemCodeRepository: Repository<ItemCode>,
     private readonly loggingService: LoggingService,
-  ) {
-    // Starte automatisches Backup beim Initialisieren (mit Verzögerung, damit DB ready ist)
-    setTimeout(() => this.initAutoBackup(), 5000);
+  ) {}
+
+  onModuleInit(): void {
+    // Delay so the DB connection pool is fully ready before scheduling backups
+    setTimeout(() => { void this.initAutoBackup(); }, 5000);
   }
 
   async needsSetup(): Promise<boolean> {

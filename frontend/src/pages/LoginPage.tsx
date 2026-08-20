@@ -15,9 +15,10 @@ import {
 import WifiOffIcon from "@mui/icons-material/WifiOff";
 import CheckCircleIcon from "@mui/icons-material/CheckCircle";
 import LockIcon from "@mui/icons-material/Lock";
+import PhonelinkLockIcon from "@mui/icons-material/PhonelinkLock";
 import useAuthStore from "../store/useAuthStore";
 import useSystemConfigStore from "../store/useSystemConfigStore";
-import { checkSetupStatus } from "../utils/api";
+import api, { checkSetupStatus } from "../utils/api";
 import PasswordResetPage from "./PasswordResetPage";
 import { APP_VERSION } from "../utils/version";
 import { hasOfflineCredentials } from "../utils/offlineAuth";
@@ -60,6 +61,9 @@ const LoginPage = () => {
   const [isOffline, setIsOffline] = useState(!navigator.onLine);
   const [offlineLoginAvailable, setOfflineLoginAvailable] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  // MFA step
+  const [mfaToken, setMfaToken] = useState<string | null>(null);
+  const [totpCode, setTotpCode] = useState("");
 
   useEffect(() => {
     checkSetupStatus().then(({ needsSetup }) => {
@@ -89,6 +93,20 @@ const LoginPage = () => {
     setIsLoading(true);
 
     try {
+      const response = await api.post<{ requiresMfa?: boolean; mfaToken?: string } | Record<string, unknown>>(
+        "/auth/login",
+        { username, password },
+      );
+      const data = response.data as any;
+
+      if (data.requiresMfa && data.mfaToken) {
+        // MFA required — switch to TOTP step
+        setMfaToken(data.mfaToken);
+        setIsLoading(false);
+        return;
+      }
+
+      // Normal login via store (sets token, user, etc.)
       await login({ username, password });
       setSuccess("Erfolgreich angemeldet!");
     } catch (err: unknown) {
@@ -119,8 +137,82 @@ const LoginPage = () => {
     }
   };
 
+  const handleMfaSubmit = async (event: React.FormEvent) => {
+    event.preventDefault();
+    setError(null);
+    setIsLoading(true);
+    try {
+      const response = await api.post<{ accessToken: string; user: any }>("/auth/mfa/verify", {
+        mfaToken,
+        totpCode,
+      });
+      const { accessToken, user: userData } = response.data;
+      api.defaults.headers.common.Authorization = `Bearer ${accessToken}`;
+      useAuthStore.setState({ token: accessToken, user: userData, lastActivity: Date.now() });
+      setSuccess("Erfolgreich angemeldet!");
+    } catch {
+      setError("Ungültiger Code. Bitte prüfen Sie Ihre Authenticator-App.");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   if (showPasswordReset) {
     return <PasswordResetPage onBackToLogin={() => setShowPasswordReset(false)} />;
+  }
+
+  // MFA-Step: Authenticator-Code eingeben
+  if (mfaToken) {
+    return (
+      <Box sx={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center" }}>
+        <Container maxWidth="xs">
+          <Paper
+            component="form"
+            onSubmit={(e) => { void handleMfaSubmit(e); }}
+            sx={{ p: 4, borderRadius: designTokens.borderRadius.lg, boxShadow: designTokens.shadows.lg }}
+          >
+            <Box sx={{ textAlign: "center", mb: 3 }}>
+              <PhonelinkLockIcon sx={{ fontSize: "3rem", color: "primary.main", mb: 1 }} />
+              <Typography variant="h6" fontWeight={700}>Zwei-Faktor-Authentifizierung</Typography>
+              <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+                Geben Sie den 6-stelligen Code aus Ihrer Authenticator-App ein
+              </Typography>
+            </Box>
+            {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
+            {success && <Alert severity="success" sx={{ mb: 2 }}>{success}</Alert>}
+            <ModernInput
+              label="Authenticator-Code"
+              placeholder="000000"
+              value={totpCode}
+              onChange={(e) => setTotpCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
+              autoComplete="one-time-code"
+              inputMode="numeric"
+              fullWidth
+            />
+            <PrimaryButton
+              type="submit"
+              fullWidth
+              size="large"
+              loading={isLoading}
+              disabled={totpCode.length !== 6 || isLoading}
+              sx={{ mt: 2, py: 1.5, fontWeight: 600 }}
+            >
+              Bestätigen
+            </PrimaryButton>
+            <Box sx={{ textAlign: "center", mt: 1.5 }}>
+              <Link
+                component="button"
+                type="button"
+                variant="body2"
+                onClick={() => { setMfaToken(null); setTotpCode(""); setError(null); }}
+              >
+                Zurück zur Anmeldung
+              </Link>
+            </Box>
+          </Paper>
+        </Container>
+      </Box>
+    );
   }
 
   return (

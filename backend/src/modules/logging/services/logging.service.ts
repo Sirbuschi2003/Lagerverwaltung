@@ -62,7 +62,8 @@ export class LoggingService {
         action,
         details,
         userId: context?.userId,
-        ipAddress: context?.ipAddress,
+        // DSGVO: Letztes IPv4-Oktett auf 0 setzen, vollständige IPv6 anonymisieren
+        ipAddress: context?.ipAddress ? this.anonymizeIp(context.ipAddress) : undefined,
         // DSGVO-Datensparsamkeit: Nur Browser-Familie speichern, nicht den vollständigen UserAgent-String
         userAgent: context?.userAgent ? this.extractBrowserFamily(context.userAgent) : undefined,
         // Sensible Metadaten-Schlüssel vor Speicherung entfernen
@@ -284,17 +285,18 @@ export class LoggingService {
     return this.logInfo(
       LogCategory.AUTH,
       'USER_LOGIN',
-      `Benutzer ${user.username} hat sich angemeldet`,
-      { ...context, userId: user.id, metadata: { username: user.username, role: user.role } }
+      'Benutzer hat sich angemeldet',
+      { ...context, userId: user.id, metadata: { role: user.role } }
     );
   }
 
-  async logUserLogout(user: User, context?: LogContext): Promise<void> {
+  // Accepts userId string so logout() in auth.service can call without loading the full User entity.
+  async logUserLogout(userId: string, context?: LogContext): Promise<void> {
     return this.logInfo(
       LogCategory.AUTH,
       'USER_LOGOUT',
-      `Benutzer ${user.username} hat sich abgemeldet`,
-      { ...context, userId: user.id, metadata: { username: user.username } }
+      'Benutzer hat sich abgemeldet',
+      { ...context, userId, metadata: {} }
     );
   }
 
@@ -305,27 +307,23 @@ export class LoggingService {
     quantity: number,
     context?: LogContext
   ): Promise<void> {
-    // Nutze itemCode und itemDescription aus metadata falls vorhanden
     const itemCode = context?.metadata?.itemCode || itemId;
     const itemDescription = context?.metadata?.itemDescription;
-    const itemDisplay = itemDescription 
-      ? `${itemCode} (${itemDescription})` 
-      : itemCode;
-    
+    const itemDisplay = itemDescription ? `${itemCode} (${itemDescription})` : itemCode;
+
     return this.logInfo(
       LogCategory.STOCK,
       'STOCK_MOVEMENT',
       `${action}: ${quantity} Einheiten von Artikel ${itemDisplay}`,
-      { 
-        ...context, 
-        userId: user.id, 
-        metadata: { 
-          itemId, 
-          quantity, 
+      {
+        ...context,
+        userId: user.id,
+        metadata: {
+          itemId,
+          quantity,
           action,
-          username: user.username,
-          ...(context?.metadata || {})
-        } 
+          ...(context?.metadata || {}),
+        },
       }
     );
   }
@@ -334,53 +332,31 @@ export class LoggingService {
     return this.logInfo(
       LogCategory.VEHICLE,
       'VEHICLE_CHANGE',
-      `Benutzer ${user.username} hat zu Fahrzeug ${vehicleId} gewechselt`,
-      { 
-        ...context, 
-        userId: user.id, 
-        metadata: { 
-          vehicleId, 
-          username: user.username 
-        } 
-      }
+      `Fahrzeugwechsel zu ${vehicleId}`,
+      { ...context, userId: user.id, metadata: { vehicleId } }
     );
   }
 
   async logRestockRequest(
     user: User,
     action: string,
-    requestId: string, // UUID statt number
+    requestId: string,
     context?: LogContext
   ): Promise<void> {
-    // Verwende die ersten 8 Zeichen der UUID für die Anzeige
     const displayId = requestId ? requestId.substring(0, 8) : 'unknown';
     return this.logInfo(
       LogCategory.RESTOCK,
       'RESTOCK_REQUEST',
       `${action}: Nachschub-Anfrage ${displayId}`,
-      { 
-        ...context, 
-        userId: user.id, 
-        metadata: { 
-          requestId, 
-          action,
-          username: user.username 
-        } 
-      }
+      { ...context, userId: user.id, metadata: { requestId, action } }
     );
   }
 
   async logPasswordChange(user: User, context?: LogContext): Promise<void> {
     return this.logSecurity(
       'PASSWORD_CHANGE',
-      `Benutzer ${user.username} hat sein Passwort geändert`,
-      { 
-        ...context, 
-        userId: user.id, 
-        metadata: { 
-          username: user.username 
-        } 
-      }
+      'Passwort wurde geändert',
+      { ...context, userId: user.id, metadata: {} }
     );
   }
 
@@ -507,12 +483,26 @@ export class LoggingService {
     return `${browser}/${os}`;
   }
 
+  /** DSGVO: Anonymisiert IP-Adressen (IPv4 letztes Oktett → 0, IPv6 letzte 80 Bit → 0). */
+  private anonymizeIp(ip: string): string {
+    if (!ip) return ip;
+    // IPv4
+    const v4 = ip.match(/^(\d{1,3}\.\d{1,3}\.\d{1,3})\.\d{1,3}$/);
+    if (v4) return `${v4[1]}.0`;
+    // IPv6: erste 48 Bit behalten, Rest nullen
+    if (ip.includes(':')) {
+      const parts = ip.split(':');
+      return parts.slice(0, 3).concat(new Array(parts.length - 3).fill('0')).join(':');
+    }
+    return ip;
+  }
+
   /**
    * Entfernt potentiell sensible Schlüssel aus Metadaten vor der Speicherung.
    */
   private sanitizeMetadata(metadata: any): any {
     if (typeof metadata !== 'object' || metadata === null) return metadata;
-    const sensitiveKeys = ['password', 'token', 'secret', 'key', 'hash', 'credential', 'email', 'to'];
+    const sensitiveKeys = ['password', 'token', 'secret', 'key', 'hash', 'credential', 'email', 'to', 'username'];
     const sanitized: Record<string, any> = {};
     for (const [k, v] of Object.entries(metadata)) {
       if (sensitiveKeys.some((s) => k.toLowerCase().includes(s))) {

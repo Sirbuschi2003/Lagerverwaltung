@@ -235,10 +235,6 @@ export class StockService {
 
     await this.ensureMovementAllowed(item.id, vehicle?.id ?? null, location?.id ?? null, dto.type, dto.quantity);
 
-    // Wenn ein externer EntityManager übergeben wird (z.B. aus einer umgebenden Transaktion),
-    // nutzen wir diesen für create/save, damit StockMovement atomar mit der äußeren Transaktion committed wird.
-    // applyMovementToStock und logStockMovement nutzen noch eigene Repositories (partieller Fix);
-    // vollständige Atomarität erfordert eine spätere Umstellung aller Helfer auf EntityManager.
     const movementData = {
       item,
       vehicle: vehicle ?? null,
@@ -251,27 +247,25 @@ export class StockService {
       occurredAt: new Date(dto.occurredAt),
     };
 
-    const movement = manager
-      ? manager.create(StockMovement, movementData)
-      : this.movementsRepository.create(movementData);
+    // When an external EntityManager is provided (e.g. from an outer transaction), use it directly.
+    // Otherwise wrap save + applyMovementToStock in one transaction so a crash after save but before
+    // stock-level update rolls back both automatically — no manual compensating delete needed.
+    let movement: StockMovement;
 
     if (manager) {
+      movement = manager.create(StockMovement, movementData);
       await manager.save(StockMovement, movement);
-    } else {
-      await this.movementsRepository.save(movement);
-    }
-    try {
       await this.applyMovementToStock(movement);
-    } catch (err) {
-      if (!manager) {
-        // Ohne externe Transaktion: Bewegung manuell entfernen, damit der Audit-Trail konsistent bleibt.
-        // Mit externem Manager übernimmt der Transaktion-Rollback das Rückgängigmachen.
-        await this.movementsRepository.remove(movement);
-      }
-      throw err;
+    } else {
+      movement = await this.dataSource.transaction(async (txManager) => {
+        const m = txManager.create(StockMovement, movementData);
+        await txManager.save(StockMovement, m);
+        await this.applyMovementToStock(m);
+        return m;
+      });
     }
 
-    // Erweiterte Protokollierung fuer alle Stock-Bewegungen
+    // Protokollierung außerhalb der Transaktion — Logging-Fehler dürfen Buchung nicht rollbacken
     await this.logStockMovement(movement, user);
 
     return movement;
