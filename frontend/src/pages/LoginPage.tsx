@@ -93,23 +93,15 @@ const LoginPage = () => {
     setIsLoading(true);
 
     try {
-      const response = await api.post<{ requiresMfa?: boolean; mfaToken?: string } | Record<string, unknown>>(
-        "/auth/login",
-        { username, password },
-      );
-      const data = response.data as any;
-
-      if (data.requiresMfa && data.mfaToken) {
-        // MFA required — switch to TOTP step
-        setMfaToken(data.mfaToken);
-        setIsLoading(false);
-        return;
-      }
-
-      // Normal login via store (sets token, user, etc.)
       await login({ username, password });
       setSuccess("Erfolgreich angemeldet!");
     } catch (err: unknown) {
+      // MFA required — store throws typed error
+      if ((err as any)?.message === 'MFA_REQUIRED') {
+        setMfaToken((err as any).mfaToken);
+        setIsLoading(false);
+        return;
+      }
       console.error("[LoginPage] Login-Fehler:", err);
       const loginError = toLoginRequestError(err);
       const errorMessage = loginError.message ?? "";

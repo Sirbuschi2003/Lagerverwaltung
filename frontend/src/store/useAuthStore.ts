@@ -106,6 +106,13 @@ const useAuthStore = create<AuthState>()(
             password: sanitizedPassword
           });
 
+          const data = response.data as any;
+          if (data.requiresMfa && data.mfaToken) {
+            const err = new Error('MFA_REQUIRED') as any;
+            err.mfaToken = data.mfaToken;
+            throw err;
+          }
+
           const { accessToken, user } = response.data;
 
           if (!validateAuthToken(accessToken)) {
