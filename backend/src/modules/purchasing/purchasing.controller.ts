@@ -136,6 +136,13 @@ export class PurchasingController {
     return this.purchasingService.updateLine(id, lineId, body, req.user?.branchId);
   }
 
+  @Patch(":id/lines/reorder")
+  @Permissions("orders.edit")
+  reorderLines(@Req() req: PurchasingRequest, @Param("id") id: string, @Body("lineIds") lineIds: string[]) {
+    if (!Array.isArray(lineIds) || lineIds.length === 0) throw new BadRequestException("lineIds erforderlich");
+    return this.purchasingService.reorderLines(id, lineIds, req.user?.branchId);
+  }
+
   @Delete(":id/lines/:lineId")
   @Permissions("orders.edit")
   removeLine(@Req() req: PurchasingRequest, @Param("id") id: string, @Param("lineId") lineId: string) {

@@ -954,6 +954,11 @@ export const deletePurchaseOrderLine = async (
   return response.data;
 };
 
+export const reorderPurchaseOrderLines = async (orderId: string, lineIds: string[]): Promise<PurchaseOrderDto> => {
+  const response = await api.patch<PurchaseOrderDto>(`/purchase-orders/${orderId}/lines/reorder`, { lineIds });
+  return response.data;
+};
+
 export interface LastOrderForItemDto {
   orderId: string;
   orderNumber: string | null;

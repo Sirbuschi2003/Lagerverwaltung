@@ -27,4 +27,7 @@ export class PurchaseOrderLine {
 
   @Column({ type: "int", nullable: true })
   packSize!: number | null;
+
+  @Column({ type: "int", default: 0 })
+  sortOrder!: number;
 }

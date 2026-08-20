@@ -4,6 +4,16 @@ Alle nennenswerten Änderungen, neueste zuerst.
 
 ---
 
+## [20.08.2026]
+
+### Neu
+- **Bestellpositionen: Drag-and-Drop Sortierung** — Reihenfolge der Positionen im Entwurf per Ziehen am Handle-Icon frei wählbar; Reihenfolge wird in der DB (Spalte `sortOrder`) gespeichert und im erzeugten PDF übernommen
+  - Migration `1755400000000` fügt `sortOrder INT` zu `purchase_order_lines` hinzu
+  - Neuer Endpunkt `PATCH /purchase-orders/:id/lines/reorder`
+  - Frontend: `@dnd-kit/core` + `@dnd-kit/sortable` mit optimistischem Update und Fehler-Revert
+
+---
+
 ## [19.08.2026]
 
 ### Behoben

@@ -1,4 +1,7 @@
 ﻿import React, { useEffect, useMemo, useState } from "react";
+import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors, type DragEndEvent } from "@dnd-kit/core";
+import { SortableContext, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy, arrayMove } from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
 import {
   Alert,
   Autocomplete,
@@ -39,6 +42,7 @@ import PictureAsPdfIcon from "@mui/icons-material/PictureAsPdf";
 import ArchiveIcon from "@mui/icons-material/Archive";
 import KeyboardArrowDownIcon from "@mui/icons-material/KeyboardArrowDown";
 import KeyboardArrowUpIcon from "@mui/icons-material/KeyboardArrowUp";
+import DragIndicatorIcon from "@mui/icons-material/DragIndicator";
 
 import useAuthStore from "../../store/useAuthStore";
 import ItemEditDialog from "../items/ItemEditDialog";
@@ -50,6 +54,7 @@ import {
   addPurchaseOrderLine,
   updatePurchaseOrderLine,
   deletePurchaseOrderLine,
+  reorderPurchaseOrderLines,
   type ItemDto,
   type PurchaseOrderDto,
   type PurchaseOrderStatus,
@@ -80,6 +85,62 @@ const getOrderYear = (order: PurchaseOrderDto) => {
   const reference = order.orderedAt || order.createdAt;
   const parsed = new Date(reference);
   return Number.isNaN(parsed.getTime()) ? new Date().getFullYear() : parsed.getFullYear();
+};
+
+interface SortableLineRowProps {
+  line: PurchaseOrderDto["lines"][number];
+  isDraft: boolean;
+  qty: number;
+  lineActionLoading: boolean;
+  linesCount: number;
+  onQtyChange: (id: string, qty: number) => void;
+  onBlur: (id: string) => void;
+  onRemove: (id: string) => void;
+}
+
+const SortableLineRow: React.FC<SortableLineRowProps> = ({ line, isDraft, qty, lineActionLoading, linesCount, onQtyChange, onBlur, onRemove }) => {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: line.id });
+  return (
+    <TableRow ref={setNodeRef} style={{ transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.4 : 1 }}>
+      {isDraft && (
+        <TableCell sx={{ width: 28, px: 0.5, cursor: "grab", color: "text.disabled" }} {...attributes} {...listeners}>
+          <DragIndicatorIcon fontSize="small" />
+        </TableCell>
+      )}
+      <TableCell>
+        <Typography variant="body2" sx={{ fontWeight: 600 }}>{line.item.code}</Typography>
+        <Typography variant="caption" color="text.secondary">{line.item.description}</Typography>
+      </TableCell>
+      <TableCell align="right">
+        {isDraft ? (
+          <TextField
+            type="number"
+            size="small"
+            value={qty}
+            onChange={(e) => onQtyChange(line.id, Math.max(1, Number.parseInt(e.target.value, 10) || 1))}
+            onBlur={() => onBlur(line.id)}
+            onFocus={(e) => e.target.select()}
+            inputProps={{ min: 1 }}
+            sx={{ width: 80 }}
+            disabled={lineActionLoading}
+          />
+        ) : (
+          line.quantity
+        )}
+      </TableCell>
+      {isDraft && (
+        <TableCell>
+          <Tooltip title="Position entfernen">
+            <span>
+              <IconButton size="small" color="error" disabled={lineActionLoading || linesCount <= 1} onClick={() => onRemove(line.id)}>
+                <DeleteIcon fontSize="small" />
+              </IconButton>
+            </span>
+          </Tooltip>
+        </TableCell>
+      )}
+    </TableRow>
+  );
 };
 
 const ActiveOrdersTab: React.FC = () => {
@@ -272,6 +333,33 @@ const ActiveOrdersTab: React.FC = () => {
       alert(`Fehler: ${err?.response?.data?.message || err?.message || "Unbekannt"}`);
     } finally {
       setLineActionLoading(false);
+    }
+  };
+
+  const dndSensors = useSensors(
+    useSensor(PointerSensor),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
+  );
+
+  const handleDragEnd = async (event: DragEndEvent) => {
+    const { active, over } = event;
+    if (!over || active.id === over.id || !activeOrder || !canEdit) return;
+    const oldIndex = activeOrder.lines.findIndex((l) => l.id === active.id);
+    const newIndex = activeOrder.lines.findIndex((l) => l.id === over.id);
+    if (oldIndex === -1 || newIndex === -1) return;
+    const reordered = arrayMove(activeOrder.lines, oldIndex, newIndex);
+    // Optimistic update
+    setActiveOrder({ ...activeOrder, lines: reordered });
+    setOrders((prev) => prev.map((o) => (o.id === activeOrder.id ? { ...o, lines: reordered } : o)));
+    try {
+      const updated = await reorderPurchaseOrderLines(activeOrder.id, reordered.map((l) => l.id));
+      setActiveOrder(updated);
+      setOrders((prev) => prev.map((o) => (o.id === updated.id ? updated : o)));
+    } catch (err: any) {
+      // Revert on error
+      setActiveOrder(activeOrder);
+      setOrders((prev) => prev.map((o) => (o.id === activeOrder.id ? activeOrder : o)));
+      alert(`Reihenfolge konnte nicht gespeichert werden: ${err?.response?.data?.message || err?.message || "Unbekannt"}`);
     }
   };
 
@@ -619,55 +707,46 @@ const ActiveOrdersTab: React.FC = () => {
                 <Table size="small">
                   <TableHead>
                     <TableRow>
+                      {activeOrder.status === "DRAFT" && <TableCell sx={{ width: 28, px: 0.5 }} />}
                       <TableCell>Artikel</TableCell>
                       <TableCell align="right">Menge</TableCell>
                       {activeOrder.status === "DRAFT" && <TableCell />}
                     </TableRow>
                   </TableHead>
                   <TableBody>
-                    {activeOrder.lines.map((line) => (
-                      <TableRow key={line.id}>
-                        <TableCell>
-                          <Typography variant="body2" sx={{ fontWeight: 600 }}>{line.item.code}</Typography>
-                          <Typography variant="caption" color="text.secondary">{line.item.description}</Typography>
-                        </TableCell>
-                        <TableCell align="right">
-                          {activeOrder.status === "DRAFT" ? (
-                            <TextField
-                              type="number"
-                              size="small"
-                              value={lineQtyMap[line.id] ?? line.quantity}
-                              onChange={(e) =>
-                                setLineQtyMap((prev) => ({ ...prev, [line.id]: Math.max(1, Number.parseInt(e.target.value, 10) || 1) }))
-                              }
-                              onBlur={() => void handleUpdateLine(line.id)}
-                              onFocus={(e) => e.target.select()}
-                              inputProps={{ min: 1 }}
-                              sx={{ width: 80 }}
-                              disabled={lineActionLoading}
+                    {activeOrder.status === "DRAFT" ? (
+                      <DndContext sensors={dndSensors} collisionDetection={closestCenter} onDragEnd={(e) => void handleDragEnd(e)}>
+                        <SortableContext items={activeOrder.lines.map((l) => l.id)} strategy={verticalListSortingStrategy}>
+                          {activeOrder.lines.map((line) => (
+                            <SortableLineRow
+                              key={line.id}
+                              line={line}
+                              isDraft
+                              qty={lineQtyMap[line.id] ?? line.quantity}
+                              lineActionLoading={lineActionLoading}
+                              linesCount={activeOrder.lines.length}
+                              onQtyChange={(id, qty) => setLineQtyMap((prev) => ({ ...prev, [id]: qty }))}
+                              onBlur={(id) => void handleUpdateLine(id)}
+                              onRemove={(id) => void handleRemoveLine(id)}
                             />
-                          ) : (
-                            line.quantity
-                          )}
-                        </TableCell>
-                        {activeOrder.status === "DRAFT" && (
-                          <TableCell>
-                            <Tooltip title="Position entfernen">
-                              <span>
-                                <IconButton
-                                  size="small"
-                                  color="error"
-                                  disabled={lineActionLoading || activeOrder.lines.length <= 1}
-                                  onClick={() => void handleRemoveLine(line.id)}
-                                >
-                                  <DeleteIcon fontSize="small" />
-                                </IconButton>
-                              </span>
-                            </Tooltip>
-                          </TableCell>
-                        )}
-                      </TableRow>
-                    ))}
+                          ))}
+                        </SortableContext>
+                      </DndContext>
+                    ) : (
+                      activeOrder.lines.map((line) => (
+                        <SortableLineRow
+                          key={line.id}
+                          line={line}
+                          isDraft={false}
+                          qty={line.quantity}
+                          lineActionLoading={false}
+                          linesCount={activeOrder.lines.length}
+                          onQtyChange={() => {}}
+                          onBlur={() => {}}
+                          onRemove={() => {}}
+                        />
+                      ))
+                    )}
                   </TableBody>
                 </Table>
 

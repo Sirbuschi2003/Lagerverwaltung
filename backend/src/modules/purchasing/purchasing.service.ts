@@ -145,6 +145,9 @@ export class PurchasingService {
     if (!order) {
       throw new NotFoundException("Purchase order not found");
     }
+    if (order.lines) {
+      order.lines.sort((a, b) => a.sortOrder - b.sortOrder);
+    }
     return order;
   }
 
@@ -327,7 +330,8 @@ export class PurchasingService {
       existing.quantity += Math.max(1, payload.quantity);
       await this.linesRepository.save(existing);
     } else {
-      const line = this.linesRepository.create({ order, item, quantity: Math.max(1, payload.quantity), receivedQuantity: 0 });
+      const maxSortOrder = order.lines?.reduce((max, l) => Math.max(max, l.sortOrder ?? 0), -1) ?? -1;
+      const line = this.linesRepository.create({ order, item, quantity: Math.max(1, payload.quantity), receivedQuantity: 0, sortOrder: maxSortOrder + 1 });
       await this.linesRepository.save(line);
     }
     this.invalidateSuggestionsCache();
@@ -368,6 +372,19 @@ export class PurchasingService {
     if (!line) throw new NotFoundException("Position nicht gefunden");
     await this.linesRepository.delete(lineId);
     this.invalidateSuggestionsCache();
+    return this.findOne(orderId, branchId);
+  }
+
+  async reorderLines(orderId: string, lineIds: string[], branchId?: string | null): Promise<PurchaseOrder> {
+    const order = await this.findOne(orderId, branchId);
+    if (order.status !== "DRAFT") {
+      throw new BadRequestException("Positionen können nur bei Entwürfen umsortiert werden");
+    }
+    const orderLineIds = new Set(order.lines.map((l) => l.id));
+    if (!lineIds.every((id) => orderLineIds.has(id))) {
+      throw new BadRequestException("Ungültige Position-IDs");
+    }
+    await Promise.all(lineIds.map((id, index) => this.linesRepository.update(id, { sortOrder: index })));
     return this.findOne(orderId, branchId);
   }
 
