@@ -40,9 +40,10 @@ RUN npm install --omit=dev
 # Copy built application
 COPY --from=builder /app/dist ./dist
 
-# Update-Helper-Script einbinden (wird vom In-App-Update-Mechanismus genutzt)
+# Helper-Scripts: update (In-App-Update) + start (migration-then-run)
 COPY scripts/update.sh /app/update.sh
-RUN chmod +x /app/update.sh
+COPY scripts/start.sh /app/start.sh
+RUN chmod +x /app/update.sh /app/start.sh
 
 # Create non-root user for security
 RUN addgroup -g 1001 -S nodejs && \
@@ -57,5 +58,5 @@ HEALTHCHECK --interval=15s --timeout=5s --retries=5 \
     CMD curl -f http://localhost:3000/health || exit 1
 
 EXPOSE 3000
-CMD ["node", "dist/main.js"]
+CMD ["/app/start.sh"]
 
