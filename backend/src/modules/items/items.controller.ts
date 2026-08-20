@@ -16,7 +16,7 @@ import { JwtAuthGuard } from "../auth/guards/jwt-auth.guard";
 import { Permissions } from "../access-control/decorators/permissions.decorator";
 import { PermissionsGuard } from "../access-control/guards/permissions.guard";
 import { Public } from "../auth/decorators/public.decorator";
-import { SkipThrottle } from "@nestjs/throttler";
+import { SkipThrottle, Throttle } from "@nestjs/throttler";
 
 /**
  * Prüft die Magic Bytes eines Buffers auf erlaubte Bildformate.
@@ -118,6 +118,7 @@ export class ItemsController {
   }
 
   @Post("bulk")
+  @Throttle({ default: { ttl: 60000, limit: 5 } })
   @Permissions("items.create")
   async createBulk(@Body() dto: CreateItemDto[], @Req() req: ItemsRequest) {
     try {
