@@ -38,15 +38,19 @@ export function useLiveData<T>({
   
   const intervalRef = useRef<number | null>(null);
   const fetcherRef = useRef(fetcher);
+  const onSuccessRef = useRef(onSuccess);
+  const onErrorRef = useRef(onError);
+  const enabledRef = useRef(enabled);
   const loadingRef = useRef(false);
 
-  // Fetcher-Referenz aktuell halten
-  useEffect(() => {
-    fetcherRef.current = fetcher;
-  }, [fetcher]);
+  useEffect(() => { fetcherRef.current = fetcher; }, [fetcher]);
+  useEffect(() => { onSuccessRef.current = onSuccess; }, [onSuccess]);
+  useEffect(() => { onErrorRef.current = onError; }, [onError]);
+  useEffect(() => { enabledRef.current = enabled; }, [enabled]);
 
+  // Stabile refresh-Referenz — startet den Timer nicht neu wenn Callbacks sich ändern
   const refresh = useCallback(async () => {
-    if (!enabled || loadingRef.current) return;
+    if (!enabledRef.current || loadingRef.current) return;
 
     loadingRef.current = true;
     setLoading(true);
@@ -56,16 +60,16 @@ export function useLiveData<T>({
       const result = await fetcherRef.current();
       setData(result);
       setLastUpdated(new Date());
-      onSuccess?.(result);
+      onSuccessRef.current?.(result);
     } catch (err) {
       console.error('[useLiveData] Fetch error:', err);
       setError(err);
-      onError?.(err);
+      onErrorRef.current?.(err);
     } finally {
       loadingRef.current = false;
       setLoading(false);
     }
-  }, [enabled, onSuccess, onError]);
+  }, []);
   
   // Initial load
   useEffect(() => {
@@ -102,7 +106,7 @@ export function useLiveData<T>({
         intervalRef.current = null;
       }
     };
-  }, [enabled, settings.enabled, settings.interval, isOnline, refresh]);
+  }, [enabled, settings.enabled, settings.interval, isOnline]); // refresh ist stabil (keine Deps)
   
   // Cleanup on unmount
   useEffect(() => {

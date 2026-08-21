@@ -19,6 +19,40 @@ import { UpdateUserDto } from "./dto/update-user.dto";
 import { User } from "./entities/user.entity";
 import { UsersService } from "./users.service";
 
+const SAFE_KEY = /^[a-zA-Z0-9._-]{1,100}$/;
+const MAX_SETTINGS_DEPTH = 5;
+const MAX_ARRAY_LENGTH = 200;
+const MAX_STRING_LENGTH = 2000;
+
+function sanitizeSettings(value: unknown, depth: number): Record<string, unknown> {
+  const result: Record<string, unknown> = {};
+  if (typeof value !== "object" || value === null || Array.isArray(value)) return result;
+  for (const [key, val] of Object.entries(value as Record<string, unknown>)) {
+    if (!SAFE_KEY.test(key)) continue;
+    result[key] = sanitizeValue(val, depth + 1);
+  }
+  return result;
+}
+
+function sanitizeValue(value: unknown, depth: number): unknown {
+  if (value === null) return null;
+  if (typeof value === "string") return value.slice(0, MAX_STRING_LENGTH);
+  if (typeof value === "number" || typeof value === "boolean") return value;
+  if (depth >= MAX_SETTINGS_DEPTH) return null;
+  if (Array.isArray(value)) {
+    return value.slice(0, MAX_ARRAY_LENGTH).map((item) => sanitizeValue(item, depth + 1));
+  }
+  if (typeof value === "object") {
+    const nested: Record<string, unknown> = {};
+    for (const [key, val] of Object.entries(value as Record<string, unknown>)) {
+      if (!SAFE_KEY.test(key)) continue;
+      nested[key] = sanitizeValue(val, depth + 1);
+    }
+    return nested;
+  }
+  return null;
+}
+
 @UseInterceptors(ClassSerializerInterceptor)
 @Controller("users")
 @UseGuards(JwtAuthGuard, RolesGuard, PermissionsGuard)
@@ -47,15 +81,7 @@ export class UsersController {
 
   @Put("me/settings")
   updateMySettings(@Body() settings: Record<string, unknown>, @CurrentUser() user: User) {
-    const sanitized: Record<string, unknown> = {};
-    for (const [key, value] of Object.entries(settings ?? {})) {
-      if (!/^[a-zA-Z0-9._-]{1,100}$/.test(key)) continue;
-      if (typeof value === "string") {
-        sanitized[key] = value.slice(0, 1000);
-      } else if (typeof value === "number" || typeof value === "boolean" || value === null) {
-        sanitized[key] = value;
-      }
-    }
+    const sanitized = sanitizeSettings(settings, 0);
     return this.usersService.updateUserSettings(user.id, sanitized);
   }
 
