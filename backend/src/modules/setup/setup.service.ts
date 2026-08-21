@@ -183,7 +183,7 @@ export class SetupService implements OnModuleInit {
           username: u.username,
           displayName: u.displayName,
           email: u.email ?? null,
-          passwordHash: u.passwordHash,
+          // passwordHash intentionally omitted — restore uses locked sentinel; admin must reset passwords after restore (SEC-013)
           role: u.role,
           vehicleId: u.vehicleId ?? null,
           branchId: u.branchId ?? null,

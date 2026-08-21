@@ -1,6 +1,7 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, Between } from 'typeorm';
+import * as crypto from 'crypto';
 import * as fs from 'fs';
 import * as path from 'path';
 
@@ -17,6 +18,8 @@ export interface ArchiveEntry {
 @Injectable()
 export class LogArchiveService {
   private readonly archiveDir: string;
+  private readonly encryptionKey: Buffer | null;
+  private readonly logger = new Logger(LogArchiveService.name);
 
   constructor(
     @InjectRepository(SystemLog)
@@ -25,6 +28,61 @@ export class LogArchiveService {
   ) {
     this.archiveDir = process.env.LOG_ARCHIVE_PATH || path.join(process.cwd(), 'log-archives');
     fs.mkdirSync(this.archiveDir, { recursive: true });
+
+    const rawKey = process.env.LOG_ARCHIVE_ENCRYPTION_KEY;
+    if (rawKey) {
+      // Derive a fixed 32-byte AES-256 key from the passphrase
+      this.encryptionKey = crypto.createHash('sha256').update(rawKey).digest();
+      this.logger.log('Log-Archiv-Verschlüsselung aktiv (AES-256-GCM)');
+    } else {
+      this.encryptionKey = null;
+    }
+  }
+
+  /** AES-256-GCM encrypt; stored as JSON envelope {enc,iv,tag,data} */
+  private encrypt(plaintext: string): string {
+    const key = this.encryptionKey!;
+    const iv = crypto.randomBytes(12);
+    const cipher = crypto.createCipheriv('aes-256-gcm', key, iv);
+    const encrypted = Buffer.concat([cipher.update(plaintext, 'utf-8'), cipher.final()]);
+    const tag = cipher.getAuthTag();
+    return JSON.stringify({ enc: true, iv: iv.toString('hex'), tag: tag.toString('hex'), data: encrypted.toString('hex') });
+  }
+
+  /** Decrypt an envelope produced by encrypt(); returns null when key is missing or content is plaintext */
+  private tryDecrypt(raw: string): string | null {
+    if (!this.encryptionKey) return null;
+    try {
+      const envelope = JSON.parse(raw);
+      if (!envelope.enc) return null;
+      const iv = Buffer.from(envelope.iv, 'hex');
+      const tag = Buffer.from(envelope.tag, 'hex');
+      const data = Buffer.from(envelope.data, 'hex');
+      const decipher = crypto.createDecipheriv('aes-256-gcm', this.encryptionKey, iv);
+      decipher.setAuthTag(tag);
+      return decipher.update(data) + decipher.final('utf-8');
+    } catch {
+      return null;
+    }
+  }
+
+  /** Write an archive file, encrypting when a key is configured */
+  private writeArchiveFile(filePath: string, content: string): void {
+    const payload = this.encryptionKey ? this.encrypt(content) : content;
+    fs.writeFileSync(filePath, payload, 'utf-8');
+  }
+
+  /** Read an archive file and decrypt if necessary; returns parsed JSON */
+  private readAndParse(filePath: string): unknown[] {
+    const raw = fs.readFileSync(filePath, 'utf-8');
+    const decrypted = this.tryDecrypt(raw);
+    const json = decrypted ?? raw;
+    try {
+      const parsed = JSON.parse(json);
+      return Array.isArray(parsed) ? parsed : [];
+    } catch {
+      return [];
+    }
   }
 
   /** Sanitize to prevent path traversal */
@@ -69,7 +127,7 @@ export class LogArchiveService {
         userId: log.userId,
         // username, ipAddress und userAgent werden nicht archiviert (DSGVO: Datensparsamkeit)
       }));
-      fs.writeFileSync(filePath, JSON.stringify(serialized, null, 2), 'utf-8');
+      this.writeArchiveFile(filePath, JSON.stringify(serialized, null, 2));
       result[category] = entries.length;
     }
 
@@ -97,8 +155,7 @@ export class LogArchiveService {
         const size = fs.statSync(filePath).size;
         let entryCount = 0;
         try {
-          const parsed = JSON.parse(fs.readFileSync(filePath, 'utf-8'));
-          entryCount = Array.isArray(parsed) ? parsed.length : 0;
+          entryCount = this.readAndParse(filePath).length;
         } catch { /* corrupted file – still list it */ }
 
         result.push({ date: dateDir, category: file.replace('.json', ''), entryCount, size });
@@ -143,7 +200,9 @@ export class LogArchiveService {
 
     const filePath = path.join(this.archiveDir, date, `${category}.json`);
     if (!fs.existsSync(filePath)) throw new NotFoundException('Archiv-Datei nicht gefunden');
-    return fs.readFileSync(filePath);
+    // Return plaintext (decrypted if necessary) so callers get readable JSON
+    const entries = this.readAndParse(filePath);
+    return Buffer.from(JSON.stringify(entries, null, 2), 'utf-8');
   }
 
   buildBundle(dates: string[]): Buffer {
@@ -157,7 +216,7 @@ export class LogArchiveService {
       for (const file of fs.readdirSync(datePath).filter(f => f.endsWith('.json'))) {
         const key = `${date}/${file.replace('.json', '')}`;
         try {
-          all[key] = JSON.parse(fs.readFileSync(path.join(datePath, file), 'utf-8'));
+          all[key] = this.readAndParse(path.join(datePath, file));
         } catch { all[key] = []; }
       }
     }
@@ -175,8 +234,7 @@ export class LogArchiveService {
     const all: unknown[] = [];
     for (const file of fs.readdirSync(datePath).filter(f => f.endsWith('.json'))) {
       try {
-        const parsed = JSON.parse(fs.readFileSync(path.join(datePath, file), 'utf-8'));
-        if (Array.isArray(parsed)) all.push(...parsed);
+        all.push(...this.readAndParse(path.join(datePath, file)));
       } catch { /* skip corrupted file */ }
     }
 
