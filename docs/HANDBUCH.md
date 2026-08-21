@@ -1,6 +1,6 @@
 # KFZ Lagerverwaltung – Benutzerhandbuch
 
-**Version 3.9 · Stand: August 2026**
+**Version 4.1 · Stand: August 2026**
 
 ---
 
@@ -21,6 +21,7 @@
 12. [Backup & Wiederherstellung](#12-backup--wiederherstellung)
 13. [Benutzerverwaltung & Zugriffssteuerung](#13-benutzerverwaltung--zugriffssteuerung)
 14. [Einstellungen & Konfiguration](#14-einstellungen--konfiguration)
+    - [14.5 Log-Archive](#145-log-archive-administration)
 15. [Offline-Betrieb](#15-offline-betrieb)
 16. [Häufige Fragen (FAQ)](#16-häufige-fragen-faq)
 
@@ -68,6 +69,8 @@
    | `INVENTORY_HMAC_SECRET` | Inventur-Checksummen (min. 32 Zeichen) | `openssl rand -hex 32` |
    | `CADDY_HTTPS_PORT` | HTTPS-Port der App | `8443` |
    | `CADDY_HTTP_PORT` | HTTP-Port (Weiterleitung auf HTTPS) | `8080` |
+   | `LOG_ARCHIVE_ENCRYPTION_KEY` | **Empfohlen:** Passphrase für AES-256-GCM-Verschlüsselung der Log-Archive (optional) | beliebiger String |
+   | `PUPPETEER_DISABLE_SANDBOX` | Auf `true` setzen wenn Puppeteer im Container keine Sandbox nutzen darf (Synology) | `true` |
 
    **Dateiablage-Pfade** (optional, aber empfohlen für NAS-Zugriff per SMB):
    ```env
@@ -470,11 +473,14 @@ Aufruf unter **Administration → Backup**.
 
 Vor jedem Datenbankupdate (Migration) wird automatisch ein Backup erstellt.
 
+> **Sicherheitshinweis:** Passwort-Hashes werden **nicht** in das JSON-Backup exportiert. Nach einem Restore sind alle Benutzerkonten gesperrt – der Administrator muss die Passwörter über **Benutzer → Passwort zurücksetzen** für alle Benutzer neu vergeben.
+
 ### 12.2 Backup wiederherstellen
 
 1. Backup-Datei hochladen
 2. Datenkategorien auswählen (granulare Wiederherstellung – jede Kategorie einzeln aktivierbar)
 3. Restore starten – vollständige Transaktion, automatischer Rollback bei Fehler
+4. **Passwörter zurücksetzen** – nach einem vollständigen Restore alle Benutzerpasswörter neu vergeben
 
 ---
 
@@ -540,6 +546,19 @@ Jeder Benutzer kann eigene Präferenzen speichern (serverseitig, geräteübergre
 - **Dashboard-Widgets:** Sichtbarkeit und Reihenfolge
 - **Schnellzugriff-Buttons:** Konfigurierbar für Desktop und Mobil
 
+Alle Einstellungen werden serverseitig gespeichert und sind nach Reload (F5) oder erneutem Anmelden sofort wiederhergestellt.
+
+### 14.5 Log-Archive (Administration)
+
+Aufruf unter **Administration → Logs → Archiv**.
+
+Ältere Logs werden automatisch in tagesweise JSON-Dateien archiviert und aus der Datenbank entfernt. Der Archivierungszeitraum ist konfigurierbar.
+
+**Verschlüsselung (empfohlen):**  
+Wenn `LOG_ARCHIVE_ENCRYPTION_KEY` in der `.env` gesetzt ist, werden neu erstellte Archive mit AES-256-GCM verschlüsselt gespeichert. Ältere Plaintext-Archive bleiben weiterhin lesbar. Die Entschlüsselung erfolgt automatisch beim Abrufen über die Oberfläche.
+
+> DSGVO-Hinweis: Archive enthalten keine Benutzernamen, IP-Adressen oder User-Agent-Strings. Nur pseudonymisierte User-IDs und Aktionsbeschreibungen werden gespeichert.
+
 ---
 
 ## 15. Offline-Betrieb
@@ -587,3 +606,12 @@ A: Der Import erstellt neue Artikel-UUIDs. Bestehende Backups müssen nach dem I
 
 **F: Wie viele Benutzer / Artikel werden unterstützt?**  
 A: Das System ist für bis zu ~200 gleichzeitige Benutzer und ~200.000 Artikel optimiert (DB-Indizes, Connection-Pool, Eager→Lazy Loading). Bei höherer Last empfiehlt sich Redis für Socket.io-Scaling.
+
+**F: Meine Dashboard-Einstellungen gehen nach dem Reload verloren.**  
+A: Seit v4.1 werden alle Einstellungen (Dashboard-Widgets, Schnellzugriff-Buttons, Theme, Farben) serverseitig gespeichert und sind geräteübergreifend verfügbar. Falls weiterhin Probleme auftreten, bitte einmal ab- und wieder anmelden.
+
+**F: Nach einem Backup-Restore sind alle Passwörter gesperrt.**  
+A: Das ist beabsichtigt. Seit v4.1 werden Passwort-Hashes nicht mehr im Backup gespeichert. Nach einem Restore müssen alle Passwörter vom Administrator unter **Benutzer → Passwort zurücksetzen** neu vergeben werden.
+
+**F: Der PDF-Export (Bestellungs-PDF) schlägt im Docker-Container fehl.**  
+A: Auf manchen NAS-Systemen (z.B. Synology) fehlt die Sandbox-Unterstützung für Chromium. Lösung: `PUPPETEER_DISABLE_SANDBOX=true` in der `.env` setzen und Container neu starten.
