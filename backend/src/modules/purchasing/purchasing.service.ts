@@ -30,6 +30,8 @@ interface PurchaseOrderQueryParams {
   supplierId?: string;
   sortBy?: PurchaseOrderSortField;
   sortDir?: SortDirection;
+  page?: number;
+  limit?: number;
 }
 
 interface OrderDocumentQueryParams {
@@ -132,7 +134,10 @@ export class PurchasingService {
         break;
     }
 
-    return qb.take(500).getMany();
+    const limit = Math.min(params?.limit ?? 500, 500);
+    const offset = ((params?.page ?? 1) - 1) * limit;
+    const [orders, total] = await qb.take(limit).skip(offset).getManyAndCount();
+    return { orders, total, page: params?.page ?? 1, limit };
   }
 
   async findOne(id: string, branchId?: string | null) {

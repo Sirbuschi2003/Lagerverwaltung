@@ -87,8 +87,8 @@ const ArchivedOrdersTab: React.FC = () => {
     setLoading(true);
     setError(null);
     try {
-      const data = await fetchPurchaseOrders({ status: "ARCHIVED" });
-      setOrders(data);
+      const { orders } = await fetchPurchaseOrders({ status: "ARCHIVED" });
+      setOrders(orders);
     } catch {
       setError("Archivierte Bestellungen konnten nicht geladen werden.");
     } finally {

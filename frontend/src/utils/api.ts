@@ -865,6 +865,15 @@ export interface PurchaseOrderQueryParams {
   supplierId?: string;
   sortBy?: "createdAt" | "orderedAt" | "supplier";
   sortDir?: "ASC" | "DESC";
+  page?: number;
+  limit?: number;
+}
+
+export interface PurchaseOrdersResult {
+  orders: PurchaseOrderDto[];
+  total: number;
+  page: number;
+  limit: number;
 }
 
 export interface PurchaseOrderDocumentDto {
@@ -879,8 +888,8 @@ export interface PurchaseOrderDocumentDto {
   branchFolder: string | null;
 }
 
-export const fetchPurchaseOrders = async (params?: PurchaseOrderQueryParams): Promise<PurchaseOrderDto[]> => {
-  const response = await api.get<PurchaseOrderDto[]>("/purchase-orders", { params });
+export const fetchPurchaseOrders = async (params?: PurchaseOrderQueryParams): Promise<PurchaseOrdersResult> => {
+  const response = await api.get<PurchaseOrdersResult>("/purchase-orders", { params });
   return response.data;
 };
 

@@ -43,8 +43,12 @@ export class PurchasingController {
     @Query("supplierId") supplierId?: string,
     @Query("sortBy") sortBy?: string,
     @Query("sortDir") sortDir?: string,
+    @Query("page") page?: string,
+    @Query("limit") limit?: string,
   ) {
     const parsedYear = year ? Number.parseInt(year, 10) : undefined;
+    const parsedPage = page ? Math.max(1, Number.parseInt(page, 10)) : 1;
+    const parsedLimit = limit ? Math.min(500, Math.max(1, Number.parseInt(limit, 10))) : 500;
     return this.purchasingService.findAll({
       status: status as any,
       year: Number.isFinite(parsedYear) ? parsedYear : undefined,
@@ -53,6 +57,8 @@ export class PurchasingController {
       sortDir: sortDir as any,
       branchId: req.user?.branchId,
       locationIds: req.user?.locationIds,
+      page: parsedPage,
+      limit: parsedLimit,
     });
   }
 

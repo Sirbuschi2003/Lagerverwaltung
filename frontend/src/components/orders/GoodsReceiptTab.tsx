@@ -219,11 +219,11 @@ const GoodsReceiptTab: React.FC = () => {
     setLoading(true);
     setError(null);
     try {
-      const [draftOrders, orderedOrders] = await Promise.all([
+      const [draftResult, orderedResult] = await Promise.all([
         fetchPurchaseOrders({ status: "DRAFT" }),
         fetchPurchaseOrders({ status: "ORDERED" }),
       ]);
-      setOrders([...draftOrders, ...orderedOrders]);
+      setOrders([...draftResult.orders, ...orderedResult.orders]);
     } catch (err: any) {
       setError(`Fehler beim Laden der Bestellungen: ${err?.response?.data?.message || err?.message || "Unbekannt"}`);
     } finally {

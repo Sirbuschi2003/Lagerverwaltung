@@ -22,7 +22,6 @@ import {
   ButtonGroup,
 } from '@mui/material';
 import { ExpandMore, Save, Refresh, Download, CloudUpload } from '@mui/icons-material';
-import { ChromePicker, ColorResult } from 'react-color';
 import { getPdfHtmlTemplate, updatePdfHtmlTemplate, PdfHtmlTemplate } from '../utils/api';
 
 interface PdfTemplateSettings {
@@ -104,7 +103,6 @@ const PdfTemplateBuilderPage: React.FC = () => {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
-  const [colorPicker, setColorPicker] = useState<string | null>(null);
 
   useEffect(() => {
     loadTemplate();
@@ -344,25 +342,18 @@ body {
   }) => (
     <Box sx={{ mb: 2 }}>
       <Typography variant="body2" sx={{ mb: 1 }}>{label}</Typography>
-      <Button
-        variant="outlined"
-        onClick={() => setColorPicker(colorPicker === colorKey ? null : (colorKey as string))}
-        sx={{
-          width: '100%',
-          height: '40px',
-          backgroundColor: value as string,
-          border: `2px solid #ccc`,
-          '&:hover': { border: `2px solid #999` },
-        }}
-      />
-      {colorPicker === colorKey && (
-        <Box sx={{ position: 'absolute', zIndex: 2, mt: 1 }}>
-          <ChromePicker
-            color={value as string}
-            onChangeComplete={(color: ColorResult) => setSettings({ ...settings, [colorKey]: color.hex })}
-          />
-        </Box>
-      )}
+      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+        <Box
+          component="input"
+          type="color"
+          value={value as string}
+          onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+            setSettings((prev) => ({ ...prev, [colorKey]: e.target.value }))
+          }
+          sx={{ width: 40, height: 40, cursor: 'pointer', border: '1px solid #ccc', borderRadius: 1, padding: '2px' }}
+        />
+        <Typography variant="body2" sx={{ fontFamily: 'monospace' }}>{value}</Typography>
+      </Box>
     </Box>
   );
 

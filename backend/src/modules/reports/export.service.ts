@@ -1011,11 +1011,18 @@ export class ExportService {
     // Inject CSS
     const fullHtml = html.replace('</head>', `<style>${template.css}</style></head>`);
 
-    // Render with Puppeteer
+    // --no-sandbox ist in Docker-Containern erforderlich, wenn kein SYS_ADMIN-Capability
+    // oder kein angepasstes seccomp-Profil gesetzt ist. Der Backend-Prozess läuft als
+    // Nicht-Root (USER nestjs, DOCKER-ROOT-Fix), daher ist das Risiko akzeptabel.
+    // Zum Deaktivieren: PUPPETEER_DISABLE_SANDBOX=false in .env setzen.
+    const useSandbox = process.env.PUPPETEER_DISABLE_SANDBOX !== 'true';
     const browser = await puppeteer.launch({
       headless: true,
       executablePath: process.env.PUPPETEER_EXECUTABLE_PATH,
-      args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage']
+      args: [
+        ...(!useSandbox ? ['--no-sandbox', '--disable-setuid-sandbox'] : []),
+        '--disable-dev-shm-usage',
+      ],
     });
 
     try {

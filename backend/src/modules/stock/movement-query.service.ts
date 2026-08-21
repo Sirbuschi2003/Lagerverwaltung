@@ -58,6 +58,25 @@ export class MovementQueryService {
     }
   }
 
+  private applyBaseFilters(
+    qb: SelectQueryBuilder<StockMovement>,
+    params: { branchId?: string | null; itemId?: string; vehicleId?: string; userId?: string },
+    locationIds: string[] | undefined,
+    excludeVehicles: boolean | null | undefined,
+  ): void {
+    if (params.branchId) qb.andWhere("item.branchId = :branchId", { branchId: params.branchId });
+    if (locationIds?.length) {
+      qb.andWhere(
+        "(storageLocation.id IN (:...locationIds) OR slParent.id IN (:...locationIds))",
+        { locationIds },
+      );
+    }
+    if (excludeVehicles) qb.andWhere("movement.vehicleId IS NULL");
+    if (params.itemId) qb.andWhere("movement.itemId = :itemId", { itemId: params.itemId });
+    if (params.vehicleId) qb.andWhere("movement.vehicleId = :vehicleId", { vehicleId: params.vehicleId });
+    if (params.userId) qb.andWhere("movement.userId = :userId", { userId: params.userId });
+  }
+
   private applyTemporalFilters(
     qb: SelectQueryBuilder<StockMovement>,
     params: { type?: StockMovementType; from?: Date; to?: Date; source?: string },
@@ -109,17 +128,7 @@ export class MovementQueryService {
       .leftJoinAndSelect("movement.user", "user")
       .orderBy("movement.occurredAt", "DESC");
 
-    if (params.branchId) qb.andWhere("item.branchId = :branchId", { branchId: params.branchId });
-    if (effectiveLocationIds?.length) {
-      qb.andWhere(
-        "(storageLocation.id IN (:...locationIds) OR slParent.id IN (:...locationIds))",
-        { locationIds: effectiveLocationIds },
-      );
-    }
-    if (excludeVehicles) qb.andWhere("movement.vehicleId IS NULL");
-    if (params.itemId) qb.andWhere("item.id = :itemId", { itemId: params.itemId });
-    if (params.vehicleId) qb.andWhere("vehicle.id = :vehicleId", { vehicleId: params.vehicleId });
-    if (params.userId) qb.andWhere("user.id = :userId", { userId: params.userId });
+    this.applyBaseFilters(qb, params, effectiveLocationIds, !!excludeVehicles);
     this.applyTemporalFilters(qb, params);
 
     const limit = Math.min(params.limit || 50, 500);
@@ -137,17 +146,7 @@ export class MovementQueryService {
       .addSelect("SUM(movement.quantity)", "qty")
       .addSelect("COUNT(*)", "cnt");
 
-    if (params.branchId) summaryQb.andWhere("item.branchId = :branchId", { branchId: params.branchId });
-    if (effectiveLocationIds?.length) {
-      summaryQb.andWhere(
-        "(storageLocation.id IN (:...locationIds) OR slParent.id IN (:...locationIds))",
-        { locationIds: effectiveLocationIds },
-      );
-    }
-    if (excludeVehicles) summaryQb.andWhere("movement.vehicleId IS NULL");
-    if (params.itemId) summaryQb.andWhere("movement.itemId = :itemId", { itemId: params.itemId });
-    if (params.vehicleId) summaryQb.andWhere("movement.vehicleId = :vehicleId", { vehicleId: params.vehicleId });
-    if (params.userId) summaryQb.andWhere("movement.userId = :userId", { userId: params.userId });
+    this.applyBaseFilters(summaryQb, params, effectiveLocationIds, !!excludeVehicles);
     this.applyTemporalFilters(summaryQb, params);
 
     const raw = await summaryQb.groupBy("movement.type").getRawMany<MovementSummaryRow>();

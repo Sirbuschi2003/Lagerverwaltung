@@ -186,9 +186,9 @@ const ActiveOrdersTab: React.FC = () => {
     setLoading(true);
     setError(null);
     try {
-      const data = await fetchPurchaseOrders(status ? { status } : undefined);
+      const { orders } = await fetchPurchaseOrders(status ? { status } : undefined);
       if (signal?.aborted) return;
-      setOrders(data.filter((order) => order.status !== "ARCHIVED"));
+      setOrders(orders.filter((order) => order.status !== "ARCHIVED"));
     } catch {
       if (signal?.aborted) return;
       setError("Bestellungen konnten nicht geladen werden.");
