@@ -436,6 +436,21 @@ const QuickBookingPage: React.FC = () => {
     const found = await lookupItem(trimmed);
 
     if (!found) {
+      // Wenn der Code aussieht wie eine Vorgangsnummer (z.B. LFS/461101/…), direkt als neue Referenz setzen.
+      // Löst gleichzeitig die Duplikat-Warnung – der User wechselt zum nächsten Vorgang.
+      if (extractCustomerNumber(trimmed)) {
+        setReference(trimmed);
+        if (referenceRef.current) referenceRef.current.value = trimmed;
+        setDuplicateWarnings([]);
+        setItemNotFound(false);
+        busyRef.current = false;
+        setBusy(false);
+        if (socketRef.current?.connected && userIdRef.current) {
+          socketRef.current.emit("quickbook:reference", { userId: userIdRef.current, reference: trimmed });
+        }
+        refocusBarcode();
+        return;
+      }
       playError();
       setItemNotFound(true);
       setCurrentItem(null);
