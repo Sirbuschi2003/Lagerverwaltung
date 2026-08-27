@@ -1,5 +1,5 @@
 ﻿export type ThemeMode = "light" | "dark";
-export type ThemePresetId = "sunset" | "ocean" | "graphite" | "emerald" | "atlantic" | "dusk" | "amber";
+export type ThemePresetId = "sunset" | "ocean" | "graphite" | "emerald" | "atlantic" | "dusk" | "amber" | "sky";
 
 export interface ThemePalette {
   primary: {
@@ -327,6 +327,35 @@ export const themePresets: ReadonlyArray<ThemePreset> = [
         border: { default: "#503820", light: "#684C28", dark: "#3C2810" },
         status: { success: "#50C080", warning: "#E8A840", error: "#E87060", info: "#7AAAD0" },
         semantic: { inventory: "#7AAAD0", order: "#E8A840", vehicle: "#60B8A0", location: "#E8A840", user: "#7AAAD0" },
+      },
+    },
+  },
+  {
+    id: "sky",
+    label: "Himmelblau",
+    description: "Luftiges Hellblau mit warmem Goldakzent – freundlich und klar.",
+    fonts: {
+      heading: '"Plus Jakarta Sans", "Manrope", sans-serif',
+      body: '"Inter", "Segoe UI", sans-serif',
+    },
+    palettes: {
+      light: {
+        primary: { main: "#3D7EC8", light: "#70A6E0", dark: "#245EA0", contrast: "#FFFFFF" },
+        secondary: { main: "#C8900A", light: "#E0B240", dark: "#9A6A08", contrast: "#FFFFFF" },
+        surface: { default: "#F2F7FD", paper: "#FFFFFF", variant: "#E8F1FB", hover: "#DCEAF8", selected: "#FFF4DC" },
+        text: { primary: "#0E1D30", secondary: "#3A5270", tertiary: "#607A96", disabled: "#98AFCA", inverse: "#FFFFFF" },
+        border: { default: "#C4D8F0", light: "#DAE9F8", dark: "#A4C0E0" },
+        status: { success: "#1E8A50", warning: "#C8900A", error: "#C43830", info: "#3D7EC8" },
+        semantic: { inventory: "#3D7EC8", order: "#C8900A", vehicle: "#1A8A9A", location: "#9A6A20", user: "#3D7EC8" },
+      },
+      dark: {
+        primary: { main: "#78B4F0", light: "#A0CAF8", dark: "#5090D0", contrast: "#040D1C" },
+        secondary: { main: "#F0C050", light: "#F8D880", dark: "#C89A28", contrast: "#160D00" },
+        surface: { default: "#0A1622", paper: "#122030", variant: "#1A2C3E", hover: "#223A50", selected: "#302810" },
+        text: { primary: "#E8F2FD", secondary: "#A8C4E0", tertiary: "#7AA0C0", disabled: "#507890", inverse: "#0A1622" },
+        border: { default: "#1C3650", light: "#285070", dark: "#102438" },
+        status: { success: "#40C080", warning: "#F0C050", error: "#E86858", info: "#78B4F0" },
+        semantic: { inventory: "#78B4F0", order: "#F0C050", vehicle: "#48C0D0", location: "#F0C050", user: "#78B4F0" },
       },
     },
   },
