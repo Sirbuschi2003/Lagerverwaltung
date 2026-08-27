@@ -26,7 +26,7 @@ const isThemeMode = (value: string | null | undefined): value is ThemeMode =>
   value === "light" || value === "dark";
 
 const isThemePreset = (value: string | null | undefined): value is ThemePresetId =>
-  value === "sunset" || value === "ocean" || value === "graphite" || value === "emerald";
+  themePresets.some((p) => p.id === value);
 
 const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
 
