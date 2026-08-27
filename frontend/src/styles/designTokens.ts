@@ -1,5 +1,5 @@
 ﻿export type ThemeMode = "light" | "dark";
-export type ThemePresetId = "sunset" | "ocean" | "graphite" | "emerald";
+export type ThemePresetId = "sunset" | "ocean" | "graphite" | "emerald" | "atlantic" | "dusk" | "amber";
 
 export interface ThemePalette {
   primary: {
@@ -240,6 +240,93 @@ export const themePresets: ReadonlyArray<ThemePreset> = [
         border: { default: "#30503E", light: "#3F684F", dark: "#243C30" },
         status: { success: "#5AD69A", warning: "#DFAB4D", error: "#E47467", info: "#78BDF0" },
         semantic: { inventory: "#78BDF0", order: "#4AC58A", vehicle: "#61C8B7", location: "#C2A364", user: "#4AC58A" },
+      },
+    },
+  },
+  {
+    id: "atlantic",
+    label: "Atlantik",
+    description: "Kräftiges Tiefblau mit Cyan-Akzenten – klar und präzise.",
+    fonts: {
+      heading: '"Plus Jakarta Sans", "Manrope", sans-serif',
+      body: '"Inter", "Segoe UI", sans-serif',
+    },
+    palettes: {
+      light: {
+        primary: { main: "#1455A4", light: "#4A84CC", dark: "#0D3C78", contrast: "#FFFFFF" },
+        secondary: { main: "#0097A7", light: "#35BDC9", dark: "#006E79", contrast: "#FFFFFF" },
+        surface: { default: "#F0F5FB", paper: "#FFFFFF", variant: "#E6EEF8", hover: "#D9E7F5", selected: "#D8F1F5" },
+        text: { primary: "#0D1E35", secondary: "#3D5470", tertiary: "#637A96", disabled: "#9AACC2", inverse: "#FFFFFF" },
+        border: { default: "#C8D9ED", light: "#DEE9F5", dark: "#A7C0DB" },
+        status: { success: "#1E7E50", warning: "#C47F18", error: "#C4382A", info: "#1455A4" },
+        semantic: { inventory: "#1455A4", order: "#0097A7", vehicle: "#1A7A99", location: "#A06420", user: "#1455A4" },
+      },
+      dark: {
+        primary: { main: "#5BA3E8", light: "#84BEF0", dark: "#3380C8", contrast: "#05111F" },
+        secondary: { main: "#4ECFDF", light: "#7ADDE8", dark: "#28ABBE", contrast: "#021419" },
+        surface: { default: "#071524", paper: "#0E2033", variant: "#162D47", hover: "#1E3D5E", selected: "#0F3B4A" },
+        text: { primary: "#E8F3FD", secondary: "#A8C5E0", tertiary: "#7AA2C0", disabled: "#527A98", inverse: "#071524" },
+        border: { default: "#1E3D5E", light: "#2B5278", dark: "#132A42" },
+        status: { success: "#42BB80", warning: "#DFAB4A", error: "#E86558", info: "#5BA3E8" },
+        semantic: { inventory: "#5BA3E8", order: "#4ECFDF", vehicle: "#45BDD0", location: "#C8A050", user: "#5BA3E8" },
+      },
+    },
+  },
+  {
+    id: "dusk",
+    label: "Dämmerung",
+    description: "Tiefes Violett mit warmem Amber-Akzent – edel und kontrastreich.",
+    fonts: {
+      heading: '"DM Sans", "Manrope", sans-serif',
+      body: '"Inter", "Segoe UI", sans-serif',
+    },
+    palettes: {
+      light: {
+        primary: { main: "#6B30A0", light: "#9A60C8", dark: "#4A1F72", contrast: "#FFFFFF" },
+        secondary: { main: "#C8780C", light: "#E0A84A", dark: "#975A08", contrast: "#FFFFFF" },
+        surface: { default: "#F8F4FC", paper: "#FFFFFF", variant: "#F0EAF9", hover: "#E5DBEF", selected: "#FAECD6" },
+        text: { primary: "#1C0F2E", secondary: "#52406A", tertiary: "#7A6490", disabled: "#AA98C0", inverse: "#FFFFFF" },
+        border: { default: "#DDD0EE", light: "#EDE5F7", dark: "#BFB0D6" },
+        status: { success: "#2A8E52", warning: "#C8780C", error: "#C03838", info: "#3060B0" },
+        semantic: { inventory: "#3060B0", order: "#6B30A0", vehicle: "#267A7A", location: "#C8780C", user: "#6B30A0" },
+      },
+      dark: {
+        primary: { main: "#B478E8", light: "#CDA0F0", dark: "#8C50C0", contrast: "#120820" },
+        secondary: { main: "#F0B04A", light: "#F5C878", dark: "#C88828", contrast: "#1A0E00" },
+        surface: { default: "#100818", paper: "#1A1028", variant: "#251838", hover: "#32234A", selected: "#3D2210" },
+        text: { primary: "#F4EEFF", secondary: "#C8B4E4", tertiary: "#A08AC0", disabled: "#78649A", inverse: "#100818" },
+        border: { default: "#3A2858", light: "#4E3870", dark: "#281B40" },
+        status: { success: "#52C88A", warning: "#F0B04A", error: "#E87070", info: "#78A8F0" },
+        semantic: { inventory: "#78A8F0", order: "#B478E8", vehicle: "#58C8C0", location: "#F0B04A", user: "#B478E8" },
+      },
+    },
+  },
+  {
+    id: "amber",
+    label: "Bernstein",
+    description: "Warmes Gold und Schiefer – industriell und einladend zugleich.",
+    fonts: {
+      heading: '"Lexend", "Manrope", sans-serif',
+      body: '"Inter", "Segoe UI", sans-serif',
+    },
+    palettes: {
+      light: {
+        primary: { main: "#B86E0A", light: "#D99840", dark: "#885008", contrast: "#FFFFFF" },
+        secondary: { main: "#3A5E82", light: "#6888A8", dark: "#26405C", contrast: "#FFFFFF" },
+        surface: { default: "#FBF7F0", paper: "#FFFFFF", variant: "#F5EEE3", hover: "#EDE3D2", selected: "#EAF0F8" },
+        text: { primary: "#221508", secondary: "#5A4230", tertiary: "#806050", disabled: "#B09A84", inverse: "#FFFFFF" },
+        border: { default: "#E0D0BC", light: "#EEDAD0", dark: "#C8B49A" },
+        status: { success: "#2A8850", warning: "#B86E0A", error: "#BE3A2A", info: "#3A5E82" },
+        semantic: { inventory: "#3A5E82", order: "#B86E0A", vehicle: "#4A7A6A", location: "#B86E0A", user: "#3A5E82" },
+      },
+      dark: {
+        primary: { main: "#E8A840", light: "#F0C070", dark: "#C08020", contrast: "#150C00" },
+        secondary: { main: "#7AAAD0", light: "#9DC0E0", dark: "#5088B0", contrast: "#040D14" },
+        surface: { default: "#181008", paper: "#251808", variant: "#342210", hover: "#443018", selected: "#0E1E2C" },
+        text: { primary: "#FAF0E0", secondary: "#D8C0A0", tertiary: "#B09878", disabled: "#887060", inverse: "#181008" },
+        border: { default: "#503820", light: "#684C28", dark: "#3C2810" },
+        status: { success: "#50C080", warning: "#E8A840", error: "#E87060", info: "#7AAAD0" },
+        semantic: { inventory: "#7AAAD0", order: "#E8A840", vehicle: "#60B8A0", location: "#E8A840", user: "#7AAAD0" },
       },
     },
   },
