@@ -62,6 +62,7 @@ import {
   type LastOrderForItemDto,
 } from "../utils/api";
 import useBarcodeScanner from "../hooks/useBarcodeScanner";
+import ItemEditDialog from "../components/items/ItemEditDialog";
 
 type ItemFormState = CreateItemRequest & { alternateCodesText: string; currentQuantity?: number };
 type CsvImportItem = CreateItemRequest & {
@@ -491,9 +492,11 @@ const QrScannerDialog = ({ open, onClose, onDetected }: QrScannerDialogProps) =>
 
 const ItemsPage = () => {
   const user = useAuthStore((state: any) => state.user);
+  const isTechnician = user?.role === "TECHNICIAN";
   const [refreshInterval, setRefreshInterval] = useState<number>(user?.refreshInterval ?? 15000);
   const [intervalSaved, setIntervalSaved] = useState<boolean>(false);
   const [open, setOpen] = useState(false);
+  const [techEditItemId, setTechEditItemId] = useState<string | null>(null);
   const [scanOpen, setScanOpen] = useState(false);
   const [searchScanOpen, setSearchScanOpen] = useState(false);
   const [altCodeScanOpen, setAltCodeScanOpen] = useState(false);
@@ -1935,6 +1938,10 @@ Import erfolgreich! Die Artikel sind jetzt verfügbar.`;
   };
 
   const handleOpenEdit = (id: string) => {
+    if (isTechnician) {
+      setTechEditItemId(id);
+      return;
+    }
     const item = items.find((entry: any) => entry.id === id);
     if (!item) return;
     setForm({
@@ -2114,16 +2121,18 @@ Import erfolgreich! Die Artikel sind jetzt verfügbar.`;
             flexDirection: { xs: 'column', sm: 'row' },
             width: { xs: '100%', sm: 'auto' }
           }}>
-            <Button 
-              variant="contained" 
-              onClick={handleOpenCreate}
-              sx={{ 
-                minHeight: 44,
-                width: { xs: '100%', sm: 'auto' }
-              }}
-            >
-              Artikel anlegen
-            </Button>
+            {!isTechnician && (
+              <Button
+                variant="contained"
+                onClick={handleOpenCreate}
+                sx={{
+                  minHeight: 44,
+                  width: { xs: '100%', sm: 'auto' }
+                }}
+              >
+                Artikel anlegen
+              </Button>
+            )}
             {user?.role === 'MANAGER' && (
               <>
                 <Button
@@ -3380,6 +3389,12 @@ TB-FC330,Toner Schwarz,Toshiba,Toner,5,89.90,Regal 3 / Fach 1`}
           )}
         </DialogContent>
       </Dialog>
+      <ItemEditDialog
+        itemId={techEditItemId}
+        open={techEditItemId !== null}
+        onClose={() => setTechEditItemId(null)}
+        onSaved={() => loadItems({ force: true })}
+      />
     </Box>
   );
 };
