@@ -93,6 +93,9 @@ const MyVehiclePage = () => {
   const [scanFeedback, setScanFeedback] = useState<ScanFeedback | null>(null);
   const [scanQuickActionsActive, setScanQuickActionsActive] = useState(false);
   const [scanFeedbackSource, setScanFeedbackSource] = useState<"scan" | "manual" | null>(null);
+  const [scanPurpose, setScanPurpose] = useState<"booking" | "check">("booking");
+  const [checkStockDialogOpen, setCheckStockDialogOpen] = useState(false);
+  const [checkStockResult, setCheckStockResult] = useState<{ item: ItemDto; quantity: number } | null>(null);
   const [scanTargetSaving, setScanTargetSaving] = useState<string | null>(null);
   const [notFoundDialogOpen, setNotFoundDialogOpen] = useState(false); // Dialog für "Artikel nicht gefunden"
   const [notFoundCode, setNotFoundCode] = useState<string>(""); // Code des nicht gefundenen Artikels
@@ -123,6 +126,19 @@ const MyVehiclePage = () => {
       if (stockItem) {
         item = stockItem;
       }
+    }
+
+    if (scanPurpose === "check") {
+      setScannerActive(false);
+      if (item) {
+        const stockEntry = stock.find((s) => s.item.id === item!.id);
+        setCheckStockResult({ item, quantity: stockEntry?.quantity ?? 0 });
+        setCheckStockDialogOpen(true);
+      } else {
+        setNotFoundCode(code);
+        setNotFoundDialogOpen(true);
+      }
+      return;
     }
 
     if (item) {
@@ -1069,14 +1085,21 @@ const MyVehiclePage = () => {
         {isSupported && (
           <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 1 }}>
             <Button
-              variant={scannerActive ? "outlined" : "contained"}
-              color={scannerActive ? "secondary" : "primary"}
+              variant={scannerActive && scanPurpose === "booking" ? "outlined" : "contained"}
+              color={scannerActive && scanPurpose === "booking" ? "secondary" : "primary"}
               startIcon={<QrCodeScannerIcon />}
               fullWidth
-              onClick={() => setScannerActive((prev) => !prev)}
+              onClick={() => {
+                if (scannerActive && scanPurpose === "booking") {
+                  setScannerActive(false);
+                } else {
+                  setScanPurpose("booking");
+                  setScannerActive(true);
+                }
+              }}
               sx={{ fontWeight: 600 }}
             >
-              {scannerActive ? "Scanner stoppen" : "Scanner starten"}
+              {scannerActive && scanPurpose === "booking" ? "Scanner stoppen" : "Scanner starten"}
             </Button>
             <Chip
               label={scannerActive ? "Aktiv" : "Inaktiv"}
@@ -1084,6 +1107,26 @@ const MyVehiclePage = () => {
               size="small"
             />
           </Box>
+        )}
+        {isSupported && (
+          <Button
+            variant={scannerActive && scanPurpose === "check" ? "outlined" : "text"}
+            color="info"
+            startIcon={<QrCodeScannerIcon />}
+            fullWidth
+            size="small"
+            onClick={() => {
+              if (scannerActive && scanPurpose === "check") {
+                setScannerActive(false);
+              } else {
+                setScanPurpose("check");
+                setScannerActive(true);
+              }
+            }}
+            sx={{ mb: 1, fontWeight: 600 }}
+          >
+            {scannerActive && scanPurpose === "check" ? "Bestand-Scanner stoppen" : "Bestand prüfen"}
+          </Button>
         )}
 
         <ToggleButtonGroup
@@ -1191,6 +1234,50 @@ const MyVehiclePage = () => {
             }}
           >
             Artikel aufnehmen
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Dialog: Bestand prüfen (read-only) */}
+      <Dialog
+        open={checkStockDialogOpen}
+        onClose={() => { setCheckStockDialogOpen(false); setCheckStockResult(null); }}
+        maxWidth="xs"
+        fullWidth
+      >
+        <DialogTitle>Bestand prüfen</DialogTitle>
+        <DialogContent>
+          {checkStockResult && (
+            <Box>
+              <Typography variant="h6" sx={{ mb: 0.5 }}>{checkStockResult.item.code}</Typography>
+              <Typography variant="body2" sx={{ mb: 0.5 }}>{checkStockResult.item.description}</Typography>
+              <Typography variant="caption" color="text.secondary" sx={{ display: "block", mb: 2 }}>
+                {checkStockResult.item.manufacturer} · {checkStockResult.item.productGroup}
+              </Typography>
+              <Box sx={{
+                p: 3,
+                borderRadius: 2,
+                textAlign: "center",
+                bgcolor: checkStockResult.quantity === 0 ? "error.light" : "success.light",
+                color: checkStockResult.quantity === 0 ? "error.contrastText" : "success.contrastText",
+              }}>
+                <Typography variant="h2" sx={{ fontWeight: "bold", lineHeight: 1 }}>
+                  {checkStockResult.quantity}
+                </Typography>
+                <Typography variant="body1" sx={{ mt: 0.5, opacity: 0.9 }}>
+                  {checkStockResult.quantity === 1 ? "Stück im Fahrzeug" : "Stück im Fahrzeug"}
+                </Typography>
+              </Box>
+            </Box>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button
+            fullWidth
+            variant="contained"
+            onClick={() => { setCheckStockDialogOpen(false); setCheckStockResult(null); }}
+          >
+            Schließen
           </Button>
         </DialogActions>
       </Dialog>
