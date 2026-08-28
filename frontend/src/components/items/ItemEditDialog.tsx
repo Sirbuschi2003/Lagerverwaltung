@@ -31,10 +31,12 @@ import {
   deleteItemImage,
   getItemImageUrl,
   fetchLastOrderForItem,
+  fetchVehicleStock,
   type CreateItemRequest,
   type ItemDto,
   type LocationDto,
   type LastOrderForItemDto,
+  type StockLevelDto,
 } from "../../utils/api";
 import useAuthStore from "../../store/useAuthStore";
 import useBarcodeScanner from "../../hooks/useBarcodeScanner";
@@ -161,6 +163,7 @@ interface ItemEditDialogProps {
 
 const ItemEditDialog: React.FC<ItemEditDialogProps> = ({ itemId, open, onClose, onSaved }) => {
   const user = useAuthStore((state: any) => state.user);
+  const isTechnician = user?.role === "TECHNICIAN";
 
   const [form, setForm] = useState<ItemFormState>(emptyForm());
   const [originalItem, setOriginalItem] = useState<ItemDto | null>(null);
@@ -175,6 +178,7 @@ const ItemEditDialog: React.FC<ItemEditDialogProps> = ({ itemId, open, onClose, 
   const [imageUploading, setImageUploading] = useState(false);
   const [imageKey, setImageKey] = useState(0); // bump to force img reload
   const [lastOrder, setLastOrder] = useState<LastOrderForItemDto | null | undefined>(undefined);
+  const [vehicleQuantity, setVehicleQuantity] = useState<number | null>(null);
 
   // Daten laden wenn Dialog öffnet
   useEffect(() => {
@@ -183,18 +187,26 @@ const ItemEditDialog: React.FC<ItemEditDialogProps> = ({ itemId, open, onClose, 
     setLoadingItem(true);
     setLastOrder(undefined);
 
+    const vehicleStockPromise =
+      isTechnician && user?.vehicleId
+        ? fetchVehicleStock(user.vehicleId).catch(() => [] as StockLevelDto[])
+        : Promise.resolve([] as StockLevelDto[]);
+
     Promise.all([
       fetchItemById(itemId),
       fetchSuppliers(),
       fetchLocations({ includeVehicles: false }),
       fetchLastOrderForItem(itemId).catch(() => null),
+      vehicleStockPromise,
     ])
-      .then(([item, supplierList, locationList, lastOrderData]) => {
+      .then(([item, supplierList, locationList, lastOrderData, vehicleStock]) => {
         setOriginalItem(item);
         setForm(itemToForm(item));
         setSuppliers(supplierList);
         setLocations(locationList);
         setLastOrder(lastOrderData);
+        const entry = (vehicleStock as StockLevelDto[]).find((s) => s.item?.id === itemId);
+        setVehicleQuantity(isTechnician ? (entry?.quantity ?? 0) : null);
       })
       .catch(() => setError("Artikel konnte nicht geladen werden."))
       .finally(() => setLoadingItem(false));
@@ -207,6 +219,7 @@ const ItemEditDialog: React.FC<ItemEditDialogProps> = ({ itemId, open, onClose, 
       setOriginalItem(null);
       setError(null);
       setLastOrder(undefined);
+      setVehicleQuantity(null);
     }
   }, [open]);
 
@@ -559,45 +572,47 @@ const ItemEditDialog: React.FC<ItemEditDialogProps> = ({ itemId, open, onClose, 
                     renderInput={(params: any) => <TextField {...params} label="Lieferant" />}
                   />
                 </Grid>
-                <Grid item xs={12} sm={6}>
-                  <Autocomplete
-                    options={locationOptions}
-                    value={locationOptions.find((l: any) => l.id === form.storageLocationId) ?? null}
-                    onChange={(_: any, value: any) =>
-                      setForm((prev) => ({ ...prev, storageLocationId: value?.id ?? "" }))
-                    }
-                    groupBy={(option: any) => getLocationGroup(option)}
-                    filterOptions={(options, state) => {
-                      const query = state.inputValue.trim().toLowerCase();
-                      if (!query) return options;
-                      return options.filter((o: any) => getLocationSearchText(o).includes(query));
-                    }}
-                    isOptionEqualToValue={(option: any, value: any) => option.id === value.id}
-                    autoHighlight
-                    getOptionLabel={(option: any) => getLocationLabel(option)}
-                    renderOption={(props, option: any) => (
-                      <li {...props}>
-                        <Box sx={{ py: 0.25 }}>
-                          <Typography variant="body2" sx={{ fontWeight: 600 }}>
-                            {getLocationPath(option) || option.code}
-                          </Typography>
-                          {option.name && (
-                            <Typography variant="caption" color="text.secondary">
-                              {option.name}
+                {!isTechnician && (
+                  <Grid item xs={12} sm={6}>
+                    <Autocomplete
+                      options={locationOptions}
+                      value={locationOptions.find((l: any) => l.id === form.storageLocationId) ?? null}
+                      onChange={(_: any, value: any) =>
+                        setForm((prev) => ({ ...prev, storageLocationId: value?.id ?? "" }))
+                      }
+                      groupBy={(option: any) => getLocationGroup(option)}
+                      filterOptions={(options, state) => {
+                        const query = state.inputValue.trim().toLowerCase();
+                        if (!query) return options;
+                        return options.filter((o: any) => getLocationSearchText(o).includes(query));
+                      }}
+                      isOptionEqualToValue={(option: any, value: any) => option.id === value.id}
+                      autoHighlight
+                      getOptionLabel={(option: any) => getLocationLabel(option)}
+                      renderOption={(props, option: any) => (
+                        <li {...props}>
+                          <Box sx={{ py: 0.25 }}>
+                            <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                              {getLocationPath(option) || option.code}
                             </Typography>
-                          )}
-                        </Box>
-                      </li>
-                    )}
-                    renderInput={(params: any) => (
-                      <TextField
-                        {...params}
-                        label="Lagerort"
-                        helperText="Suche nach Code, Name oder Pfad"
-                      />
-                    )}
-                  />
-                </Grid>
+                            {option.name && (
+                              <Typography variant="caption" color="text.secondary">
+                                {option.name}
+                              </Typography>
+                            )}
+                          </Box>
+                        </li>
+                      )}
+                      renderInput={(params: any) => (
+                        <TextField
+                          {...params}
+                          label="Lagerort"
+                          helperText="Suche nach Code, Name oder Pfad"
+                        />
+                      )}
+                    />
+                  </Grid>
+                )}
                 <Grid item xs={12} sm={6}>
                   <Box sx={{ display: "flex", gap: 1 }}>
                     <TextField
@@ -612,87 +627,102 @@ const ItemEditDialog: React.FC<ItemEditDialogProps> = ({ itemId, open, onClose, 
                     </Button>
                   </Box>
                 </Grid>
-                <Grid item xs={12} sm={4}>
-                  <TextField
-                    label="Preis (EUR)"
-                    name="price"
-                    type="number"
-                    value={form.price ?? ""}
-                    onChange={handleInputChange}
-                    fullWidth
-                    inputProps={{ min: 0, step: 0.01 }}
-                  />
-                </Grid>
-                <Grid item xs={12} sm={4}>
-                  <TextField
-                    label="Verpackungseinheit"
-                    name="packSize"
-                    type="number"
-                    value={form.packSize ?? ""}
-                    onChange={handleInputChange}
-                    fullWidth
-                    inputProps={{ min: 1 }}
-                  />
-                </Grid>
-                <Grid item xs={12} sm={4}>
-                  <TextField
-                    label="Bestellmenge"
-                    name="orderQuantity"
-                    type="number"
-                    value={form.orderQuantity ?? ""}
-                    onChange={handleInputChange}
-                    fullWidth
-                    inputProps={{ min: 0 }}
-                    helperText="0 = automatisch (Soll − Aktuell)"
-                  />
-                </Grid>
-                <Grid item xs={12} sm={6}>
-                  <TextField
-                    label="Sollbestand"
-                    name="targetStock"
-                    type="number"
-                    value={form.targetStock ?? 0}
-                    onChange={handleInputChange}
-                    fullWidth
-                    inputProps={{ min: 0 }}
-                    helperText="Zielbestand nach Auffüllung"
-                  />
-                </Grid>
-                <Grid item xs={12} sm={6}>
-                  <TextField
-                    label="Meldebestand"
-                    name="reorderPoint"
-                    type="number"
-                    value={form.reorderPoint ?? ""}
-                    onChange={handleInputChange}
-                    fullWidth
-                    inputProps={{ min: 0 }}
-                    helperText="Bestellung auslösen wenn Bestand ≤ diesem Wert"
-                  />
-                </Grid>
-                <Grid item xs={12} sm={6}>
-                  <TextField
-                    label="Mindestbestand"
-                    name="minimumStock"
-                    type="number"
-                    value={form.minimumStock ?? ""}
-                    onChange={handleInputChange}
-                    fullWidth
-                    inputProps={{ min: 0 }}
-                    helperText="Absolute Untergrenze / Sicherheitspuffer"
-                  />
-                </Grid>
-                <Grid item xs={12} sm={6}>
-                  <TextField
-                    label="Ist-Bestand"
-                    name="currentQuantity"
-                    type="number"
-                    value={form.currentQuantity ?? ""}
-                    onChange={handleInputChange}
-                    fullWidth
-                    inputProps={{ min: 0 }}
-                  />
-                </Grid>
+                {!isTechnician && (
+                  <>
+                    <Grid item xs={12} sm={4}>
+                      <TextField
+                        label="Preis (EUR)"
+                        name="price"
+                        type="number"
+                        value={form.price ?? ""}
+                        onChange={handleInputChange}
+                        fullWidth
+                        inputProps={{ min: 0, step: 0.01 }}
+                      />
+                    </Grid>
+                    <Grid item xs={12} sm={4}>
+                      <TextField
+                        label="Verpackungseinheit"
+                        name="packSize"
+                        type="number"
+                        value={form.packSize ?? ""}
+                        onChange={handleInputChange}
+                        fullWidth
+                        inputProps={{ min: 1 }}
+                      />
+                    </Grid>
+                    <Grid item xs={12} sm={4}>
+                      <TextField
+                        label="Bestellmenge"
+                        name="orderQuantity"
+                        type="number"
+                        value={form.orderQuantity ?? ""}
+                        onChange={handleInputChange}
+                        fullWidth
+                        inputProps={{ min: 0 }}
+                        helperText="0 = automatisch (Soll − Aktuell)"
+                      />
+                    </Grid>
+                    <Grid item xs={12} sm={6}>
+                      <TextField
+                        label="Sollbestand"
+                        name="targetStock"
+                        type="number"
+                        value={form.targetStock ?? 0}
+                        onChange={handleInputChange}
+                        fullWidth
+                        inputProps={{ min: 0 }}
+                        helperText="Zielbestand nach Auffüllung"
+                      />
+                    </Grid>
+                    <Grid item xs={12} sm={6}>
+                      <TextField
+                        label="Meldebestand"
+                        name="reorderPoint"
+                        type="number"
+                        value={form.reorderPoint ?? ""}
+                        onChange={handleInputChange}
+                        fullWidth
+                        inputProps={{ min: 0 }}
+                        helperText="Bestellung auslösen wenn Bestand ≤ diesem Wert"
+                      />
+                    </Grid>
+                    <Grid item xs={12} sm={6}>
+                      <TextField
+                        label="Mindestbestand"
+                        name="minimumStock"
+                        type="number"
+                        value={form.minimumStock ?? ""}
+                        onChange={handleInputChange}
+                        fullWidth
+                        inputProps={{ min: 0 }}
+                        helperText="Absolute Untergrenze / Sicherheitspuffer"
+                      />
+                    </Grid>
+                    <Grid item xs={12} sm={6}>
+                      <TextField
+                        label="Ist-Bestand"
+                        name="currentQuantity"
+                        type="number"
+                        value={form.currentQuantity ?? ""}
+                        onChange={handleInputChange}
+                        fullWidth
+                        inputProps={{ min: 0 }}
+                      />
+                    </Grid>
+                  </>
+                )}
+                {isTechnician && (
+                  <Grid item xs={12} sm={6}>
+                    <TextField
+                      label="Im Fahrzeug"
+                      value={vehicleQuantity !== null ? vehicleQuantity : "–"}
+                      fullWidth
+                      InputProps={{ readOnly: true }}
+                      helperText="Ihr aktueller Fahrzeugbestand"
+                    />
+                  </Grid>
+                )}
                 <Grid item xs={12}>
                   <Box sx={{ display: "flex", gap: 1, alignItems: "flex-start" }}>
                     <TextField
