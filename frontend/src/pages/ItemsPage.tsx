@@ -3394,6 +3394,7 @@ TB-FC330,Toner Schwarz,Toshiba,Toner,5,89.90,Regal 3 / Fach 1`}
         open={techEditItemId !== null}
         onClose={() => setTechEditItemId(null)}
         onSaved={() => loadItems({ force: true })}
+        fallbackItem={techEditItemId ? items.find((it: any) => it.id === techEditItemId) : undefined}
       />
     </Box>
   );

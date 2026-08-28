@@ -157,11 +157,13 @@ interface ItemEditDialogProps {
   open: boolean;
   onClose: () => void;
   onSaved?: () => void;
+  /** Cached item data used as fallback when fetchItemById fails (e.g. offline mode) */
+  fallbackItem?: ItemDto;
 }
 
 // ─── Komponente ───────────────────────────────────────────────────────────────
 
-const ItemEditDialog: React.FC<ItemEditDialogProps> = ({ itemId, open, onClose, onSaved }) => {
+const ItemEditDialog: React.FC<ItemEditDialogProps> = ({ itemId, open, onClose, onSaved, fallbackItem }) => {
   const user = useAuthStore((state: any) => state.user);
   const isTechnician = user?.role === "TECHNICIAN";
 
@@ -193,13 +195,14 @@ const ItemEditDialog: React.FC<ItemEditDialogProps> = ({ itemId, open, onClose, 
         : Promise.resolve([] as StockLevelDto[]);
 
     Promise.all([
-      fetchItemById(itemId),
+      fetchItemById(itemId).catch(() => fallbackItem ?? null),
       isTechnician ? Promise.resolve([] as any[]) : fetchSuppliers(),
       isTechnician ? Promise.resolve([] as any[]) : fetchLocations({ includeVehicles: false }),
       fetchLastOrderForItem(itemId).catch(() => null),
       vehicleStockPromise,
     ])
       .then(([item, supplierList, locationList, lastOrderData, vehicleStock]) => {
+        if (!item) { setError("Artikel konnte nicht geladen werden."); return; }
         setOriginalItem(item);
         setForm(itemToForm(item));
         setSuppliers(supplierList);
