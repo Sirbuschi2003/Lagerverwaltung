@@ -194,8 +194,8 @@ const ItemEditDialog: React.FC<ItemEditDialogProps> = ({ itemId, open, onClose, 
 
     Promise.all([
       fetchItemById(itemId),
-      fetchSuppliers(),
-      fetchLocations({ includeVehicles: false }),
+      isTechnician ? Promise.resolve([] as any[]) : fetchSuppliers(),
+      isTechnician ? Promise.resolve([] as any[]) : fetchLocations({ includeVehicles: false }),
       fetchLastOrderForItem(itemId).catch(() => null),
       vehicleStockPromise,
     ])
