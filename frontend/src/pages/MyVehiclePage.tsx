@@ -38,6 +38,7 @@ import SearchIcon from "@mui/icons-material/Search";
 import useAuthStore from "../store/useAuthStore";
 import useItemsStore from "../store/useItemsStore";
 import useRestockStore from "../store/useRestockStore";
+import useNotificationStore from "../store/useNotificationStore";
 import { useNetworkStatus } from "../hooks/useNetworkStatus";
 import { useOfflineStorage } from "../hooks/useOfflineStorage";
 import useOfflineQueue from "../store/useOfflineQueue";
@@ -243,6 +244,7 @@ const MyVehiclePage = () => {
   // vehicleId ist bereits oben deklariert
   const { items, loadItems, forceLoadItems, addItem } = useItemsStore();
   const loadRestock = useRestockStore((state: any) => state.loadForVehicle);
+  const markReadByItemId = useNotificationStore((state) => state.markReadByItemId);
   // Kein Live-Update für Techniker-Ansicht! Nur einmalig laden und nach Aktionen neu laden.
   const restockRequests: RestockRequestDto[] = useRestockStore((state: any) => state.myRequests);
   const activeRestockRequests = useMemo(
@@ -601,6 +603,9 @@ const MyVehiclePage = () => {
           occurredAt: new Date().toISOString(),
           source: "device",
         });
+        if (type === "CHECKIN") {
+          markReadByItemId(itemId);
+        }
         await loadStock();
         await loadRestock(vehicleId);
         setError(null);

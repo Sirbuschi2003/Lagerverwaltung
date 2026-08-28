@@ -172,6 +172,7 @@ const RestockNotifier: React.FC = () => {
             title: "Artikel bereitgestellt",
             message: msg,
             link: "/my-vehicle",
+            itemId: req.item.id,
           });
           // Benachrichtigung immer über SW mit tag, damit zusammengefasst wird
           await triggerNotification(msg, req.status === "APPROVED" ? "restock-ready" : undefined);

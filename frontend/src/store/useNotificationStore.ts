@@ -10,6 +10,7 @@ export interface AppNotification {
   timestamp: string; // ISO
   read: boolean;
   link?: string;
+  itemId?: string;
 }
 
 interface NotificationStore {
@@ -17,6 +18,7 @@ interface NotificationStore {
   unreadCount: number;
   addNotification: (n: Omit<AppNotification, "id" | "read" | "timestamp">) => void;
   markRead: (id: string) => void;
+  markReadByItemId: (itemId: string) => void;
   markAllRead: () => void;
   clearAll: () => void;
 }
@@ -62,6 +64,14 @@ const useNotificationStore = create<NotificationStore>((set, get) => ({
 
   markRead: (id) => {
     const updated = get().notifications.map((n) => (n.id === id ? { ...n, read: true } : n));
+    saveToStorage(updated);
+    set({ notifications: updated, unreadCount: updated.filter((x) => !x.read).length });
+  },
+
+  markReadByItemId: (itemId) => {
+    const updated = get().notifications.map((n) =>
+      n.itemId === itemId && !n.read ? { ...n, read: true } : n
+    );
     saveToStorage(updated);
     set({ notifications: updated, unreadCount: updated.filter((x) => !x.read).length });
   },
