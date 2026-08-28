@@ -619,22 +619,20 @@ const ItemEditDialog: React.FC<ItemEditDialogProps> = ({ itemId, open, onClose, 
                     />
                   </Grid>
                 )}
-                {!isTechnician && (
-                  <Grid item xs={12} sm={6}>
-                    <Box sx={{ display: "flex", gap: 1 }}>
-                      <TextField
-                        label="QR-Code"
-                        name="qrCodeValue"
-                        value={form.qrCodeValue ?? ""}
-                        onChange={handleInputChange}
-                        fullWidth
-                      />
-                      <Button variant="outlined" type="button" onClick={() => setScanOpen(true)} sx={{ whiteSpace: "nowrap" }}>
-                        QR scannen
-                      </Button>
-                    </Box>
-                  </Grid>
-                )}
+                <Grid item xs={12} sm={6}>
+                  <Box sx={{ display: "flex", gap: 1 }}>
+                    <TextField
+                      label="QR-Code"
+                      name="qrCodeValue"
+                      value={form.qrCodeValue ?? ""}
+                      onChange={handleInputChange}
+                      fullWidth
+                    />
+                    <Button variant="outlined" type="button" onClick={() => setScanOpen(true)} sx={{ whiteSpace: "nowrap" }}>
+                      QR scannen
+                    </Button>
+                  </Box>
+                </Grid>
                 {!isTechnician && (
                   <>
                     <Grid item xs={12} sm={4}>
@@ -742,31 +740,29 @@ const ItemEditDialog: React.FC<ItemEditDialogProps> = ({ itemId, open, onClose, 
                     </Grid>
                   </>
                 )}
-                {!isTechnician && (
-                  <Grid item xs={12}>
-                    <Box sx={{ display: "flex", gap: 1, alignItems: "flex-start" }}>
-                      <TextField
-                        label="Weitere Codes"
-                        name="alternateCodesText"
-                        value={form.alternateCodesText}
-                        onChange={handleInputChange}
-                        fullWidth
-                        multiline
-                        minRows={2}
-                        helperText="Optional: getrennt durch Komma oder Leerzeichen"
-                      />
-                      <Tooltip title="Code scannen und hinzufügen">
-                        <IconButton
-                          color="primary"
-                          onClick={() => setAltCodeScanOpen(true)}
-                          sx={{ mt: 1, border: "1px solid", borderColor: "primary.main", borderRadius: 1 }}
-                        >
-                          <QrCodeScannerIcon />
-                        </IconButton>
-                      </Tooltip>
-                    </Box>
-                  </Grid>
-                )}
+                <Grid item xs={12}>
+                  <Box sx={{ display: "flex", gap: 1, alignItems: "flex-start" }}>
+                    <TextField
+                      label="Weitere Codes"
+                      name="alternateCodesText"
+                      value={form.alternateCodesText}
+                      onChange={handleInputChange}
+                      fullWidth
+                      multiline
+                      minRows={2}
+                      helperText="Optional: getrennt durch Komma oder Leerzeichen"
+                    />
+                    <Tooltip title="Code scannen und hinzufügen">
+                      <IconButton
+                        color="primary"
+                        onClick={() => setAltCodeScanOpen(true)}
+                        sx={{ mt: 1, border: "1px solid", borderColor: "primary.main", borderRadius: 1 }}
+                      >
+                        <QrCodeScannerIcon />
+                      </IconButton>
+                    </Tooltip>
+                  </Box>
+                </Grid>
 
                 {error && (
                   <Grid item xs={12}>
@@ -809,13 +805,11 @@ const ItemEditDialog: React.FC<ItemEditDialogProps> = ({ itemId, open, onClose, 
           </DialogContent>
           <DialogActions>
             <Button onClick={onClose} disabled={isSubmitting}>
-              {isTechnician ? "Schließen" : "Abbrechen"}
+              Abbrechen
             </Button>
-            {!isTechnician && (
-              <Button type="submit" variant="contained" disabled={isSubmitting || loadingItem}>
-                {isSubmitting ? "Speichern..." : "Speichern"}
-              </Button>
-            )}
+            <Button type="submit" variant="contained" disabled={isSubmitting || loadingItem}>
+              {isSubmitting ? "Speichern..." : "Speichern"}
+            </Button>
           </DialogActions>
         </form>
       </Dialog>
