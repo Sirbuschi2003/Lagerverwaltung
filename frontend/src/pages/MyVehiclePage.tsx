@@ -86,17 +86,15 @@ const MyVehiclePage = () => {
   // Barcode-Scanner für Fahrzeugseite
   const [scannerActive, setScannerActive] = useState(false); // Scanner standardmäßig AUS
   // Buchungsrichtung beim Scannen: standardmäßig Ausbuchen (Techniker nimmt Teile vom Fahrzeug)
-  const [bookingMode, setBookingMode] = useState<"CHECKIN" | "CHECKOUT">("CHECKOUT");
+  const [bookingMode, setBookingMode] = useState<"CHECKIN" | "CHECKOUT" | "CHECK">("CHECKOUT");
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const [scanActionDialogOpen, setScanActionDialogOpen] = useState(false);
   const [scannedItem, setScannedItem] = useState<any>(null);
   const [scanFeedback, setScanFeedback] = useState<ScanFeedback | null>(null);
   const [scanQuickActionsActive, setScanQuickActionsActive] = useState(false);
   const [scanFeedbackSource, setScanFeedbackSource] = useState<"scan" | "manual" | null>(null);
-  const [scanPurpose, setScanPurpose] = useState<"booking" | "check">("booking");
   const [checkStockDialogOpen, setCheckStockDialogOpen] = useState(false);
   const [checkStockResult, setCheckStockResult] = useState<{ item: ItemDto; quantity: number } | null>(null);
-  const [checkManualCode, setCheckManualCode] = useState<string>("");
   const [scanTargetSaving, setScanTargetSaving] = useState<string | null>(null);
   const [notFoundDialogOpen, setNotFoundDialogOpen] = useState(false); // Dialog für "Artikel nicht gefunden"
   const [notFoundCode, setNotFoundCode] = useState<string>(""); // Code des nicht gefundenen Artikels
@@ -127,19 +125,6 @@ const MyVehiclePage = () => {
       if (stockItem) {
         item = stockItem;
       }
-    }
-
-    if (scanPurpose === "check") {
-      setScannerActive(false);
-      if (item) {
-        const stockEntry = stock.find((s) => s.item.id === item!.id);
-        setCheckStockResult({ item, quantity: stockEntry?.quantity ?? 0 });
-        setCheckStockDialogOpen(true);
-      } else {
-        setNotFoundCode(code);
-        setNotFoundDialogOpen(true);
-      }
-      return;
     }
 
     if (item) {
@@ -763,7 +748,16 @@ const MyVehiclePage = () => {
 
   // Scan-Sofortbuchung: bucht 1 Stück in der aktuell gewählten Richtung (bookingMode)
   // und blendet danach eine kurze Bestätigung ein, statt einen Dialog zu öffnen.
+  // Im CHECK-Modus: kein Buchen, nur Bestand anzeigen.
   const handleAutoBookScan = async (item: ItemDto) => {
+    if (bookingMode === "CHECK") {
+      setScannerActive(false);
+      const stockEntry = stock.find((s) => s.item.id === item.id);
+      setCheckStockResult({ item, quantity: stockEntry?.quantity ?? 0 });
+      setCheckStockDialogOpen(true);
+      return;
+    }
+
     setScannedItem(item);
     setLastScannedItemId(item.id);
     setScanFeedbackSource("scan");
@@ -777,10 +771,10 @@ const MyVehiclePage = () => {
       quantity: existingEntry?.quantity ?? 0,
       targetQuantity: existingEntry?.targetQuantity ?? item.targetStock ?? 0,
       existsOnVehicle: Boolean(existingEntry),
-      bookedType: bookingMode,
+      bookedType: bookingMode as "CHECKIN" | "CHECKOUT",
     });
 
-    await handleMovement(bookingMode, item.id, 1);
+    await handleMovement(bookingMode as "CHECKIN" | "CHECKOUT", item.id, 1);
   };
 
   // Spezielle Funktion für bereitgestellte Mengen einbuchen
@@ -1086,21 +1080,14 @@ const MyVehiclePage = () => {
         {isSupported && (
           <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 1 }}>
             <Button
-              variant={scannerActive && scanPurpose === "booking" ? "outlined" : "contained"}
-              color={scannerActive && scanPurpose === "booking" ? "secondary" : "primary"}
+              variant={scannerActive ? "outlined" : "contained"}
+              color={scannerActive ? "secondary" : "primary"}
               startIcon={<QrCodeScannerIcon />}
               fullWidth
-              onClick={() => {
-                if (scannerActive && scanPurpose === "booking") {
-                  setScannerActive(false);
-                } else {
-                  setScanPurpose("booking");
-                  setScannerActive(true);
-                }
-              }}
+              onClick={() => setScannerActive((prev) => !prev)}
               sx={{ fontWeight: 600 }}
             >
-              {scannerActive && scanPurpose === "booking" ? "Scanner stoppen" : "Scanner starten"}
+              {scannerActive ? "Scanner stoppen" : "Scanner starten"}
             </Button>
             <Chip
               label={scannerActive ? "Aktiv" : "Inaktiv"}
@@ -1109,34 +1096,12 @@ const MyVehiclePage = () => {
             />
           </Box>
         )}
-        <Button
-          variant={scannerActive && scanPurpose === "check" ? "outlined" : "text"}
-          color="info"
-          startIcon={<QrCodeScannerIcon />}
-          fullWidth
-          size="small"
-          onClick={() => {
-            if (scannerActive && scanPurpose === "check") {
-              setScannerActive(false);
-            } else if (isSupported) {
-              setScanPurpose("check");
-              setScannerActive(true);
-            } else {
-              setCheckStockDialogOpen(true);
-              setCheckStockResult(null);
-            }
-          }}
-          sx={{ mb: 1, fontWeight: 600 }}
-        >
-          {scannerActive && scanPurpose === "check" ? "Bestand-Scanner stoppen" : "Bestand prüfen"}
-        </Button>
-
         <ToggleButtonGroup
           value={bookingMode}
           exclusive
           fullWidth
           size="small"
-          onChange={(_event, value: "CHECKIN" | "CHECKOUT" | null) => {
+          onChange={(_event, value: "CHECKIN" | "CHECKOUT" | "CHECK" | null) => {
             if (value) {
               setBookingMode(value);
             }
@@ -1147,6 +1112,9 @@ const MyVehiclePage = () => {
           </ToggleButton>
           <ToggleButton value="CHECKIN" color="success">
             Einbuchen
+          </ToggleButton>
+          <ToggleButton value="CHECK" color="info">
+            Bestand prüfen
           </ToggleButton>
         </ToggleButtonGroup>
       </Paper>
@@ -1243,57 +1211,13 @@ const MyVehiclePage = () => {
       {/* Dialog: Bestand prüfen (read-only) */}
       <Dialog
         open={checkStockDialogOpen}
-        onClose={() => { setCheckStockDialogOpen(false); setCheckStockResult(null); setCheckManualCode(""); }}
+        onClose={() => { setCheckStockDialogOpen(false); setCheckStockResult(null); }}
         maxWidth="xs"
         fullWidth
       >
         <DialogTitle>Bestand prüfen</DialogTitle>
         <DialogContent>
-          {!checkStockResult ? (
-            <Box>
-              <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-                {isSupported ? "Scannen Sie einen Artikel oder geben Sie den Code manuell ein." : "Geben Sie den Artikelcode ein."}
-              </Typography>
-              <TextField
-                label="Artikelcode"
-                value={checkManualCode}
-                onChange={(e) => setCheckManualCode(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") {
-                    const item = findItemByCode(items, checkManualCode.trim()) ??
-                      (stock.length > 0 ? findItemByCode(stock.map((s) => s.item), checkManualCode.trim()) : null);
-                    if (item) {
-                      const stockEntry = stock.find((s) => s.item.id === item.id);
-                      setCheckStockResult({ item, quantity: stockEntry?.quantity ?? 0 });
-                    } else {
-                      setCheckManualCode("");
-                    }
-                  }
-                }}
-                fullWidth
-                autoFocus
-                inputProps={{ inputMode: "text" }}
-              />
-              <Button
-                fullWidth
-                variant="contained"
-                sx={{ mt: 2 }}
-                disabled={!checkManualCode.trim()}
-                onClick={() => {
-                  const item = findItemByCode(items, checkManualCode.trim()) ??
-                    (stock.length > 0 ? findItemByCode(stock.map((s) => s.item), checkManualCode.trim()) : null);
-                  if (item) {
-                    const stockEntry = stock.find((s) => s.item.id === item.id);
-                    setCheckStockResult({ item, quantity: stockEntry?.quantity ?? 0 });
-                  } else {
-                    setCheckManualCode("");
-                  }
-                }}
-              >
-                Bestand anzeigen
-              </Button>
-            </Box>
-          ) : (
+          {checkStockResult && (
             <Box>
               <Typography variant="h6" sx={{ mb: 0.5 }}>{checkStockResult.item.code}</Typography>
               <Typography variant="body2" sx={{ mb: 0.5 }}>{checkStockResult.item.description}</Typography>
@@ -1314,14 +1238,6 @@ const MyVehiclePage = () => {
                   Stück im Fahrzeug
                 </Typography>
               </Box>
-              <Button
-                fullWidth
-                variant="text"
-                sx={{ mt: 2 }}
-                onClick={() => { setCheckStockResult(null); setCheckManualCode(""); }}
-              >
-                Anderen Artikel suchen
-              </Button>
             </Box>
           )}
         </DialogContent>
@@ -1329,7 +1245,7 @@ const MyVehiclePage = () => {
           <Button
             fullWidth
             variant="contained"
-            onClick={() => { setCheckStockDialogOpen(false); setCheckStockResult(null); setCheckManualCode(""); }}
+            onClick={() => { setCheckStockDialogOpen(false); setCheckStockResult(null); }}
           >
             Schließen
           </Button>
