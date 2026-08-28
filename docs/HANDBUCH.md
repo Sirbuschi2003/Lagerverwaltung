@@ -1,6 +1,6 @@
 # KFZ Lagerverwaltung – Benutzerhandbuch
 
-**Version 4.1 · Stand: August 2026**
+**Version 4.2 · Stand: August 2026**
 
 ---
 
@@ -187,7 +187,7 @@ Die KFZ Lagerverwaltung ist eine webbasierte Plattform zur Verwaltung von Ersatz
 | Super-Administrator | SUPER_ADMIN | Systemweit alle Daten, Wartung, NL-Verwaltung |
 | Manager | MANAGER | Niederlassungsleitung, Bestellungen, Berichte |
 | Lagermitarbeiter | WAREHOUSE | Wareneingang, Schnellbuchung, Bestellvorschläge |
-| Techniker | TECHNICIAN | Teile aus Fahrzeug entnehmen/einbuchen |
+| Techniker | TECHNICIAN | Teile aus Fahrzeug entnehmen/einbuchen, eigene Codes pflegen |
 | Nur-Lesen | VIEWER | Berichte und Bestände einsehen |
 
 Zusätzlich zu Rollen können einzelne Berechtigungen pro Benutzer aktiviert oder entzogen werden (unter **Zugriffssteuerung → Benutzer-Overrides**).
@@ -246,10 +246,18 @@ Toggle „Workflow" direkt im Formular:
 
 ## 4. Teile scannen (Fahrzeug-Scanner)
 
-Für Techniker, die Teile direkt vom Fahrzeug buchen. Aufruf unter **Teile scannen**.
+Für Techniker, die Teile direkt vom Fahrzeug buchen. Aufruf unter **Mein Fahrzeug**.
 
 - QR-/Barcode per Kamera scannen oder Code manuell eingeben
-- Artikel aus der Fahrzeug-Zuordnung entnehmen (CHECK_OUT) oder zurücklegen (CHECK_IN)
+- Modus über den **Umschalter** im oberen Bereich wählen:
+
+| Modus | Funktion |
+|-------|----------|
+| **Ausbuchen** | Artikel aus dem Fahrzeug entnehmen (Bestand sinkt) |
+| **Einbuchen** | Artikel ins Fahrzeug einlegen (Bestand steigt) |
+| **Bestand prüfen** | Nur Anzeige – kein Buchen. Zeigt aktuellen Fahrzeugbestand für den gescannten Artikel |
+
+- Scanner starten → Modus „Bestand prüfen" → Code scannen → Bestand wird angezeigt (grün = vorhanden, rot = 0)
 - Nicht gefundene Artikel können direkt angelegt werden
 - Offline-fähig: Buchungen werden bei fehlender Verbindung lokal gespeichert
 
@@ -282,11 +290,16 @@ Aufruf unter **Artikel**.
 
 ### 5.3 Artikeldetails
 
-Klick auf einen Artikel öffnet den Detaildialog mit:
-- Vollständigen Stammdaten (editierbar)
-- Aktuellem Bestand
-- Bewegungshistorie des Artikels
-- Letzter Bestellung (Datum, Lieferant, Menge, Bestellnummer)
+Klick auf einen Artikel öffnet den Detaildialog. Der Umfang hängt von der Rolle ab:
+
+**Manager / Lagermitarbeiter:** Alle Felder editierbar (Stammdaten, Lagerort, Preise, Bestände).
+
+**Techniker:** Der Dialog ist weitgehend schreibgeschützt.
+- Stammdaten (Bezeichnung, Hersteller, etc.) sind nur zur Ansicht – grau, nicht änderbar
+- **QR-Code** und **Weitere Codes** können Techniker bearbeiten und speichern (eigene Fahrzeugcodes)
+- **Im Fahrzeug:** zeigt den eigenen aktuellen Fahrzeugbestand für diesen Artikel
+- **Im Teilelager:** zeigt den Lagerbestand (nur Ansicht)
+- Kein Zugriff auf Preise, Lagerort, Soll-/Melde-/Mindestbestand
 
 ---
 
@@ -299,6 +312,8 @@ Zeigt alle Fahrzeuge mit aktuellem Bestand. Klick auf ein Fahrzeug öffnet die D
 ### 6.2 Mein Fahrzeug
 
 Techniker sehen hier ihren persönlichen Fahrzeugbestand. Fehlbestände können direkt als Nachbestellung gemeldet werden.
+
+**Bestand prüfen (Scan):** Der Modus-Umschalter oben bietet neben Ein-/Ausbuchen auch „Bestand prüfen". Scanner starten → Artikel scannen → Fahrzeugbestand wird sofort angezeigt, ohne zu buchen. Nützlich um schnell nachzusehen wie viele Stück eines Teils noch im Wagen sind.
 
 ### 6.3 Bestand buchen
 

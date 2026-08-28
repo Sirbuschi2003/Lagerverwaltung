@@ -5,6 +5,22 @@ Format orientiert sich an [Keep a Changelog](https://keepachangelog.com/de/1.0.0
 
 ---
 
+## [4.2.0] – 2026-08-28
+
+### Neu
+- **Techniker-Artikelansicht (read-only):** Öffnet ein Techniker den Artikelstamm, sind alle Lagerfelder (Lagerort, Preise, Soll-/Melde-/Mindestbestand, Ist-Bestand) ausgeblendet. Angezeigt wird stattdessen:
+  - **Im Fahrzeug** – eigener Fahrzeugbestand für diesen Artikel (read-only)
+  - **Im Teilelager** – aktueller Lagerbestand (read-only, nur Ansicht)
+  - **QR-Code und Weitere Codes** – editierbar (Techniker können fahrzeugspezifische Codes hinterlegen und speichern)
+  - Alle sonstigen Felder (Bezeichnung, Hersteller etc.) sind schreibgeschützt; kein versehentliches Überschreiben von Stammdaten.
+- **Bestand prüfen (Fahrzeug-Scanner):** Neuer Scan-Modus „Bestand prüfen" im Modus-Umschalter auf der Seite „Mein Fahrzeug". Scanner → Artikel scannen → Fahrzeugbestand wird sofort als Dialog angezeigt (grün ≥ 1, rot = 0), ohne Buchung auszulösen.
+- **Farbschema-Persistenz:** Neue Farbschemata (Atlantik, Dämmerung, Bernstein, Himmelblau) werden nach Seiten-Reload korrekt wiederhergestellt (dynamische Preset-Validierung statt hartcodierter Liste).
+
+### Behoben
+- **Bestandsanzeige Bestellvorschläge (Artikel 6B000001169):** 412 Waisendatensätze in `stock_levels` (locationId = NULL, entstanden durch Migration vom 15.06.2026) setzten den berechneten Ist-Bestand künstlich auf 1. Bereinigt per direktem DB-UPDATE; Bestellmenge wird jetzt korrekt berechnet.
+
+---
+
 ## [4.1.1] – 2026-08-21
 
 ### Behoben
