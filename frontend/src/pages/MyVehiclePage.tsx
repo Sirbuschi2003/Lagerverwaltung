@@ -96,6 +96,7 @@ const MyVehiclePage = () => {
   const [scanPurpose, setScanPurpose] = useState<"booking" | "check">("booking");
   const [checkStockDialogOpen, setCheckStockDialogOpen] = useState(false);
   const [checkStockResult, setCheckStockResult] = useState<{ item: ItemDto; quantity: number } | null>(null);
+  const [checkManualCode, setCheckManualCode] = useState<string>("");
   const [scanTargetSaving, setScanTargetSaving] = useState<string | null>(null);
   const [notFoundDialogOpen, setNotFoundDialogOpen] = useState(false); // Dialog für "Artikel nicht gefunden"
   const [notFoundCode, setNotFoundCode] = useState<string>(""); // Code des nicht gefundenen Artikels
@@ -1108,26 +1109,27 @@ const MyVehiclePage = () => {
             />
           </Box>
         )}
-        {isSupported && (
-          <Button
-            variant={scannerActive && scanPurpose === "check" ? "outlined" : "text"}
-            color="info"
-            startIcon={<QrCodeScannerIcon />}
-            fullWidth
-            size="small"
-            onClick={() => {
-              if (scannerActive && scanPurpose === "check") {
-                setScannerActive(false);
-              } else {
-                setScanPurpose("check");
-                setScannerActive(true);
-              }
-            }}
-            sx={{ mb: 1, fontWeight: 600 }}
-          >
-            {scannerActive && scanPurpose === "check" ? "Bestand-Scanner stoppen" : "Bestand prüfen"}
-          </Button>
-        )}
+        <Button
+          variant={scannerActive && scanPurpose === "check" ? "outlined" : "text"}
+          color="info"
+          startIcon={<QrCodeScannerIcon />}
+          fullWidth
+          size="small"
+          onClick={() => {
+            if (scannerActive && scanPurpose === "check") {
+              setScannerActive(false);
+            } else if (isSupported) {
+              setScanPurpose("check");
+              setScannerActive(true);
+            } else {
+              setCheckStockDialogOpen(true);
+              setCheckStockResult(null);
+            }
+          }}
+          sx={{ mb: 1, fontWeight: 600 }}
+        >
+          {scannerActive && scanPurpose === "check" ? "Bestand-Scanner stoppen" : "Bestand prüfen"}
+        </Button>
 
         <ToggleButtonGroup
           value={bookingMode}
@@ -1241,13 +1243,57 @@ const MyVehiclePage = () => {
       {/* Dialog: Bestand prüfen (read-only) */}
       <Dialog
         open={checkStockDialogOpen}
-        onClose={() => { setCheckStockDialogOpen(false); setCheckStockResult(null); }}
+        onClose={() => { setCheckStockDialogOpen(false); setCheckStockResult(null); setCheckManualCode(""); }}
         maxWidth="xs"
         fullWidth
       >
         <DialogTitle>Bestand prüfen</DialogTitle>
         <DialogContent>
-          {checkStockResult && (
+          {!checkStockResult ? (
+            <Box>
+              <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                {isSupported ? "Scannen Sie einen Artikel oder geben Sie den Code manuell ein." : "Geben Sie den Artikelcode ein."}
+              </Typography>
+              <TextField
+                label="Artikelcode"
+                value={checkManualCode}
+                onChange={(e) => setCheckManualCode(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    const item = findItemByCode(items, checkManualCode.trim()) ??
+                      (stock.length > 0 ? findItemByCode(stock.map((s) => s.item), checkManualCode.trim()) : null);
+                    if (item) {
+                      const stockEntry = stock.find((s) => s.item.id === item.id);
+                      setCheckStockResult({ item, quantity: stockEntry?.quantity ?? 0 });
+                    } else {
+                      setCheckManualCode("");
+                    }
+                  }
+                }}
+                fullWidth
+                autoFocus
+                inputProps={{ inputMode: "text" }}
+              />
+              <Button
+                fullWidth
+                variant="contained"
+                sx={{ mt: 2 }}
+                disabled={!checkManualCode.trim()}
+                onClick={() => {
+                  const item = findItemByCode(items, checkManualCode.trim()) ??
+                    (stock.length > 0 ? findItemByCode(stock.map((s) => s.item), checkManualCode.trim()) : null);
+                  if (item) {
+                    const stockEntry = stock.find((s) => s.item.id === item.id);
+                    setCheckStockResult({ item, quantity: stockEntry?.quantity ?? 0 });
+                  } else {
+                    setCheckManualCode("");
+                  }
+                }}
+              >
+                Bestand anzeigen
+              </Button>
+            </Box>
+          ) : (
             <Box>
               <Typography variant="h6" sx={{ mb: 0.5 }}>{checkStockResult.item.code}</Typography>
               <Typography variant="body2" sx={{ mb: 0.5 }}>{checkStockResult.item.description}</Typography>
@@ -1265,9 +1311,17 @@ const MyVehiclePage = () => {
                   {checkStockResult.quantity}
                 </Typography>
                 <Typography variant="body1" sx={{ mt: 0.5, opacity: 0.9 }}>
-                  {checkStockResult.quantity === 1 ? "Stück im Fahrzeug" : "Stück im Fahrzeug"}
+                  Stück im Fahrzeug
                 </Typography>
               </Box>
+              <Button
+                fullWidth
+                variant="text"
+                sx={{ mt: 2 }}
+                onClick={() => { setCheckStockResult(null); setCheckManualCode(""); }}
+              >
+                Anderen Artikel suchen
+              </Button>
             </Box>
           )}
         </DialogContent>
@@ -1275,7 +1329,7 @@ const MyVehiclePage = () => {
           <Button
             fullWidth
             variant="contained"
-            onClick={() => { setCheckStockDialogOpen(false); setCheckStockResult(null); }}
+            onClick={() => { setCheckStockDialogOpen(false); setCheckStockResult(null); setCheckManualCode(""); }}
           >
             Schließen
           </Button>
