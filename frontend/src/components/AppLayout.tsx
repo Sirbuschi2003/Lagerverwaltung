@@ -60,7 +60,7 @@ const AppLayout = () => {
       const vehicleId = getVehicleId();
       if (!vehicleId) { setVehicleData(null); return; }
       try {
-        const response = await api.get(`/api/vehicles/${vehicleId}`);
+        const response = await api.get(`/vehicles/${vehicleId}`);
         setVehicleData(response.data ?? null);
       } catch {
         setVehicleData(null);
