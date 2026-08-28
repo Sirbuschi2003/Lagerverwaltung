@@ -783,7 +783,7 @@ const MyVehiclePage = () => {
   };
 
   // Spezielle Funktion für bereitgestellte Mengen einbuchen
-  const handleCheckinProvidedQuantity = async (_itemId: string, restockRequestId: string, quantity: number) => {
+  const handleCheckinProvidedQuantity = async (itemId: string, restockRequestId: string, quantity: number) => {
     if (movementProcessingRef.current) return;
     movementProcessingRef.current = true;
     try {
@@ -800,6 +800,7 @@ const MyVehiclePage = () => {
         note: `${quantity} Stück vom Lager übernommen`,
       });
 
+      markReadByItemId(itemId);
       await loadStock();
       await loadRestock(vehicleId!);
       setError(null);
