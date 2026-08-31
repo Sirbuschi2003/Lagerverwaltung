@@ -1243,7 +1243,7 @@ const OrderSuggestionsTab: React.FC = () => {
                   </DndContext>
                   {/* Artikel hinzufügen */}
                   <TableRow>
-                    <TableCell colSpan={2}>
+                    <TableCell colSpan={3}>
                       <Autocomplete
                         key={`add-${group.supplierId}-${addCounters[group.supplierId] ?? 0}`}
                         freeSolo={false}
