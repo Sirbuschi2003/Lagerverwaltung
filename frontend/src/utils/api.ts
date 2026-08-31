@@ -822,6 +822,7 @@ export interface PurchaseOrderLineDto {
   quantity: number;
   receivedQuantity: number;
   packSize?: number | null;
+  sortOrder?: number | null;
 }
 
 export interface PurchaseOrderDto {

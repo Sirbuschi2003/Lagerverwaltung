@@ -213,7 +213,7 @@ export class PurchasingService {
     const itemMap = new Map(loadedItems.map((i) => [i.id, i]));
 
     const lines: PurchaseOrderLine[] = [];
-    for (const line of payload.lines) {
+    for (const [index, line] of payload.lines.entries()) {
       const item = itemMap.get(line.itemId);
       if (!item) {
         throw new NotFoundException(`Item ${line.itemId} not found`);
@@ -224,6 +224,7 @@ export class PurchasingService {
           quantity: line.quantity,
           receivedQuantity: 0,
           packSize: line.packSize ?? null,
+          sortOrder: index,
         }),
       );
     }

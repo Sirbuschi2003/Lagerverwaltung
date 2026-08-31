@@ -801,7 +801,8 @@ const GoodsReceiptTab: React.FC = () => {
                 {[...(selectedOrder?.lines ?? [])].sort((a, b) => {
                   const aComplete = getRemainingQuantity(a.quantity, a.receivedQuantity) <= 0 ? 1 : 0;
                   const bComplete = getRemainingQuantity(b.quantity, b.receivedQuantity) <= 0 ? 1 : 0;
-                  return aComplete - bComplete;
+                  if (aComplete !== bComplete) return aComplete - bComplete;
+                  return (a.sortOrder ?? 0) - (b.sortOrder ?? 0);
                 }).map((line) => {
                   const remaining = getRemainingQuantity(line.quantity, line.receivedQuantity);
                   const value = Math.max(0, Math.min(remaining, receivedQuantities[line.id] || 0));
