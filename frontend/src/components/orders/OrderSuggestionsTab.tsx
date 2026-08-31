@@ -155,6 +155,13 @@ const OrderSuggestionsTab: React.FC = () => {
   const [suggestionQuantities, setSuggestionQuantities] = useState<Record<string, number>>({});
   const [forecastPeriod, setForecastPeriod] = useState<30 | 60 | 90 | 180 | 365>(30);
   
+  // Manuelle Bestellung
+  const [manualOrderOpen, setManualOrderOpen] = useState(false);
+  const [manualItems, setManualItems] = useState<Array<{ item: ItemDto; quantity: number }>>([]);
+  const [manualSearch, setManualSearch] = useState("");
+  const [manualSearchOptions, setManualSearchOptions] = useState<ItemDto[]>([]);
+  const [manualSearchLoading, setManualSearchLoading] = useState(false);
+
   // Wizard
   const [wizardOpen, setWizardOpen] = useState(false);
   const [wizardGroups, setWizardGroups] = useState<WizardGroup[]>([]);
@@ -442,6 +449,26 @@ const OrderSuggestionsTab: React.FC = () => {
       .sort((a, b) => a.name.localeCompare(b.name, "de", { sensitivity: "base" }));
   }, [suggestions]);
 
+  useEffect(() => {
+    if (manualSearch.length < 2) {
+      setManualSearchOptions([]);
+      return;
+    }
+    let cancelled = false;
+    setManualSearchLoading(true);
+    const t = setTimeout(async () => {
+      try {
+        const result = await fetchItems({ search: manualSearch, limit: 50 });
+        if (!cancelled) setManualSearchOptions(result.items ?? []);
+      } catch {
+        // ignore
+      } finally {
+        if (!cancelled) setManualSearchLoading(false);
+      }
+    }, 300);
+    return () => { cancelled = true; clearTimeout(t); };
+  }, [manualSearch]);
+
   const sortedSuggestions = useMemo(() => {
     let filtered = suggestions;
     if (filterBelowMinimum) {
@@ -567,6 +594,53 @@ const OrderSuggestionsTab: React.FC = () => {
       return;
     }
 
+    setWizardGroups(Array.from(groupMap.values()));
+    setAddSearches({});
+    setAddOptions({});
+    setAddItems({});
+    setAddQtys({});
+    setAddCounters({});
+    setWizardOpen(true);
+  };
+
+  const handleManualOrderToWizard = () => {
+    const groupMap = new Map<string, WizardGroup>();
+    let hasNoSupplier = false;
+
+    manualItems.forEach(({ item, quantity }) => {
+      if (!item.supplier?.id) {
+        hasNoSupplier = true;
+        return;
+      }
+      const supplierId = item.supplier.id;
+      if (!groupMap.has(supplierId)) {
+        groupMap.set(supplierId, {
+          supplierId,
+          supplierName: item.supplier.name || "Kein Lieferant",
+          lines: [],
+        });
+      }
+      groupMap.get(supplierId)!.lines.push({
+        itemId: item.id,
+        code: item.code,
+        description: item.description,
+        descriptionSecondary: item.descriptionSecondary,
+        quantity: Math.max(1, quantity),
+      });
+    });
+
+    if (hasNoSupplier) {
+      alert("Einige Artikel haben keinen Lieferanten und werden übersprungen.");
+    }
+    if (groupMap.size === 0) {
+      alert("Keine bestellbaren Artikel (alle ohne Lieferant).");
+      return;
+    }
+
+    setManualOrderOpen(false);
+    setManualItems([]);
+    setManualSearch("");
+    setManualSearchOptions([]);
     setWizardGroups(Array.from(groupMap.values()));
     setAddSearches({});
     setAddOptions({});
@@ -849,6 +923,15 @@ const OrderSuggestionsTab: React.FC = () => {
           >
             Aktualisieren
           </Button>
+          {canCreate && (
+            <Button
+              variant="outlined"
+              startIcon={<AddIcon />}
+              onClick={() => { setManualItems([]); setManualSearch(""); setManualSearchOptions([]); setManualOrderOpen(true); }}
+            >
+              Manuell bestellen
+            </Button>
+          )}
           {canCreate && (
             <Button
               variant="contained"
@@ -1166,6 +1249,112 @@ const OrderSuggestionsTab: React.FC = () => {
         </Paper>
       )}
       
+      {/* Manuelle Bestellung Dialog */}
+      <Dialog open={manualOrderOpen} onClose={() => setManualOrderOpen(false)} maxWidth="sm" fullWidth>
+        <DialogTitle>Manuell bestellen</DialogTitle>
+        <DialogContent>
+          <Stack spacing={2} sx={{ mt: 1 }}>
+            <Autocomplete
+              options={manualSearchOptions}
+              getOptionLabel={(o) => `${o.code} – ${o.description}`}
+              filterOptions={(x) => x}
+              value={null}
+              inputValue={manualSearch}
+              onInputChange={(_, val, reason) => {
+                if (reason === "input") setManualSearch(val);
+                if (reason === "clear") { setManualSearch(""); setManualSearchOptions([]); }
+              }}
+              onChange={(_, item) => {
+                if (!item) return;
+                setManualItems((prev) => {
+                  if (prev.find((e) => e.item.id === item.id)) return prev;
+                  return [...prev, { item, quantity: item.orderQuantity ?? 1 }];
+                });
+                setManualSearch("");
+                setManualSearchOptions([]);
+              }}
+              loading={manualSearchLoading}
+              noOptionsText={manualSearch.length < 2 ? "Mindestens 2 Zeichen eingeben" : "Kein Artikel gefunden"}
+              renderOption={(props, o) => (
+                <li {...props} key={o.id}>
+                  <Box>
+                    <Typography variant="body2" fontWeight="medium">{o.code}</Typography>
+                    <Typography variant="caption" color="text.secondary">
+                      {o.description}{o.supplier ? ` · ${o.supplier.name}` : " · Kein Lieferant"}
+                    </Typography>
+                  </Box>
+                </li>
+              )}
+              renderInput={(params) => (
+                <TextField {...params} placeholder="Artikel suchen (Code oder Bezeichnung)…" size="small" autoFocus />
+              )}
+            />
+            {manualItems.length > 0 && (
+              <Table size="small">
+                <TableHead>
+                  <TableRow>
+                    <TableCell>Artikel</TableCell>
+                    <TableCell>Lieferant</TableCell>
+                    <TableCell align="right" sx={{ width: 90 }}>Menge</TableCell>
+                    <TableCell sx={{ width: 40 }} />
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {manualItems.map(({ item, quantity }) => (
+                    <TableRow key={item.id}>
+                      <TableCell>
+                        <Typography variant="body2" fontWeight="medium">{item.code}</Typography>
+                        <Typography variant="caption" color="text.secondary">{item.description}</Typography>
+                      </TableCell>
+                      <TableCell>
+                        <Typography variant="body2" color={item.supplier ? "text.primary" : "error"}>
+                          {item.supplier?.name ?? "Kein Lieferant"}
+                        </Typography>
+                      </TableCell>
+                      <TableCell align="right">
+                        <TextField
+                          type="number"
+                          size="small"
+                          value={quantity}
+                          onChange={(e) => {
+                            const q = Math.max(1, parseInt(e.target.value) || 1);
+                            setManualItems((prev) => prev.map((e) => e.item.id === item.id ? { ...e, quantity: q } : e));
+                          }}
+                          onFocus={(e) => e.target.select()}
+                          inputProps={{ min: 1, style: { textAlign: "right" } }}
+                          sx={{ width: 70 }}
+                        />
+                      </TableCell>
+                      <TableCell>
+                        <IconButton size="small" color="error" onClick={() => setManualItems((prev) => prev.filter((e) => e.item.id !== item.id))}>
+                          <DeleteIcon fontSize="small" />
+                        </IconButton>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            )}
+            {manualItems.length === 0 && (
+              <Typography variant="body2" color="text.secondary" sx={{ textAlign: "center", py: 2 }}>
+                Noch keine Artikel hinzugefügt.
+              </Typography>
+            )}
+          </Stack>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setManualOrderOpen(false)}>Abbrechen</Button>
+          <Button
+            variant="contained"
+            startIcon={<ArrowForwardIcon />}
+            onClick={handleManualOrderToWizard}
+            disabled={manualItems.length === 0}
+          >
+            Weiter zum Wizard
+          </Button>
+        </DialogActions>
+      </Dialog>
+
       {/* Bestellungs-Wizard */}
       <Dialog
         open={wizardOpen}
