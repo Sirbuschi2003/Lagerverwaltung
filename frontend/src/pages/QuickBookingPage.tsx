@@ -897,7 +897,7 @@ const QuickBookingPage: React.FC = () => {
             <Typography variant="h6" fontWeight={800} sx={{ flex: 1 }}>
               Duplikat-Warnung
             </Typography>
-            <IconButton size="small" onClick={() => setDuplicateWarnings([])} sx={{ color: "warning.contrastText" }} aria-label="Schliessen">
+            <IconButton size="small" onClick={() => { setDuplicateWarnings([]); setReference(""); setTimeout(() => { referenceRef.current?.focus(); }, 80); }} sx={{ color: "warning.contrastText" }} aria-label="Schliessen">
               <CloseIcon fontSize="small" />
             </IconButton>
           </Box>
