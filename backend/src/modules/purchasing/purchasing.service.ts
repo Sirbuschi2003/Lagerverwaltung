@@ -197,7 +197,7 @@ export class PurchasingService {
     supplierId: string;
     orderNumber?: string;
     note?: string;
-    lines: Array<{ itemId: string; quantity: number; packSize?: number }>;
+    lines: Array<{ itemId: string; quantity: number; packSize?: number; unitPriceNet?: number; taxRate?: number; currency?: string }>;
     branchId?: string | null;
     locationId?: string | null;
   }) {
@@ -227,6 +227,9 @@ export class PurchasingService {
           receivedQuantity: 0,
           packSize: line.packSize ?? null,
           sortOrder: index,
+          unitPriceNet: line.unitPriceNet ?? null,
+          taxRate: line.taxRate ?? 19,
+          currency: line.currency ?? 'EUR',
         }),
       );
     }
@@ -323,23 +326,34 @@ export class PurchasingService {
 
   async addLine(
     orderId: string,
-    payload: { itemId: string; quantity: number },
+    payload: { itemId: string; quantity: number; unitPriceNet?: number; taxRate?: number; currency?: string },
     branchId?: string | null,
   ): Promise<PurchaseOrder> {
     const order = await this.findOne(orderId, branchId);
     if (order.status !== "DRAFT") {
-      throw new BadRequestException("Artikel kÃ¶nnen nur zu EntwÃ¼rfen hinzugefÃ¼gt werden");
+      throw new BadRequestException('Artikel können nur zu Entwürfen hinzugefügt werden');
     }
     const item = await this.itemsService.findOne(payload.itemId);
-    if (!item) throw new NotFoundException("Artikel nicht gefunden");
+    if (!item) throw new NotFoundException('Artikel nicht gefunden');
 
     const existing = order.lines?.find((l) => l.item?.id === payload.itemId);
     if (existing) {
       existing.quantity += Math.max(1, payload.quantity);
+      if (payload.unitPriceNet != null) existing.unitPriceNet = payload.unitPriceNet;
+      if (payload.taxRate != null) existing.taxRate = payload.taxRate;
+      if (payload.currency) existing.currency = payload.currency;
       await this.linesRepository.save(existing);
     } else {
       const maxSortOrder = order.lines?.reduce((max, l) => Math.max(max, l.sortOrder ?? 0), -1) ?? -1;
-      const line = this.linesRepository.create({ order, item, quantity: Math.max(1, payload.quantity), receivedQuantity: 0, sortOrder: maxSortOrder + 1 });
+      const line = this.linesRepository.create({
+        order, item,
+        quantity: Math.max(1, payload.quantity),
+        receivedQuantity: 0,
+        sortOrder: maxSortOrder + 1,
+        unitPriceNet: payload.unitPriceNet ?? null,
+        taxRate: payload.taxRate ?? 19,
+        currency: payload.currency ?? 'EUR',
+      });
       await this.linesRepository.save(line);
     }
     this.invalidateSuggestionsCache();
@@ -349,16 +363,19 @@ export class PurchasingService {
   async updateLine(
     orderId: string,
     lineId: string,
-    payload: { quantity: number },
+    payload: { quantity: number; unitPriceNet?: number; taxRate?: number; currency?: string },
     branchId?: string | null,
   ): Promise<PurchaseOrder> {
     const order = await this.findOne(orderId, branchId);
     if (order.status !== "DRAFT") {
-      throw new BadRequestException("Positionen kÃ¶nnen nur bei EntwÃ¼rfen bearbeitet werden");
+      throw new BadRequestException('Positionen können nur bei Entwürfen bearbeitet werden');
     }
     const line = order.lines?.find((l) => l.id === lineId);
-    if (!line) throw new NotFoundException("Position nicht gefunden");
+    if (!line) throw new NotFoundException('Position nicht gefunden');
     line.quantity = Math.max(1, payload.quantity);
+    if (payload.unitPriceNet != null) line.unitPriceNet = payload.unitPriceNet;
+    if (payload.taxRate != null) line.taxRate = payload.taxRate;
+    if (payload.currency) line.currency = payload.currency;
     await this.linesRepository.save(line);
     this.invalidateSuggestionsCache();
     return this.findOne(orderId, branchId);

@@ -1,5 +1,5 @@
 import { Type } from "class-transformer";
-import { IsArray, IsInt, IsOptional, IsString, MaxLength, Min, ValidateNested } from "class-validator";
+import { IsArray, IsInt, IsNumber, IsOptional, IsString, IsUppercase, Length, MaxLength, Min, ValidateNested } from "class-validator";
 
 export class CreatePurchaseOrderLineDto {
   @IsString()
@@ -13,6 +13,25 @@ export class CreatePurchaseOrderLineDto {
   @IsInt()
   @Min(1)
   packSize?: number;
+
+  // §240 HGB: Einstandspreis (Netto) pro Einheit
+  @IsOptional()
+  @IsNumber({ maxDecimalPlaces: 4 })
+  @Min(0)
+  unitPriceNet?: number;
+
+  // Steuersatz in Prozent (Standard: 19)
+  @IsOptional()
+  @IsNumber({ maxDecimalPlaces: 2 })
+  @Min(0)
+  taxRate?: number;
+
+  // ISO-4217 Währungscode (Standard: EUR)
+  @IsOptional()
+  @IsString()
+  @IsUppercase()
+  @Length(3, 3)
+  currency?: string;
 }
 
 export class CreatePurchaseOrderDto {

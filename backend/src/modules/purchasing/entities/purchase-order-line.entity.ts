@@ -30,4 +30,26 @@ export class PurchaseOrderLine {
 
   @Column({ type: "int", default: 0 })
   sortOrder!: number;
+
+  // §240 HGB / GoBD GOB-003: Einstandspreise für Bestandsbewertung
+  @Column({ type: "decimal", precision: 12, scale: 4, nullable: true })
+  unitPriceNet!: number | null;
+
+  @Column({ type: "decimal", precision: 5, scale: 2, nullable: true, default: 19.0 })
+  taxRate!: number | null;
+
+  @Column({ type: "varchar", length: 3, default: "EUR" })
+  currency!: string;
+
+  get lineTotalNet(): number | null {
+    if (this.unitPriceNet == null) return null;
+    return Math.round(this.quantity * Number(this.unitPriceNet) * 10000) / 10000;
+  }
+
+  get lineTotalGross(): number | null {
+    if (this.unitPriceNet == null) return null;
+    const net = this.quantity * Number(this.unitPriceNet);
+    const tax = (this.taxRate != null ? Number(this.taxRate) : 19) / 100;
+    return Math.round(net * (1 + tax) * 10000) / 10000;
+  }
 }
