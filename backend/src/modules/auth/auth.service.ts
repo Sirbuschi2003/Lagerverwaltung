@@ -170,23 +170,6 @@ export class AuthService {
       return { requiresMfa: true, mfaToken };
     }
 
-    // NIS2-009: MFA-Enrollment-Pflicht für privilegierte Rollen (ADMIN, SUPER_ADMIN).
-    // Statt ForbiddenException: kurzlebiger mfa-setup Token für den Bootstrap-Flow:
-    //   1. POST /api/auth/mfa/setup-init       (mfaSetupToken) → QR-Code + Secret
-    //   2. POST /api/auth/mfa/verify-setup-init (mfaSetupToken + totpCode) → vollständige Auth-Tokens
-    if (["ADMIN", "SUPER_ADMIN"].includes(user.role) && !user.mfaEnabled) {
-      await this.loggingService.logSecurity(
-        'MFA_ENROLLMENT_REQUIRED',
-        `Login für ${user.role} ohne MFA — MFA-Setup-Token ausgestellt: ${user.username}`,
-        { ...context, userId: user.id },
-      );
-      const mfaSetupToken = await this.jwtService.signAsync(
-        { sub: user.id, tokenType: 'mfa-setup' },
-        { expiresIn: '10m' },
-      );
-      return { requiresMfaSetup: true, mfaSetupToken };
-    }
-
     return this.issueTokens(user, context);
   }
 
