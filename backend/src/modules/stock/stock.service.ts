@@ -255,12 +255,12 @@ export class StockService {
     if (manager) {
       movement = manager.create(StockMovement, movementData);
       await manager.save(StockMovement, movement);
-      await this.applyMovementToStock(movement);
+      await this.applyMovementToStock(movement, manager);
     } else {
       movement = await this.dataSource.transaction(async (txManager) => {
         const m = txManager.create(StockMovement, movementData);
         await txManager.save(StockMovement, m);
-        await this.applyMovementToStock(m);
+        await this.applyMovementToStock(m, txManager);
         return m;
       });
     }
@@ -1260,7 +1260,8 @@ export class StockService {
     }
   }
 
-  private async applyMovementToStock(movement: StockMovement) {
+  private async applyMovementToStock(movement: StockMovement, manager?: EntityManager) {
+    const repo = manager ? manager.getRepository(StockLevel) : this.stockLevelsRepository;
     const direction = this.resolveDirection(movement.type);
     const quantityDelta = movement.quantity * direction;
     const location = movement.location ?? (movement.vehicle ? await this.locationsService.ensureVehicleLocation(movement.vehicle) : null);
@@ -1286,7 +1287,7 @@ export class StockService {
         movement.vehicle,
       );
     } else {
-      const existing = await this.stockLevelsRepository.findOne({
+      const existing = await repo.findOne({
         where: {
           item: { id: movement.item.id },
           location: { id: locationId },
@@ -1294,7 +1295,7 @@ export class StockService {
       });
 
       if (!existing) {
-        stockLevel = this.stockLevelsRepository.create({
+        stockLevel = repo.create({
           item: movement.item,
           vehicle: movement.vehicle ?? null,
           location,
@@ -1317,18 +1318,19 @@ export class StockService {
       throw new BadRequestException('Der Bestand kann nicht negativ werden.');
     }
 
-    // Nur lÃ¶schen wenn SOWOHL quantity ALS AUCH targetQuantity = 0 sind
+    // Nur löschen wenn SOWOHL quantity ALS AUCH targetQuantity = 0 sind
     if (nextQuantity === 0 && stockLevel.targetQuantity === 0) {
-      // Artikel ist komplett irrelevant fÃ¼r das Fahrzeug (kein Soll, kein Ist)
-      await this.stockLevelsRepository.remove(stockLevel);
-      // Keine Restock-Synchronisation nÃ¶tig, da gelÃ¶scht
+      // Artikel ist komplett irrelevant für das Fahrzeug (kein Soll, kein Ist)
+      await repo.remove(stockLevel);
+      // Keine Restock-Synchronisation nötig, da gelöscht
       return;
     }
 
     if (stockLevel.id) {
       // Atomic conditional UPDATE: prevents race conditions from concurrent bookings.
       // The WHERE quantity check runs on the current DB value, not the stale in-memory read.
-      const result = await this.dataSource
+      // When inside an external transaction (manager provided), the UPDATE participates in it.
+      const result = await (manager ?? this.dataSource)
         .createQueryBuilder()
         .update(StockLevel)
         .set({ quantity: () => `quantity + (${quantityDelta})` })
@@ -1341,7 +1343,7 @@ export class StockService {
       stockLevel.quantity = nextQuantity;
     } else {
       stockLevel.quantity = nextQuantity;
-      await this.stockLevelsRepository.save(stockLevel);
+      await repo.save(stockLevel);
     }
 
     await this.syncRestockRequest(stockLevel.id);

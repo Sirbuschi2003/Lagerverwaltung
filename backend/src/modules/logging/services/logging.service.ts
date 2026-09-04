@@ -199,14 +199,24 @@ export class LoggingService {
   }
 
   /**
-   * Löscht ALLE Logs (für Admin-Funktion)
+   * Löscht ALLE Logs außer SECURITY-Einträgen (NIS2-001: Audit-Trail bleibt erhalten).
+   * Schreibt zuerst einen SECURITY-Log, dann werden nur non-SECURITY-Logs gelöscht.
    */
   async deleteAllLogs(): Promise<number> {
-    await this.logSecurity("LOGS_DELETED", "Alle System-Logs wurden geloescht", { metadata: { deletedAt: new Date().toISOString() } });
+    const deletedAt = new Date();
 
+    // NIS2-001: Audit-Eintrag VOR der Löschoperation persistieren
+    await this.logSecurity(
+      'LOGS_DELETED',
+      'Alle nicht-sicherheitsrelevanten System-Logs wurden gelöscht',
+      { metadata: { deletedAt: deletedAt.toISOString() } },
+    );
+
+    // Nur Non-SECURITY-Logs löschen – SECURITY-Einträge bleiben als unveränderlicher Audit-Trail
     const result = await this.logRepository
       .createQueryBuilder()
       .delete()
+      .where('level != :level', { level: LogLevel.SECURITY })
       .execute();
 
     return result.affected || 0;

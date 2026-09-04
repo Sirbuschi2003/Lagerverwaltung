@@ -1,4 +1,4 @@
-﻿import { BadRequestException, Injectable, NotFoundException } from "@nestjs/common";
+﻿import { BadRequestException, Injectable, Logger, NotFoundException } from "@nestjs/common";
 import { PurchaseSuggestionService } from "./purchase-suggestion.service";
 import { promises as fs, Dirent } from "node:fs";
 import path from "node:path";
@@ -53,6 +53,8 @@ export interface StoredOrderDocumentEntry {
 
 @Injectable()
 export class PurchasingService {
+  private readonly logger = new Logger(PurchasingService.name);
+
   constructor(
     @InjectRepository(PurchaseOrder)
     private readonly ordersRepository: Repository<PurchaseOrder>,
@@ -390,7 +392,10 @@ export class PurchasingService {
     if (!lineIds.every((id) => orderLineIds.has(id))) {
       throw new BadRequestException("Ungültige Position-IDs");
     }
-    await Promise.all(lineIds.map((id, index) => this.linesRepository.update(id, { sortOrder: index })));
+    // TX-02: sortOrder-Updates in einer Transaktion, um Teilerfolge zu verhindern.
+    await this.dataSource.transaction(async (manager) => {
+      await Promise.all(lineIds.map((id, index) => manager.update(PurchaseOrderLine, id, { sortOrder: index })));
+    });
     return this.findOne(orderId, branchId);
   }
 
@@ -533,36 +538,11 @@ export class PurchasingService {
     };
   }
 
+  // GOB-001: Physisches Löschen von Bestellungen deaktiviert.
+  // GoBD Rn. 64-67: Buchungsbelege müssen unveränderlich aufbewahrt werden (§257 HGB: 10 Jahre).
   async purgeOldOrders(years = 10, branchId?: string | null): Promise<{ deleted: number }> {
-    const cutoff = new Date();
-    cutoff.setFullYear(cutoff.getFullYear() - years);
-
-    const qb = this.ordersRepository
-      .createQueryBuilder("order")
-      .leftJoinAndSelect("order.lines", "line")
-      .where("order.status IN (:...statuses)", { statuses: ["RECEIVED", "ARCHIVED", "CANCELLED"] })
-      .andWhere("COALESCE(order.orderedAt, order.createdAt) < :cutoff", { cutoff });
-    if (branchId) qb.andWhere("order.branchId = :branchId", { branchId });
-    const orders = await qb.getMany();
-
-    if (orders.length === 0) return { deleted: 0 };
-
-    // PDFs vom Dateisystem lÃ¶schen
-    for (const order of orders) {
-      await this.deleteOrderPdfFromStorage(order);
-    }
-
-    await this.ordersRepository.remove(orders);
-    this.invalidateSuggestionsCache();
-
-    await this.loggingService.logInfo(
-      LogCategory.PURCHASE,
-      'purchase_orders_purged',
-      `Bestellarchiv bereinigt: ${orders.length} Bestellungen Ã¤lter als ${years} Jahre gelÃ¶scht`,
-      { metadata: { deletedCount: orders.length, years, cutoffDate: cutoff.toISOString() } },
-    );
-
-    return { deleted: orders.length };
+    this.logger.warn("purgeOldOrders() deaktiviert. GoBD Rn. 64-67: Buchungsbelege unveraenderlich aufbewahren (§257 HGB: 10 Jahre).");
+    return { deleted: 0 };
   }
 
   async getOrderPdf(id: string, branchId?: string | null): Promise<{ filename: string; buffer: Buffer }> {
@@ -868,6 +848,7 @@ export class PurchasingService {
 
       return documents;
     } catch (err) {
+      this.logger.error("Fehler beim Laden der Bestelldokumente:", err);
       return [];
     }
   }
@@ -1170,53 +1151,10 @@ export class PurchasingService {
     }
   }
 
-  private stripOrderPdfFields(html: string): string {
-    let sanitized = html;
-
-    // Remove status line/block from metadata area.
-    sanitized = sanitized.replace(/\{\{#orderStatus\}\}[\s\S]*?\{\{\/orderStatus\}\}/gi, "");
-    sanitized = sanitized.replace(/\{\{\^orderStatus\}\}[\s\S]*?\{\{\/orderStatus\}\}/gi, "");
-    sanitized = sanitized.replace(
-      /<[^>]+>\s*(?:Status|Bestellstatus)\s*:?\s*\{\{orderStatus\}\}\s*<\/[^>]+>/gi,
-      "",
-    );
-    sanitized = sanitized.replace(/\{\{orderStatus\}\}/g, "");
-
-    // Legacy cleanup: remove old price/total columns and placeholders from historic templates.
-    sanitized = sanitized.replace(
-      /<th\b[^>]*>(?:(?!<\/th>)[\s\S])*?(?:Preis|Price|\{\{[^}]*unitPrice[^}]*\}\})(?:(?!<\/th>)[\s\S])*?<\/th>/gi,
-      "",
-    );
-    sanitized = sanitized.replace(
-      /<th\b[^>]*>(?:(?!<\/th>)[\s\S])*?(?:Gesamt|Total|\{\{[^}]*lineTotal[^}]*\}\})(?:(?!<\/th>)[\s\S])*?<\/th>/gi,
-      "",
-    );
-    sanitized = sanitized.replace(
-      /<td\b[^>]*>(?:(?!<\/td>)[\s\S])*?(?:\{\{[^}]*unitPrice[^}]*\}|unitPrice)(?:(?!<\/td>)[\s\S])*?<\/td>/gi,
-      "",
-    );
-    sanitized = sanitized.replace(
-      /<td\b[^>]*>(?:(?!<\/td>)[\s\S])*?(?:\{\{[^}]*lineTotal[^}]*\}|lineTotal)(?:(?!<\/td>)[\s\S])*?<\/td>/gi,
-      "",
-    );
-
-    sanitized = sanitized.replace(/\{\{#unitPrice\}\}[\s\S]*?\{\{\/unitPrice\}\}/gi, "");
-    sanitized = sanitized.replace(/\{\{\^unitPrice\}\}[\s\S]*?\{\{\/unitPrice\}\}/gi, "");
-    sanitized = sanitized.replace(/\{\{#lineTotal\}\}[\s\S]*?\{\{\/lineTotal\}\}/gi, "");
-    sanitized = sanitized.replace(/\{\{\^lineTotal\}\}[\s\S]*?\{\{\/lineTotal\}\}/gi, "");
-    sanitized = sanitized.replace(/\{\{unitPrice\}\}/g, "");
-    sanitized = sanitized.replace(/\{\{lineTotal\}\}/g, "");
-
-    sanitized = sanitized.replace(
-      /<(div|p|span)\b[^>]*>[\s\S]*?\{\{totalValue\}\}[\s\S]*?<\/\1>/gi,
-      "",
-    );
-    sanitized = sanitized.replace(/\{\{totalValue\}\}/g, "");
-
-    // Safety net for malformed old templates (e.g. literal {{#unitPrice}} appearing in output).
-    sanitized = sanitized.replace(/\{\{\s*[#\/\^]?\s*(unitPrice|lineTotal|totalValue)\s*\}\}/gi, "");
-
-    return sanitized;
+  // GOB-007: Preisfelder (unitPrice, lineTotal, totalValue) werden nicht entfernt.
+  // §14 UStG Pflichtangaben auf Belegen müssen vollständig erhalten bleiben.
+  private stripOrderPdfFields(template: string): string {
+    return template; // GOB-007: Preisfelder nicht entfernen - §14 UStG Pflicht
   }
 
   private async assertOrderNumberUnique(orderNumber: string, excludeId?: string) {
@@ -1347,28 +1285,12 @@ export class PurchasingService {
     return order;
   }
 
-  private async deleteOrderPdfFromStorage(order: PurchaseOrder, overrideOrderNumber?: string): Promise<void> {
-    try {
-      const storagePath = this.getPurchaseOrderStoragePath();
-      const token = overrideOrderNumber ?? order.orderNumber ?? order.id;
-      const filename = `${this.sanitizeStorageToken(token) || "Bestellung"}.pdf`;
-      const refDate = new Date(order.orderedAt ?? order.createdAt ?? new Date());
-      const year = String(refDate.getFullYear());
-      const month = String(refDate.getMonth() + 1).padStart(2, "0");
-      const branchFolder = await this.getBranchFolder(order.branchId);
-      const locationFolder = await this.getLocationFolder(order.locationId);
-
-      const candidates = [
-        path.join(storagePath, branchFolder, locationFolder, year, month, filename), // aktuelle Struktur
-        path.join(storagePath, branchFolder, year, month, filename),                 // alte Struktur (ohne Lager)
-        path.join(storagePath, year, filename),                                      // Ã¤lteste Struktur
-      ];
-      for (const fullPath of candidates) {
-        try { await fs.unlink(fullPath); } catch { /* nicht vorhanden â€“ ok */ }
-      }
-    } catch (error) {
-      /* PDF nicht gefunden â€“ ok */
-    }
+  // GOB-002: Physisches Löschen von Bestellungs-PDFs deaktiviert.
+  // §257 HGB Belegpflicht: Dokumente müssen 10 Jahre aufbewahrt werden.
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  private async deleteOrderPdfFromStorage(_order: PurchaseOrder, _overrideOrderNumber?: string): Promise<void> {
+    this.logger.warn(“deleteOrderPdfFromStorage() deaktiviert. GoBD §257 HGB Belegpflicht.”);
+    return;
   }
 
   private async saveOrderPdfToStorage(order: PurchaseOrder, buffer?: Buffer): Promise<void> {
@@ -1386,8 +1308,10 @@ export class PurchasingService {
       await fs.mkdir(targetDir, { recursive: true });
       const fullPath = path.join(targetDir, filename);
       await fs.writeFile(fullPath, pdfBuffer);
-    } catch (error) {
-      /* PDF-Ablage fehlgeschlagen â€“ kein fataler Fehler */
+    } catch (err) {
+      // GOB-002: PDF-Ablage ist Belegpflicht (§257 HGB) – Fehler werden nicht stillschweigend verworfen.
+      this.logger.error(“PDF-Ablage fehlgeschlagen:”, err);
+      throw err;
     }
   }
 }

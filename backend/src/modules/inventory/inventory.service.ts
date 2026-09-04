@@ -333,15 +333,15 @@ export class InventoryService {
       relations: ["vehicle", "item"],
     });
     
-    // L�sche InventoryLines (falls vorhanden)
-    if (lines.length > 0) {
-      await this.linesRepository.remove(lines);
-    }
-    
-    // L�sche StockLevels (falls vorhanden) - das ist wichtig f�r die Fahrzeugansicht
-    if (stockLevels.length > 0) {
-      await this.stockLevelsRepository.remove(stockLevels);
-    }
+    // InventoryLines und StockLevels atomar löschen — beide oder keiner
+    await this.dataSource.transaction(async (manager) => {
+      if (lines.length > 0) {
+        await manager.remove(lines);
+      }
+      if (stockLevels.length > 0) {
+        await manager.remove(stockLevels);
+      }
+    });
     
     if (lines.length === 0 && stockLevels.length === 0) {
       // Kein Fehler werfen, wenn bereits gelöscht - einfach erfolgreich zurückkehren
@@ -612,17 +612,21 @@ export class InventoryService {
       session.adjustmentsApplied = false; // Buchungen zurücksetzen bei Wiedereröffnung
     }
 
-    // Fahrzeug-Teilstatus zurücksetzen, damit wieder bearbeitet werden kann
+    // Fahrzeug-Teilstatus zurücksetzen und Session-Status atomar speichern
     const vehicleStatuses = await this.vehicleStatusRepository.find({ where: { session: { id: sessionId } } });
     for (const vs of vehicleStatuses) {
       vs.status = InventoryVehicleStatusState.DRAFT;
       vs.submittedAt = null;
       vs.submittedBy = null;
       vs.adjustmentsApplied = false;
-      await this.vehicleStatusRepository.save(vs);
     }
 
-    const saved = await this.sessionsRepository.save(session);
+    const saved = await this.dataSource.transaction(async (manager) => {
+      if (vehicleStatuses.length > 0) {
+        await manager.save(vehicleStatuses);
+      }
+      return manager.save(session);
+    });
 
     // User für Logging holen
     const user = await this.usersRepository.findOne({ where: { username } });

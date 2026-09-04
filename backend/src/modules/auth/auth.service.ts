@@ -92,9 +92,18 @@ export class AuthService {
     }
   }
 
-  /** SHA-256-Hash eines Refresh-Tokens (kein Klartext in der DB) */
+  /** SHA-256-Hash eines Tokens (kein Klartext in der DB) */
   private hashToken(token: string): string {
     return crypto.createHash("sha256").update(token).digest("hex");
+  }
+
+  /** Kürzt IP-Adressen auf Subnetz-Ebene (DSGVO: kein vollständiges Logging personenbezogener IPs) */
+  private anonymizeIpAddress(ip?: string): string | undefined {
+    if (!ip) return undefined;
+    const ipv4Match = /^(\d+\.\d+\.\d+\.)\d+$/.exec(ip);
+    if (ipv4Match) return ipv4Match[1] + "0";
+    if (ip.includes(":")) return ip.split(":").slice(0, 3).join(":") + ":*:*:*:*:*";
+    return ip;
   }
 
   /**
@@ -375,21 +384,22 @@ export class AuthService {
     );
 
     // Generiere neues Token (sicher & kryptographisch stark)
-    const token = crypto.randomBytes(32).toString('hex');
+    const rawToken = crypto.randomBytes(32).toString('hex');
+    const tokenHash = this.hashToken(rawToken);
     const expiresAt = new Date();
     expiresAt.setHours(expiresAt.getHours() + 1); // Token gültig für 1 Stunde
 
-    // Speichere Token in Datenbank
+    // Speichere nur den Hash in der DB (SEC-002: kein Klartext-Token persistieren)
     const passwordResetToken = this.passwordResetTokenRepository.create({
-      token,
+      token: tokenHash,
       userId: user.id,
       expiresAt,
-      requestedFromIp: context?.ipAddress,
+      requestedFromIp: this.anonymizeIpAddress(context?.ipAddress),
     });
     await this.passwordResetTokenRepository.save(passwordResetToken);
 
-    // Sende Reset-E-Mail
-    await this.emailService.sendPasswordResetEmail(user.email!, user.displayName, token);
+    // Sende rawToken per E-Mail (nicht den Hash)
+    await this.emailService.sendPasswordResetEmail(user.email!, user.displayName, rawToken);
 
     // Log erfolgreiche Anfrage
     await this.loggingService.logSecurity(
@@ -406,9 +416,10 @@ export class AuthService {
     newPassword: string,
     context?: { ipAddress?: string; userAgent?: string }
   ): Promise<{ message: string }> {
-    // Finde Token
+    // Finde Token – lookup über Hash (SEC-002: kein Klartext in DB)
+    const tokenHash = this.hashToken(token);
     const passwordResetToken = await this.passwordResetTokenRepository.findOne({
-      where: { token, used: false },
+      where: { token: tokenHash, used: false },
       relations: ['user'],
     });
 
@@ -442,6 +453,8 @@ export class AuthService {
 
     // Update Benutzer-Passwort
     await this.usersService.updatePassword(passwordResetToken.user.id, passwordHash);
+    // SEC-001: Alle aktiven Refresh-Tokens nach Passwortaenderung invalidieren
+    await this.refreshTokenRepo.update({ userId: passwordResetToken.user.id, isRevoked: false }, { isRevoked: true, revokedAt: new Date() });
 
     // Markiere Token als verwendet
     passwordResetToken.used = true;
@@ -501,6 +514,8 @@ export class AuthService {
     // Aktuellen Hash in Historie speichern, dann updaten
     await addToPasswordHistory(this.passwordHistoryRepository, user.id, user.passwordHash);
     await this.usersService.updatePassword(user.id, passwordHash);
+    // SEC-001: Alle aktiven Refresh-Tokens nach Passwortaenderung invalidieren
+    await this.refreshTokenRepo.update({ userId: user.id, isRevoked: false }, { isRevoked: true, revokedAt: new Date() });
 
     // Log erfolgreiche Passwort-Änderung
     await this.loggingService.logSecurity(

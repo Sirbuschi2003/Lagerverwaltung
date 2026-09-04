@@ -11,6 +11,7 @@ import { UsersModule } from "../users/users.module";
 
 import { User } from "../users/entities/user.entity";
 
+import { AuthCleanupService } from "./auth-cleanup.service";
 import { AuthController } from "./auth.controller";
 import { AuthService } from "./auth.service";
 import { PasswordHistory } from "./entities/password-history.entity";
@@ -39,7 +40,7 @@ import { JwtStrategy } from "./strategies/jwt.strategy";
     }),
   ],
   controllers: [AuthController],
-  providers: [AuthService, JwtStrategy, JwtAuthGuard, RolesGuard],
-  exports: [AuthService, JwtAuthGuard, RolesGuard],
+  providers: [AuthService, AuthCleanupService, JwtStrategy, JwtAuthGuard, RolesGuard],
+  exports: [AuthService, AuthCleanupService, JwtAuthGuard, RolesGuard],
 })
 export class AuthModule {}

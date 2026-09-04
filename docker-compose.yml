@@ -12,10 +12,10 @@ services:
       - --collation-server=utf8mb4_unicode_ci
       - --authentication-policy=caching_sha2_password
     environment:
-      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-changeMeRoot}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
       MYSQL_DATABASE: ${MYSQL_DATABASE:-lagerverwaltung}
       MYSQL_USER: ${MYSQL_USER:-lagerverwaltung}
-      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-lagerverwaltung}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
     volumes:
       - mysql_data:/var/lib/mysql
     ports:
@@ -40,18 +40,18 @@ services:
       mysql:
         condition: service_healthy
     ports:
-      - "${BACKEND_PORT:-3000}:3000"
+      - "127.0.0.1:${BACKEND_PORT:-3000}:3000"
     environment:
       NODE_ENV: production
       PORT: 3000
       DB_HOST: mysql
       DB_PORT: 3306
       DB_USER: ${MYSQL_USER:-lagerverwaltung}
-      DB_PASSWORD: ${MYSQL_PASSWORD:-lagerverwaltung}
+      DB_PASSWORD: ${MYSQL_PASSWORD}
       DB_NAME: ${MYSQL_DATABASE:-lagerverwaltung}
       DB_SYNCHRONIZE: false
       DB_MIGRATIONS_RUN: true
-      JWT_SECRET: ${BACKEND_JWT_SECRET:-super-secret}
+      JWT_SECRET: ${BACKEND_JWT_SECRET}
       JWT_EXPIRES_IN: ${BACKEND_JWT_EXPIRES_IN:-8h}
     volumes:
       - ./backups:/app/backups
@@ -69,7 +69,7 @@ services:
     depends_on:
       - backend
     ports:
-      - "80:80"
+      - "127.0.0.1:80:80"
     environment:
       VITE_API_URL: http://backend:3000
     networks:

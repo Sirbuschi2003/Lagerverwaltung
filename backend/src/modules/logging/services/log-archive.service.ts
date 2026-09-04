@@ -263,6 +263,15 @@ export class LogArchiveService {
 
   /** Delete archive directories older than retentionDays. Returns count of removed dirs. */
   cleanupOldArchives(retentionDays: number): number {
+    // GoBD §147 AO: Mindest-Aufbewahrungsfrist 10 Jahre (3650 Tage)
+    const MIN_RETENTION_DAYS = 3650;
+    if (retentionDays < MIN_RETENTION_DAYS) {
+      this.logger.warn(
+        `Retention (${retentionDays} Tage) unterschreitet GoBD-Minimum (${MIN_RETENTION_DAYS} Tage). Verwende Minimum.`,
+      );
+      retentionDays = MIN_RETENTION_DAYS;
+    }
+
     if (!fs.existsSync(this.archiveDir)) return 0;
 
     const cutoff = new Date();

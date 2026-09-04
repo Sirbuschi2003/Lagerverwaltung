@@ -1,4 +1,4 @@
-const INSECURE_JWT_SECRETS = new Set(["change-me", "secret", "changeme", "jwt-secret", "your-secret"]);
+const INSECURE_JWT_SECRETS = new Set(["change-me", "secret", "changeme", "jwt-secret", "your-secret", "super-secret", "changeme123", "lagerverwaltung"]);
 const MIN_JWT_SECRET_LENGTH = 32;
 
 function resolveJwtSecret(): string {
@@ -31,14 +31,14 @@ export default () => ({
     name: process.env.DB_NAME ?? "lagerverwaltung",
     synchronize: (process.env.DB_SYNCHRONIZE ?? "false").toLowerCase() === "true",
     migrationsRun: (process.env.DB_MIGRATIONS_RUN ?? "true").toLowerCase() === "true",
-    poolSize: parseInt(process.env.DB_POOL_SIZE ?? "30", 10),
+    poolSize: parseInt(process.env.DB_POOL_SIZE ?? "80", 10),
   },
   auth: {
     jwtSecret: resolveJwtSecret(),
     jwtExpiresIn:
       process.env.JWT_EXPIRES_IN ||
       process.env.BACKEND_JWT_EXPIRES_IN ||
-      "1d",
+      "15m",
     jwtRefreshExpiresIn:
       process.env.JWT_REFRESH_EXPIRES_IN ||
       process.env.BACKEND_JWT_REFRESH_EXPIRES_IN ||
@@ -48,7 +48,7 @@ export default () => ({
     adminUsername: process.env.DEFAULT_ADMIN_USERNAME ?? "admin",
     // Kein Fallback-Passwort: Admin-Konto ohne Passwort in der DB → Benutzer muss beim ersten Login setzen.
     // DEFAULT_ADMIN_PASSWORD nur beim initialen Seed verwendet, nie danach.
-    adminPassword: process.env.DEFAULT_ADMIN_PASSWORD ?? "ChangeMe123!",
+    adminPassword: (() => { if (!process.env.DEFAULT_ADMIN_PASSWORD && process.env.NODE_ENV === "production") { throw new Error("FATAL: DEFAULT_ADMIN_PASSWORD muss in Production gesetzt sein."); } return process.env.DEFAULT_ADMIN_PASSWORD ?? "ChangeMe123!"; })(),
     adminDisplayName: process.env.DEFAULT_ADMIN_DISPLAY_NAME ?? "System Administrator",
   },
 });
