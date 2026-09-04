@@ -1,6 +1,6 @@
 # KFZ Lagerverwaltung – Benutzerhandbuch
 
-**Version 4.2 · Stand: August 2026**
+**Version 4.3 · Stand: September 2026**
 
 ---
 
@@ -67,10 +67,15 @@
    | `MYSQL_PASSWORD` | DB-Passwort (min. 20 Zeichen) | zufälliger String |
    | `BACKEND_JWT_SECRET` | JWT-Signierungsschlüssel (min. 32 Zeichen) | `openssl rand -hex 32` |
    | `INVENTORY_HMAC_SECRET` | Inventur-Checksummen (min. 32 Zeichen) | `openssl rand -hex 32` |
+   | `DEFAULT_ADMIN_PASSWORD` | **Pflicht in Production:** Initiales Admin-Passwort (min. 12 Zeichen). Das System startet ohne diesen Wert nicht. | sicheres Passwort |
    | `CADDY_HTTPS_PORT` | HTTPS-Port der App | `8443` |
    | `CADDY_HTTP_PORT` | HTTP-Port (Weiterleitung auf HTTPS) | `8080` |
+   | `DB_POOL_SIZE` | Datenbankverbindungen im Pool (Standard: 80, ausreichend für 200 Techniker) | `80` |
+   | `JWT_EXPIRES_IN` | Laufzeit der Sitzungs-Tokens (Standard: 15 Minuten, OWASP-Empfehlung) | `15m` |
    | `LOG_ARCHIVE_ENCRYPTION_KEY` | **Empfohlen:** Passphrase für AES-256-GCM-Verschlüsselung der Log-Archive (optional) | beliebiger String |
    | `PUPPETEER_DISABLE_SANDBOX` | Auf `true` setzen wenn Puppeteer im Container keine Sandbox nutzen darf (Synology) | `true` |
+
+   > **Sicherheitshinweis (ab v4.3):** Das System startet ohne korrekt gesetztes `DEFAULT_ADMIN_PASSWORD` in Production-Umgebungen mit einem Fehler. Alle Secrets ohne gesetzten Wert in der `.env` führen ebenfalls zum Abbruch — es gibt keine unsicheren Standardwerte mehr.
 
    **Dateiablage-Pfade** (optional, aber empfohlen für NAS-Zugriff per SMB):
    ```env
@@ -145,6 +150,9 @@ Alternativ kann das Update direkt über die Web-Oberfläche ausgelöst werden:
 | `backend` | NestJS API | 3000 |
 | `frontend` | React App (nginx) | 80 |
 | `mysql` | Datenbank | 3306 |
+| `socket-proxy` | Docker-Socket-Proxy (ab v4.3) – begrenzt Docker-API-Zugriff für In-App-Updates | 2375 (intern) |
+
+> **Sicherheitshinweis:** Ab v4.3 kommuniziert der Backend-Container mit dem Docker-Daemon ausschließlich über den `socket-proxy`. Der direkte Socket-Mount (`/var/run/docker.sock`) wurde entfernt. Der Proxy erlaubt nur die für In-App-Updates notwendigen API-Endpunkte.
 
 ```bash
 # Status prüfen
@@ -527,6 +535,49 @@ Aufruf unter **Zugriffssteuerung**.
 
 ---
 
+### 13.3 Zwei-Faktor-Authentifizierung (MFA)
+
+MFA ist **optional** und kann von jedem Benutzer selbst aktiviert werden. Empfohlen für alle Administrator-Konten.
+
+**MFA aktivieren (eingeloggt):**
+1. Profil → **Sicherheit → MFA einrichten**
+2. QR-Code mit einer Authenticator-App scannen (z.B. Google Authenticator, Authy, 1Password)
+3. Einmalcode eingeben und bestätigen → MFA ist aktiv
+4. Bei jedem Login: nach Passwort-Eingabe zusätzlich den aktuellen 6-stelligen Code eingeben
+
+**MFA einrichten ohne aktiven Login (Bootstrap-Flow für neue Admin-Konten):**
+
+Falls ein neues Administrator-Konto angelegt wurde und noch kein Login möglich ist, um MFA einzurichten:
+1. Login mit Benutzername + Passwort starten
+2. Falls der Server `requiresMfaSetup: true` zurückgibt → Weiterleitung zum MFA-Einrichtungsassistenten
+3. QR-Code scannen, Code eingeben → vollständige Sitzung wird ausgestellt
+
+**MFA deaktivieren:**
+- Profil → **Sicherheit → MFA deaktivieren** (Passwort-Bestätigung erforderlich)
+- Nur Super-Admins können MFA anderer Benutzer deaktivieren (über Benutzerverwaltung)
+
+---
+
+### 13.4 DSGVO – Datenschutzrechte der Benutzer
+
+#### Recht auf Auskunft & Datenportabilität (Art. 15 / Art. 20 DSGVO)
+
+Jeder Benutzer kann seine eigenen Daten als JSON-Datei herunterladen:
+- Profil → **Datenschutz → Meine Daten exportieren**
+- Die Datei enthält alle gespeicherten personenbezogenen Daten (Profil, Einstellungen, Aktivitäten)
+
+#### Recht auf Vergessenwerden (Art. 17 DSGVO)
+
+Benutzer können ihr Konto anonymisieren lassen:
+- Profil → **Datenschutz → Konto anonymisieren**
+- Der Benutzername, die E-Mail-Adresse und alle personenbezogenen Felder werden durch anonyme Werte ersetzt
+- Das Konto selbst und alle zugehörigen Buchungen bleiben für die Buchführung erhalten (§257 HGB), sind jedoch nicht mehr einer Person zuordenbar
+- **Super-Admins** können beliebige Konten anonymisieren (unter **Benutzer → Konto anonymisieren**)
+
+> **Hinweis:** Die Anonymisierung ist unwiderruflich. Ein anonymisiertes Konto kann nicht wiederhergestellt werden.
+
+---
+
 ## 14. Einstellungen & Konfiguration
 
 ### 14.1 Allgemeine Einstellungen
@@ -568,6 +619,11 @@ Alle Einstellungen werden serverseitig gespeichert und sind nach Reload (F5) ode
 Aufruf unter **Administration → Logs → Archiv**.
 
 Ältere Logs werden automatisch in tagesweise JSON-Dateien archiviert und aus der Datenbank entfernt. Der Archivierungszeitraum ist konfigurierbar.
+
+> **GoBD-Pflicht (ab v4.3):** Die Mindest-Aufbewahrungsfrist ist auf **10 Jahre (3650 Tage)** festgelegt und kann nicht unterschritten werden. Konfigurationswerte unterhalb dieser Grenze werden beim Archivierungslauf automatisch auf das Minimum angehoben (§147 AO, GoBD). Buchungsrelevante Logs dürfen nicht gelöscht werden.
+
+**Logs manuell löschen (deleteAllLogs):**  
+Diese Funktion ist ausschließlich Super-Admins vorbehalten. Jede Löschung wird als unwiderruflicher `SECURITY`-Log-Eintrag dokumentiert, der selbst nicht gelöscht werden kann. Sicherheits-relevante Einträge (Logins, Passwortänderungen, MFA-Ereignisse) werden von der Massenbereinigung nicht entfernt.
 
 **Verschlüsselung (empfohlen):**  
 Wenn `LOG_ARCHIVE_ENCRYPTION_KEY` in der `.env` gesetzt ist, werden neu erstellte Archive mit AES-256-GCM verschlüsselt gespeichert. Ältere Plaintext-Archive bleiben weiterhin lesbar. Die Entschlüsselung erfolgt automatisch beim Abrufen über die Oberfläche.

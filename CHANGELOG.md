@@ -5,6 +5,58 @@ Format orientiert sich an [Keep a Changelog](https://keepachangelog.com/de/1.0.0
 
 ---
 
+## [4.3.0] – 2026-09-04 · Security & Compliance Release
+
+> **Wichtig:** Dieses Release behebt kritische Sicherheits- und Compliance-Findings aus dem Vollaudit vom 04.09.2026 (22 Agenten, 98 Findings). Alle 10 KRITISCH-Findings und die wichtigsten HOCH-Findings wurden adressiert.  
+> **Pflicht vor dem Produktiveinsatz:** `.env` um `DEFAULT_ADMIN_PASSWORD` und `DB_POOL_SIZE` ergänzen (siehe Installationsanleitung).
+
+### Security
+- **NIS2-003 – Klartext-Secrets entfernt:** Alle Fallback-Secrets (`JWT_SECRET=super-secret`, `MYSQL_ROOT_PASSWORD=changeMeRoot` usw.) aus `docker-compose.yml` entfernt. Das System startet ohne korrekt befüllte `.env` nicht mehr.
+- **NIS2-002 – Docker-Socket abgesichert:** Der Backend-Container mountet `/var/run/docker.sock` nicht mehr direkt. Stattdessen läuft ein `socket-proxy`-Container (Tecnativa docker-socket-proxy 0.3.0) als Mittelsmann mit minimalen Rechten (nur `CONTAINERS` + `IMAGES` + `POST`). Host-Escape ist damit nicht mehr möglich.
+- **NIS2-005 – Port-Binding:** Backend-Port 3000 und Frontend-Port 80 in `docker-compose.yml` (Entwicklung) nur noch an `127.0.0.1` gebunden.
+- **SEC-001 – Refresh-Token-Invalidierung:** Nach `changePassword()` und `resetPassword()` werden alle aktiven Refresh-Tokens des Benutzers sofort widerrufen. Gestohlene Tokens werden damit innerhalb von Sekunden ungültig.
+- **SEC-002 – Password-Reset-Token gehashт:** Reset-Tokens werden nur noch als SHA-256-Hash in der Datenbank gespeichert (identisch mit der bestehenden Refresh-Token-Logik). Der Klartext-Token geht ausschließlich per E-Mail an den Benutzer.
+- **SEC-012 – Passwort-Mindestlänge:** Von 8 auf 12 Zeichen erhöht (OWASP-Empfehlung).
+- **JWT-Laufzeit:** Access-Token-Laufzeit von 24 Stunden auf 15 Minuten gesenkt (OWASP). Bestehende Sitzungen laufen durch den Refresh-Token-Flow weiterhin nahtlos.
+- **Erweiterter Schwachstellen-Check:** `INSECURE_JWT_SECRETS`-Set um `super-secret`, `changeme123` und `lagerverwaltung` erweitert. Schwache Secrets werden beim Start erkannt und führen zum Abbruch.
+
+### DSGVO / Datenschutz
+- **DSGVO-003 – IP-Anonymisierung:** IP-Adressen in `password_reset_tokens` werden auf Subnetz-Ebene anonymisiert gespeichert (IPv4: letzes Oktett → 0, IPv6: ab Gruppe 4 → `*`).
+- **DSGVO-001 – Recht auf Vergessenwerden (Art. 17):** Neuer Endpunkt `POST /users/:id/anonymize`. Benutzer können sich selbst anonymisieren; Super-Admins können beliebige Konten anonymisieren. Der Endpunkt ruft die bestehende `anonymizeUser()`-Methode auf und erstellt einen Audit-Log-Eintrag.
+- **DSGVO-020 – Datenportabilität (Art. 20):** Neuer Endpunkt `GET /users/me/export`. Gibt alle eigenen Benutzerdaten als JSON-Download zurück (`Content-Disposition: attachment`).
+- **DSGVO-006 – Token-Bereinigung:** Neuer `AuthCleanupService` mit täglichem Cron-Job (03:00 Uhr). Löscht abgelaufene Refresh-Tokens sowie verwendete oder abgelaufene Password-Reset-Tokens, die älter als 7 Tage sind.
+
+### GoBD / Compliance
+- **GOB-001 – Löschsperre Bestellungen:** `purgeOldOrders()` ist deaktiviert. Abgeschlossene Bestellungen dürfen nach GoBD Rn. 64–67 nicht physisch gelöscht werden (Aufbewahrungspflicht §257 HGB: 10 Jahre). Die Methode schreibt nur noch eine Warnung ins Log.
+- **GOB-002 – Löschsperre Bestellungs-PDFs:** `deleteOrderPdfFromStorage()` ist deaktiviert (§257 HGB Belegpflicht). Fehler in `saveOrderPdfToStorage()` werden geloggt und nach oben propagiert.
+- **GOB-004 – Log-Archiv-Mindestretention:** `cleanupOldArchives()` erzwingt eine Mindest-Retention von 3650 Tagen (10 Jahre, §147 AO). Konfigurationswerte unterhalb dieser Grenze werden auf das Minimum angehoben.
+- **GOB-007 – PDF-Pflichtfelder:** `stripOrderPdfFields()` ist deaktiviert. Preisfelder werden nicht mehr aus Bestelldokumenten entfernt (§14 UStG: Pflichtangaben auf Rechnungen/Belegen).
+
+### NIS2 / Audit-Trail
+- **NIS2-001 – deleteAllLogs() abgesichert:** Die Methode schreibt vor der Löschoperation einen `SECURITY`-Level-Eintrag in die Log-Tabelle. Dieser SECURITY-Eintrag überlebt die Löschung und dokumentiert, wer wann alle Logs gelöscht hat. SECURITY-Logs werden grundsätzlich nicht durch `deleteAllLogs()` entfernt.
+
+### Skalierbarkeit
+- **SCALE-01 – Connection-Pool:** Standard-Pool-Size von 30 auf 80 erhöht (ausreichend für 200 gleichzeitige Techniker). Konfigurierbar über `DB_POOL_SIZE` in der `.env`.
+- **SCALE-02 – Docker Resource Limits:** Backend (2 CPUs, 1,5 GB RAM) und MySQL (4 CPUs, 2 GB RAM) haben in `docker-compose.main.yml` definierte Ressourcenlimits.
+
+### Transaktionssicherheit
+- **TX-01 – applyMovementToStock:** Die Methode nimmt jetzt einen optionalen `EntityManager` entgegen und führt Bestand-Updates innerhalb der übergebenen Transaktion aus. Kein partieller Bestandsfehler mehr bei Schreibfehler.
+- **TX-02 – reorderLines:** `Promise.all()` für Position-Sortierung in einer gemeinsamen `dataSource.transaction()` gewrappt.
+- **TX-03 – removeVehicleStock:** `linesRepository.remove()` und `stockLevelsRepository.remove()` laufen jetzt in einer gemeinsamen Transaktion. Kein halbgeleerer Fahrzeugbestand bei Datenbankfehler.
+
+### MFA
+- **MFA opt-in:** MFA bleibt freiwillig für alle Rollen. Admins können TOTP-MFA über `POST /auth/mfa/setup` → `POST /auth/mfa/verify-setup` aktivieren.
+- **MFA-Bootstrap-Flow:** Neue Endpunkte für den Fall dass ein Administrator MFA einrichten möchte ohne bereits eingeloggt zu sein:
+  - `POST /auth/mfa/setup-init` – QR-Code anfordern via kurzlebigem `mfaSetupToken` (10 Minuten)
+  - `POST /auth/mfa/verify-setup-init` – TOTP bestätigen + vollständige Auth-Tokens erhalten
+
+### Infrastruktur
+- **socket-proxy Container:** Neuer `socket-proxy`-Service in `docker-compose.main.yml` (startet vor dem Backend, `depends_on`).
+- **DEFAULT_ADMIN_PASSWORD:** In Production wird beim Fehlen dieser Umgebungsvariable ein Fehler geworfen statt einen unsicheren Standardwert zu verwenden.
+- **TypeORM-Migration `1755600000000-SecurityHardeningFixes`:** Bereinigt abgelaufene Password-Reset-Tokens und legt einen Index auf `password_reset_tokens.token` an.
+
+---
+
 ## [4.2.0] – 2026-08-28
 
 ### Neu
