@@ -1,6 +1,36 @@
 name: lagerverwaltung
 
 services:
+  socket-proxy:
+    image: tecnativa/docker-socket-proxy:0.3.0
+    restart: unless-stopped
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    environment:
+      # Erlaubte API-Endpunkte (Principle of Least Privilege – NIS2-002)
+      CONTAINERS: 1
+      IMAGES: 1
+      POST: 1
+      NETWORKS: 0
+      VOLUMES: 0
+      BUILD: 0
+      COMMIT: 0
+      CONFIGS: 0
+      DISTRIBUTION: 0
+      EXEC: 0
+      GRPC: 0
+      PLUGINS: 0
+      SECRETS: 0
+      SERVICES: 0
+      SESSION: 0
+      SWARM: 0
+      SYSTEM: 0
+      TASKS: 0
+    networks:
+      - socket_proxy_net
+    security_opt:
+      - no-new-privileges:true
+
   mysql:
     image: mysql:8.3
     restart: unless-stopped
@@ -50,6 +80,8 @@ services:
     depends_on:
       mysql:
         condition: service_healthy
+      socket-proxy:
+        condition: service_started
     environment:
       NODE_ENV: production
       PORT: 3000
@@ -76,14 +108,14 @@ services:
       LOG_ARCHIVE_PATH: /app/log-archives
       DELIVERY_NOTES_STORAGE_PATH: /app/delivery-notes
       DB_POOL_SIZE: ${DB_POOL_SIZE:-80}
+      # NIS2-002: Docker-Zugriff ueber Socket-Proxy (kein direkter Socket-Mount mehr)
+      DOCKER_HOST: tcp://socket-proxy:2375
     volumes:
       - ${BACKUP_STORAGE_HOST_PATH:-backups_data}:/app/backups
       - ${PURCHASE_ORDER_STORAGE_HOST_PATH:-purchase_orders_data}:/app/purchase-orders
       - ${ITEM_IMAGE_STORAGE_HOST_PATH:-item_images_data}:/app/item-images
       - ${LOG_ARCHIVE_STORAGE_HOST_PATH:-log_archives_data}:/app/log-archives
       - ${DELIVERY_NOTES_STORAGE_HOST_PATH:-delivery_notes_data}:/app/delivery-notes
-      # Docker-Socket fuer automatisches Update (In-App Update-Funktion)
-      - /var/run/docker.sock:/var/run/docker.sock
       # Compose-Datei fuer Update-Skript einbinden
       - .:/workspace:ro
     healthcheck:
@@ -92,15 +124,13 @@ services:
       timeout: 5s
       retries: 5
       start_period: 40s
-    # Security: non-root user, minimal capabilities, docker group for in-app update socket access
+    # Security: non-root user, minimale Capabilities (NIS2-002: group_add entfernt, kein Socket-Mount mehr)
     security_opt:
       - no-new-privileges:true
     cap_drop:
       - ALL
     cap_add:
       - NET_BIND_SERVICE
-    group_add:
-      - "121"   # docker group GID auf UGREEN NAS DATA-SRV-02 (ermittelt mit: cat /etc/group | grep docker)
     deploy:
       resources:
         limits:
@@ -110,6 +140,7 @@ services:
       lagerverwaltung:
         aliases:
           - lager-backend
+      socket_proxy_net:
 
   frontend:
     image: ghcr.io/sirbuschi2003/lagerverwaltung-frontend:latest
@@ -153,6 +184,10 @@ services:
 networks:
   lagerverwaltung:
     driver: bridge
+  # Isoliertes internes Netz fuer Socket-Proxy (NIS2-002: kein Outbound-Internet, nur Backend-Zugriff)
+  socket_proxy_net:
+    driver: bridge
+    internal: true
   lan02:
     external: true
     name: LAN02

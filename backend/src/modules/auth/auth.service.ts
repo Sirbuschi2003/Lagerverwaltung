@@ -1,6 +1,6 @@
 import * as crypto from "crypto";
 
-import { Injectable, Logger, UnauthorizedException, BadRequestException } from "@nestjs/common";
+import { Injectable, Logger, UnauthorizedException, BadRequestException, ForbiddenException } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { JwtService } from "@nestjs/jwt";
 import { InjectRepository } from "@nestjs/typeorm";
@@ -168,6 +168,23 @@ export class AuthService {
         { expiresIn: '5m' },
       );
       return { requiresMfa: true, mfaToken };
+    }
+
+    // NIS2-009: MFA-Enrollment-Pflicht für privilegierte Rollen (ADMIN, SUPER_ADMIN).
+    // Admins ohne aktives MFA werden blockiert — Setup via:
+    //   1. POST /api/auth/mfa/setup        → liefert QR-Code + Secret
+    //   2. POST /api/auth/mfa/verify-setup → bestätigt TOTP-Code und aktiviert MFA
+    // HINWEIS: Setup-Endpunkte erfordern JwtAuthGuard. Ein Administrator ohne MFA kann sich
+    // daher nicht selbst einrichten — ein Super-Admin oder DB-Admin muss MFA vorab aktivieren.
+    if (["ADMIN", "SUPER_ADMIN"].includes(user.role) && !user.mfaEnabled) {
+      await this.loggingService.logSecurity(
+        'MFA_ENROLLMENT_REQUIRED',
+        `Login für ${user.role} ohne MFA verweigert: ${user.username}`,
+        { ...context, userId: user.id },
+      );
+      throw new ForbiddenException(
+        "MFA-Einrichtung erforderlich. Bitte richten Sie TOTP-MFA ein bevor Sie sich als Administrator anmelden.",
+      );
     }
 
     return this.issueTokens(user, context);

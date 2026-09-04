@@ -8,9 +8,9 @@ export class ResetPasswordDto {
 
   @IsString()
   @IsNotEmpty({ message: 'Neues Passwort ist erforderlich' })
-  @MinLength(8, { message: 'Passwort muss mindestens 8 Zeichen lang sein' })
+  @MinLength(12, { message: 'Passwort muss mindestens 12 Zeichen lang sein' })
   @MaxLength(256)
-  @Matches(/^(?=.*[A-Z])(?=.*[0-9])(?=.*[^A-Za-z0-9]).{8,}$/, {
+  @Matches(/^(?=.*[A-Z])(?=.*[0-9])(?=.*[^A-Za-z0-9]).{12,}$/, {
     message: 'Passwort muss mindestens einen Großbuchstaben, eine Zahl und ein Sonderzeichen enthalten',
   })
   newPassword!: string;

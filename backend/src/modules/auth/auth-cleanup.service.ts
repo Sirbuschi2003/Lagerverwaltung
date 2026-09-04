@@ -1,4 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { Cron, CronExpression } from '@nestjs/schedule';
 import { InjectRepository } from '@nestjs/typeorm';
 import { LessThan, Repository } from 'typeorm';
 
@@ -22,8 +23,9 @@ export class AuthCleanupService {
 
   /**
    * Löscht abgelaufene RefreshTokens und verbrauchte/abgelaufene PasswordResetTokens
-   * die älter als 7 Tage sind.
+   * die älter als 7 Tage sind. Läuft täglich um 03:00 Uhr (DSGVO-006).
    */
+  @Cron(CronExpression.EVERY_DAY_AT_3AM)
   async cleanupExpiredAuthTokens(): Promise<{ refreshTokens: number; passwordResetTokens: number }> {
     const now = new Date();
 

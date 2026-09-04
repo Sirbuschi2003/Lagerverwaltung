@@ -1,4 +1,4 @@
-﻿import { Body, ClassSerializerInterceptor, Controller, Delete, Get, NotFoundException, Param, Patch, Post, Put, Req, UseGuards, UseInterceptors, ForbiddenException, BadRequestException } from "@nestjs/common";
+﻿import { Body, ClassSerializerInterceptor, Controller, Delete, Get, Header, HttpCode, HttpStatus, NotFoundException, Param, Patch, Post, Put, Req, UseGuards, UseInterceptors, ForbiddenException, BadRequestException } from "@nestjs/common";
 import type { Request } from "express";
 
 interface UsersRequest extends Request {
@@ -85,6 +85,13 @@ export class UsersController {
     return this.usersService.updateUserSettings(user.id, sanitized);
   }
 
+  /** DSGVO Art. 20 (Datenportabilität): Eigene personenbezogene Daten als JSON-Download exportieren. */
+  @Get("me/export")
+  @Header("Content-Disposition", "attachment; filename=\"user-data-export.json\"")
+  async exportMyData(@CurrentUser() currentUser: User) {
+    return this.usersService.getUserDataExport(currentUser.id);
+  }
+
   @Get("technicians")
   @Roles("WAREHOUSE", "MANAGER")
   findTechnicians(@Req() req: UsersRequest) {
@@ -154,25 +161,27 @@ export class UsersController {
     return this.usersService.remove(id);
   }
 
-  /** DSGVO Art. 17: Anonymisierung statt Hard-Delete */
-  @Patch(":id/anonymize")
-  @Roles("MANAGER")
-  @Permissions("users.delete")
-  async anonymizeUser(@Param("id") id: string, @CurrentUser() currentUser: User) {
-    // Kein Admin darf sich selbst anonymisieren
-    if (currentUser.id === id) {
-      throw new ForbiddenException("Eigenes Konto kann nicht anonymisiert werden");
+  /** DSGVO Art. 17 (Right to be Forgotten): Anonymisierung eines Benutzerkontos.
+   * SUPER_ADMIN kann beliebige User anonymisieren; jeder User darf sich selbst anonymisieren.
+   * Kein @Roles-Guard hier, da die Autorisierung methodenseitig geprueft wird (isSelf || isSuperAdmin). */
+  @Post(":id/anonymize")
+  @HttpCode(HttpStatus.OK)
+  async anonymizeUser(@Param("id") id: string, @Req() req: UsersRequest, @CurrentUser() currentUser: User) {
+    const isSelf = req.user?.id === id;
+    const isSuperAdmin = req.user?.role === "SUPER_ADMIN";
+    if (!isSelf && !isSuperAdmin) {
+      throw new ForbiddenException("Keine Berechtigung zur Anonymisierung dieses Benutzers");
     }
-    const result = await this.usersService.anonymizeUser(id);
+    await this.usersService.anonymizeUser(id);
     await this.loggingService.logSecurity(
       "USER_ANONYMIZED",
       `Benutzer ${id} wurde anonymisiert (DSGVO Art. 17)`,
-      { userId: currentUser.id, metadata: { targetUserId: id } },
+      { userId: currentUser.id, metadata: { targetUserId: id, selfAnonymized: isSelf } },
     );
-    return result;
+    return { message: "Benutzerdaten wurden anonymisiert.", anonymizedAt: new Date().toISOString() };
   }
 
-  /** DSGVO Art. 15: Datenauszug für betroffene Person */
+  /** DSGVO Art. 15: Datenauszug für betroffene Person (legacy-Endpunkt, bleibt für Abwärtskompatibilität) */
   @Get(":id/data-export")
   async getUserDataExport(@Param("id") id: string, @CurrentUser() currentUser: User) {
     // Nur eigene Daten oder MANAGER dürfen exportieren
