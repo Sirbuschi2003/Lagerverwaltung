@@ -1289,7 +1289,7 @@ export class PurchasingService {
   // §257 HGB Belegpflicht: Dokumente müssen 10 Jahre aufbewahrt werden.
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   private async deleteOrderPdfFromStorage(_order: PurchaseOrder, _overrideOrderNumber?: string): Promise<void> {
-    this.logger.warn(“deleteOrderPdfFromStorage() deaktiviert. GoBD §257 HGB Belegpflicht.”);
+    this.logger.warn('deleteOrderPdfFromStorage() deaktiviert. GoBD §257 HGB Belegpflicht.');
     return;
   }
 
@@ -1310,7 +1310,7 @@ export class PurchasingService {
       await fs.writeFile(fullPath, pdfBuffer);
     } catch (err) {
       // GOB-002: PDF-Ablage ist Belegpflicht (§257 HGB) – Fehler werden nicht stillschweigend verworfen.
-      this.logger.error(“PDF-Ablage fehlgeschlagen:”, err);
+      this.logger.error('PDF-Ablage fehlgeschlagen:', err);
       throw err;
     }
   }
