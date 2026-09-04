@@ -152,6 +152,29 @@ export class AuthController {
     return this.authService.verifyMfaSetup(this.extractUserId(req), body.totpCode);
   }
 
+  /** MFA-Bootstrap Step 1: initiate setup using mfaSetupToken (no full JWT, for new admins). */
+  @Post("mfa/setup-init")
+  async setupMfaInit(@Body() body: { mfaSetupToken: string }) {
+    return this.authService.setupMfaViaSetupToken(body.mfaSetupToken);
+  }
+
+  /** MFA-Bootstrap Step 2: confirm TOTP + receive full auth tokens (no full JWT needed). */
+  @Post("mfa/verify-setup-init")
+  async verifyMfaSetupInit(
+    @Body() body: { mfaSetupToken: string; totpCode: string },
+    @Req() req: Request,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    const context = this.buildRequestContext(req);
+    const result = await this.authService.verifyMfaSetupViaSetupToken(body.mfaSetupToken, body.totpCode, context);
+    if ('refreshToken' in result) {
+      setRefreshCookie(res, result.refreshToken as string);
+      const { refreshToken: _rt, ...safe } = result as Record<string, unknown>;
+      return safe;
+    }
+    return result;
+  }
+
   /** Disables MFA (requires password confirmation). */
   @UseGuards(JwtAuthGuard)
   @Post("mfa/disable")

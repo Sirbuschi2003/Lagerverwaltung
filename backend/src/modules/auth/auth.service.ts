@@ -171,20 +171,20 @@ export class AuthService {
     }
 
     // NIS2-009: MFA-Enrollment-Pflicht für privilegierte Rollen (ADMIN, SUPER_ADMIN).
-    // Admins ohne aktives MFA werden blockiert — Setup via:
-    //   1. POST /api/auth/mfa/setup        → liefert QR-Code + Secret
-    //   2. POST /api/auth/mfa/verify-setup → bestätigt TOTP-Code und aktiviert MFA
-    // HINWEIS: Setup-Endpunkte erfordern JwtAuthGuard. Ein Administrator ohne MFA kann sich
-    // daher nicht selbst einrichten — ein Super-Admin oder DB-Admin muss MFA vorab aktivieren.
+    // Statt ForbiddenException: kurzlebiger mfa-setup Token für den Bootstrap-Flow:
+    //   1. POST /api/auth/mfa/setup-init       (mfaSetupToken) → QR-Code + Secret
+    //   2. POST /api/auth/mfa/verify-setup-init (mfaSetupToken + totpCode) → vollständige Auth-Tokens
     if (["ADMIN", "SUPER_ADMIN"].includes(user.role) && !user.mfaEnabled) {
       await this.loggingService.logSecurity(
         'MFA_ENROLLMENT_REQUIRED',
-        `Login für ${user.role} ohne MFA verweigert: ${user.username}`,
+        `Login für ${user.role} ohne MFA — MFA-Setup-Token ausgestellt: ${user.username}`,
         { ...context, userId: user.id },
       );
-      throw new ForbiddenException(
-        "MFA-Einrichtung erforderlich. Bitte richten Sie TOTP-MFA ein bevor Sie sich als Administrator anmelden.",
+      const mfaSetupToken = await this.jwtService.signAsync(
+        { sub: user.id, tokenType: 'mfa-setup' },
+        { expiresIn: '10m' },
       );
+      return { requiresMfaSetup: true, mfaSetupToken };
     }
 
     return this.issueTokens(user, context);
@@ -254,6 +254,41 @@ export class AuthService {
     await this.userRepo.update(userId, { mfaEnabled: true });
     await this.loggingService.logSecurity('MFA_ENABLED', 'MFA wurde aktiviert', { userId });
     return { enabled: true };
+  }
+
+  /** MFA-Bootstrap: initiates setup using a mfa-setup token (no full JWT needed). */
+  async setupMfaViaSetupToken(mfaSetupToken: string) {
+    const payload = await this.verifyMfaSetupToken(mfaSetupToken);
+    return this.setupMfa(payload.sub as string);
+  }
+
+  /** MFA-Bootstrap: confirms TOTP and issues full auth tokens (no full JWT needed). */
+  async verifyMfaSetupViaSetupToken(
+    mfaSetupToken: string,
+    totpCode: string,
+    context?: { ipAddress?: string; userAgent?: string },
+  ) {
+    const payload = await this.verifyMfaSetupToken(mfaSetupToken);
+    const userId = payload.sub as string;
+    await this.verifyMfaSetup(userId, totpCode);
+    const user = await this.userRepo.findOne({ where: { id: userId }, relations: ['locations'] });
+    if (!user) throw new UnauthorizedException('User nicht gefunden');
+    return this.issueTokens(user, context);
+  }
+
+  private async verifyMfaSetupToken(token: string): Promise<{ sub: string; tokenType: string }> {
+    let payload: { sub: string; tokenType: string };
+    try {
+      payload = await this.jwtService.verifyAsync(token, {
+        secret: this.configService.get<string>('auth.jwtSecret'),
+      });
+    } catch {
+      throw new UnauthorizedException('Ungültiger oder abgelaufener MFA-Setup-Token');
+    }
+    if (payload.tokenType !== 'mfa-setup') {
+      throw new UnauthorizedException('Ungültiger Token-Typ');
+    }
+    return payload;
   }
 
   /** Disables MFA for the user. */

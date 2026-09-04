@@ -193,10 +193,13 @@ export class UpdateService {
     // Helper-Container startet das eigentliche Compose-Up NACHDEM unser Prozess beendet ist.
     // Volume wird am GLEICHEN Pfad wie auf dem Host gemountet → relative Pfade im
     // Compose-File (./deploy/caddy/...) lösen sich korrekt zum Host-Pfad auf.
+    // NIS2-002: Kein direkter Socket-Mount – DOCKER_HOST via Socket-Proxy weitergeben.
     const safePath = this.shellEscapePath(hostProjectPath);
+    const dockerHost = process.env.DOCKER_HOST ?? "unix:///var/run/docker.sock";
     const helperCmd = [
       "docker run --rm -d",
-      "-v /var/run/docker.sock:/var/run/docker.sock",
+      `--network ${projectName}_lagerverwaltung`,
+      `-e DOCKER_HOST=${dockerHost}`,
       `-v ${safePath}:${safePath}:ro`,
       `-e COMPOSE_PROJECT_NAME=${projectName}`,
       "--name lager-update-helper",
