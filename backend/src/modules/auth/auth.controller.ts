@@ -24,10 +24,19 @@ interface AuthenticatedRequest extends Request {
 const REFRESH_COOKIE_NAME = "refresh_token";
 const REFRESH_COOKIE_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000; // 30 Tage
 
+// COOKIE_SECURE explizit setzbar: ein "secure"-Cookie wird von Browsern nur
+// ueber HTTPS gespeichert. Deployments ohne TLS-Terminierung (z.B. direkter
+// HTTP-Zugriff auf einer NAS ohne Reverse-Proxy) muessen COOKIE_SECURE=false
+// setzen, sonst geht das Refresh-Cookie beim ersten Request verloren und der
+// Login-Refresh schlaegt mit "Kein Refresh-Token gefunden" fehl.
+const COOKIE_SECURE = process.env.COOKIE_SECURE
+  ? process.env.COOKIE_SECURE === "true"
+  : process.env.NODE_ENV === "production";
+
 function setRefreshCookie(res: Response, token: string): void {
   res.cookie(REFRESH_COOKIE_NAME, token, {
     httpOnly: true,        // Kein JavaScript-Zugriff (XSS-Schutz)
-    secure: process.env.NODE_ENV === "production", // HTTPS-only in Production
+    secure: COOKIE_SECURE, // HTTPS-only, ausser COOKIE_SECURE=false gesetzt
     sameSite: "strict",    // CSRF-Schutz
     maxAge: REFRESH_COOKIE_MAX_AGE_MS,
     path: "/api/auth",     // Nur für Auth-Endpunkte

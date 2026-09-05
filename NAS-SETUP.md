@@ -48,6 +48,12 @@ Beispiel: laeuft das Frontend unter `http://10.10.10.4:8090`, dann:
 APP_HOST=10.10.10.4:8090
 ```
 
+**`COOKIE_SECURE` ist bereits auf `false` voreingestellt** (dieser Stack hat
+keine eigene HTTPS-Terminierung). Falls ihr spaeter einen Reverse-Proxy mit
+TLS vorschaltet, auf `true` setzen - sonst funktioniert der automatische
+Login-Refresh nicht (Nutzer werden nach kurzer Zeit ausgeloggt, Fehler
+"Kein Refresh-Token gefunden").
+
 **Passwoerter generieren** (falls kein Passwort-Manager zur Hand ist), z.B. in
 PowerShell: `-join ((48..57)+(65..90)+(97..122)|Get-Random -Count 32|%{[char]$_})`
 
