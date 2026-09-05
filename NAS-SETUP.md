@@ -37,6 +37,15 @@ DEFAULT_ADMIN_PASSWORD=<sicheres-admin-passwort>
 INVENTORY_HMAC_SECRET=<noch-ein-zufaelliges-secret>
 BACKEND_PORT=3000
 FRONTEND_PORT=8080
+APP_HOST=<NAS-IP>:<FRONTEND_PORT>
+```
+
+**`APP_HOST` ist wichtig** - ohne diese Variable blockt das Backend alle
+Anfragen vom Frontend mit einem CORS-Fehler ("Origin ... nicht erlaubt").
+Beispiel: laeuft das Frontend unter `http://10.10.10.4:8090`, dann:
+
+```
+APP_HOST=10.10.10.4:8090
 ```
 
 **Passwoerter generieren** (falls kein Passwort-Manager zur Hand ist), z.B. in

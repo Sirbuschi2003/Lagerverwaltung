@@ -49,6 +49,11 @@ services:
       DB_USER: ${MYSQL_USER:-lagerverwaltung}
       DB_PASSWORD: ${MYSQL_PASSWORD}
       DB_NAME: ${MYSQL_DATABASE:-lagerverwaltung}
+      # APP_HOST = <NAS-IP>:<FRONTEND_PORT>, z.B. 10.10.10.4:8090
+      # Wird als erlaubter CORS-Origin (http+https) eingetragen - ohne das
+      # blockt das Backend alle Requests vom Frontend mit "CORS ... nicht erlaubt".
+      APP_HOST: ${APP_HOST:-}
+      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-}
       DB_SYNCHRONIZE: false
       DB_MIGRATIONS_RUN: true
       JWT_SECRET: ${BACKEND_JWT_SECRET}
