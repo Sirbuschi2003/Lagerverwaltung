@@ -1,0 +1,79 @@
+# Lagerverwaltung - Portainer/NAS Stack
+# Verwendet fertige Images von ghcr.io — kein lokales Bauen nötig.
+# In Portainer: "Compose path" auf diese Datei setzen.
+
+services:
+  mysql:
+    image: mysql:8.3
+    container_name: lagerverwaltung-db
+    restart: unless-stopped
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+      - --authentication-policy=caching_sha2_password
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-lagerverwaltung}
+      MYSQL_USER: ${MYSQL_USER:-lagerverwaltung}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+    volumes:
+      - mysql_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h localhost || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - lagerverwaltung
+
+  backend:
+    image: ghcr.io/sirbuschi2003/lagerverwaltung-backend:latest
+    container_name: lagerverwaltung-api
+    restart: unless-stopped
+    depends_on:
+      mysql:
+        condition: service_healthy
+    ports:
+      - "${BACKEND_PORT:-3000}:3000"
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      DB_HOST: mysql
+      DB_PORT: 3306
+      DB_USER: ${MYSQL_USER:-lagerverwaltung}
+      DB_PASSWORD: ${MYSQL_PASSWORD}
+      DB_NAME: ${MYSQL_DATABASE:-lagerverwaltung}
+      DB_SYNCHRONIZE: false
+      DB_MIGRATIONS_RUN: true
+      JWT_SECRET: ${BACKEND_JWT_SECRET}
+      JWT_EXPIRES_IN: ${BACKEND_JWT_EXPIRES_IN:-8h}
+      DEFAULT_ADMIN_PASSWORD: ${DEFAULT_ADMIN_PASSWORD}
+      DEFAULT_ADMIN_USERNAME: ${DEFAULT_ADMIN_USERNAME:-admin}
+      DEFAULT_ADMIN_DISPLAY_NAME: ${DEFAULT_ADMIN_DISPLAY_NAME:-System Administrator}
+      DB_POOL_SIZE: ${DB_POOL_SIZE:-80}
+      INVENTORY_HMAC_SECRET: ${INVENTORY_HMAC_SECRET}
+      PURCHASE_ORDER_STORAGE_PATH: /app/purchase-orders
+    volumes:
+      - ./backups:/app/backups
+      - ./purchase-orders:/app/purchase-orders
+    networks:
+      - lagerverwaltung
+
+  frontend:
+    image: ghcr.io/sirbuschi2003/lagerverwaltung-frontend:latest
+    container_name: lagerverwaltung-ui
+    restart: unless-stopped
+    depends_on:
+      - backend
+    ports:
+      - "${FRONTEND_PORT:-80}:80"
+    networks:
+      - lagerverwaltung
+
+networks:
+  lagerverwaltung:
+    driver: bridge
+
+volumes:
+  mysql_data:
+    driver: local
