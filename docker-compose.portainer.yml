@@ -1,6 +1,11 @@
 # Lagerverwaltung - Portainer/NAS Stack
-# Verwendet fertige Images von ghcr.io — kein lokales Bauen nötig.
+# Verwendet fertige Images von ghcr.io - kein lokales Bauen noetig.
 # In Portainer: "Compose path" auf diese Datei setzen.
+#
+# WICHTIG: Alle Daten liegen in benannten Docker-Volumes mit FESTEM Namen
+# (nicht Portainer/Stack-generiert). Das macht Backup/Reset eindeutig und
+# unabhaengig davon, wie der Stack in Portainer heisst oder von wo Portainer
+# das Git-Repo gerade ausgecheckt hat (wichtig bei GitOps-Redeploys!).
 
 services:
   mysql:
@@ -22,7 +27,8 @@ services:
       test: ["CMD-SHELL", "mysqladmin ping -h localhost || exit 1"]
       interval: 10s
       timeout: 5s
-      retries: 5
+      retries: 10
+      start_period: 40s
     networks:
       - lagerverwaltung
 
@@ -54,8 +60,14 @@ services:
       INVENTORY_HMAC_SECRET: ${INVENTORY_HMAC_SECRET}
       PURCHASE_ORDER_STORAGE_PATH: /app/purchase-orders
     volumes:
-      - ./backups:/app/backups
-      - ./purchase-orders:/app/purchase-orders
+      - backend_backups:/app/backups
+      - backend_purchase_orders:/app/purchase-orders
+    healthcheck:
+      test: ["CMD-SHELL", "wget --spider --quiet http://127.0.0.1:3000/api/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
     networks:
       - lagerverwaltung
 
@@ -64,9 +76,10 @@ services:
     container_name: lagerverwaltung-ui
     restart: unless-stopped
     depends_on:
-      - backend
+      backend:
+        condition: service_healthy
     ports:
-      - "${FRONTEND_PORT:-80}:80"
+      - "${FRONTEND_PORT:-8080}:80"
     networks:
       - lagerverwaltung
 
@@ -74,6 +87,16 @@ networks:
   lagerverwaltung:
     driver: bridge
 
+# Feste Volume-Namen - unabhaengig vom Stack-/Projektnamen in Portainer.
+# Backup/Reset ist damit immer eindeutig: "lagerverwaltung_*" in Portainer
+# unter Volumes suchen, nicht raten muessen welches gemeint ist.
 volumes:
   mysql_data:
+    name: lagerverwaltung_mysql_data
+    driver: local
+  backend_backups:
+    name: lagerverwaltung_backups
+    driver: local
+  backend_purchase_orders:
+    name: lagerverwaltung_purchase_orders
     driver: local
