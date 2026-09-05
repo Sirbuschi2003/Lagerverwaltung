@@ -823,6 +823,11 @@ export interface PurchaseOrderLineDto {
   receivedQuantity: number;
   packSize?: number | null;
   sortOrder?: number | null;
+  unitPriceNet?: number | null;
+  taxRate?: number | null;
+  currency?: string;
+  lineTotalNet?: number | null;
+  lineTotalGross?: number | null;
 }
 
 export interface PurchaseOrderDto {
@@ -909,11 +914,17 @@ export const fetchPurchaseSuggestions = async (refresh = false, warehouseId?: st
   return response.data;
 };
 
+export type PurchaseOrderLinePricePayload = {
+  unitPriceNet?: number;
+  taxRate?: number;
+  currency?: string;
+};
+
 export const createPurchaseOrder = async (payload: {
   supplierId: string;
   orderNumber?: string;
   note?: string;
-  lines: Array<{ itemId: string; quantity: number; packSize?: number }>;
+  lines: Array<{ itemId: string; quantity: number; packSize?: number } & PurchaseOrderLinePricePayload>;
 }): Promise<PurchaseOrderDto> => {
   const response = await api.post<PurchaseOrderDto>("/purchase-orders", payload);
   return response.data;
@@ -941,7 +952,7 @@ export const deletePurchaseOrder = async (id: string): Promise<void> => {
 
 export const addPurchaseOrderLine = async (
   orderId: string,
-  payload: { itemId: string; quantity: number },
+  payload: { itemId: string; quantity: number } & PurchaseOrderLinePricePayload,
 ): Promise<PurchaseOrderDto> => {
   const response = await api.post<PurchaseOrderDto>(`/purchase-orders/${orderId}/lines`, payload);
   return response.data;
@@ -950,7 +961,7 @@ export const addPurchaseOrderLine = async (
 export const updatePurchaseOrderLine = async (
   orderId: string,
   lineId: string,
-  payload: { quantity: number },
+  payload: { quantity: number } & PurchaseOrderLinePricePayload,
 ): Promise<PurchaseOrderDto> => {
   const response = await api.patch<PurchaseOrderDto>(`/purchase-orders/${orderId}/lines/${lineId}`, payload);
   return response.data;

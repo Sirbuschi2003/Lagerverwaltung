@@ -28,6 +28,7 @@ import { UpdateModule } from "./modules/update/update.module";
 import { MaintenanceModule } from "./modules/maintenance/maintenance.module";
 import { BranchesModule } from "./modules/branches/branches.module";
 import { DeliveryNotesModule } from "./modules/delivery-notes/delivery-notes.module";
+import { ConsentModule } from "./modules/consent/consent.module";
 @Module({
   imports: [
     ConfigModule.forRoot({
@@ -63,6 +64,7 @@ import { DeliveryNotesModule } from "./modules/delivery-notes/delivery-notes.mod
     MaintenanceModule,
     BranchesModule,
     DeliveryNotesModule,
+    ConsentModule,
   ],
   controllers: [AppController],
   providers: [

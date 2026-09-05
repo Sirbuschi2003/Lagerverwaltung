@@ -73,6 +73,9 @@ interface WizardLine {
   description: string;
   descriptionSecondary?: string | null;
   quantity: number;
+  unitPriceNet?: number | null;
+  taxRate?: number | null;
+  currency?: string;
 }
 
 interface WizardGroup {
@@ -86,8 +89,9 @@ const SortableWizardLineRow: React.FC<{
   supplierId: string;
   wizardCreating: boolean;
   onQtyChange: (supplierId: string, itemId: string, qty: number) => void;
+  onPriceChange: (supplierId: string, itemId: string, field: "unitPriceNet" | "taxRate", value: number | null) => void;
   onRemove: (supplierId: string, itemId: string) => void;
-}> = ({ line, supplierId, wizardCreating, onQtyChange, onRemove }) => {
+}> = ({ line, supplierId, wizardCreating, onQtyChange, onPriceChange, onRemove }) => {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: line.itemId });
   return (
     <TableRow ref={setNodeRef} style={{ transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.4 : 1 }}>
@@ -113,6 +117,40 @@ const SortableWizardLineRow: React.FC<{
           inputProps={{ min: 0, style: { textAlign: "right" } }}
           sx={{ width: 80 }}
           disabled={wizardCreating}
+        />
+      </TableCell>
+      <TableCell align="right">
+        <TextField
+          type="number"
+          size="small"
+          placeholder="0.0000"
+          value={line.unitPriceNet ?? ""}
+          onChange={(e) => {
+            const val = e.target.value === "" ? null : Math.max(0, parseFloat(e.target.value) || 0);
+            onPriceChange(supplierId, line.itemId, "unitPriceNet", val);
+          }}
+          onFocus={(e) => e.target.select()}
+          inputProps={{ min: 0, step: 0.01, style: { textAlign: "right" } }}
+          sx={{ width: 100 }}
+          disabled={wizardCreating}
+          InputProps={{ endAdornment: <Typography variant="caption" sx={{ ml: 0.5, whiteSpace: "nowrap" }}>{line.currency || "EUR"}</Typography> }}
+        />
+      </TableCell>
+      <TableCell align="right">
+        <TextField
+          type="number"
+          size="small"
+          placeholder="19"
+          value={line.taxRate ?? ""}
+          onChange={(e) => {
+            const val = e.target.value === "" ? null : Math.max(0, parseFloat(e.target.value) || 0);
+            onPriceChange(supplierId, line.itemId, "taxRate", val);
+          }}
+          onFocus={(e) => e.target.select()}
+          inputProps={{ min: 0, max: 100, style: { textAlign: "right" } }}
+          sx={{ width: 70 }}
+          disabled={wizardCreating}
+          InputProps={{ endAdornment: <Typography variant="caption" sx={{ ml: 0.5 }}>%</Typography> }}
         />
       </TableCell>
       <TableCell>
@@ -657,7 +695,13 @@ const OrderSuggestionsTab: React.FC = () => {
       for (const group of wizardGroups) {
         const lines = group.lines
           .filter((l) => l.quantity > 0)
-          .map((l) => ({ itemId: l.itemId, quantity: l.quantity }));
+          .map((l) => ({
+            itemId: l.itemId,
+            quantity: l.quantity,
+            ...(l.unitPriceNet != null ? { unitPriceNet: l.unitPriceNet } : {}),
+            ...(l.taxRate != null ? { taxRate: l.taxRate } : {}),
+            ...(l.currency ? { currency: l.currency } : {}),
+          }));
         if (lines.length === 0) continue;
         const order = await createPurchaseOrder({
           supplierId: group.supplierId,
@@ -1394,6 +1438,8 @@ const OrderSuggestionsTab: React.FC = () => {
                     <TableCell>Artikelnummer</TableCell>
                     <TableCell>Bezeichnung</TableCell>
                     <TableCell align="right" sx={{ width: 100 }}>Menge</TableCell>
+                    <TableCell align="right" sx={{ width: 120 }}>Netto-Preis</TableCell>
+                    <TableCell align="right" sx={{ width: 80 }}>MwSt.</TableCell>
                     <TableCell sx={{ width: 48 }} />
                   </TableRow>
                 </TableHead>
@@ -1411,6 +1457,15 @@ const OrderSuggestionsTab: React.FC = () => {
                               prev.map((g) =>
                                 g.supplierId === sid
                                   ? { ...g, lines: g.lines.map((l) => l.itemId === itemId ? { ...l, quantity: qty } : l) }
+                                  : g,
+                              ),
+                            )
+                          }
+                          onPriceChange={(sid, itemId, field, value) =>
+                            setWizardGroups((prev) =>
+                              prev.map((g) =>
+                                g.supplierId === sid
+                                  ? { ...g, lines: g.lines.map((l) => l.itemId === itemId ? { ...l, [field]: value } : l) }
                                   : g,
                               ),
                             )

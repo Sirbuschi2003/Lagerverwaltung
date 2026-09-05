@@ -87,18 +87,26 @@ const getOrderYear = (order: PurchaseOrderDto) => {
   return Number.isNaN(parsed.getTime()) ? new Date().getFullYear() : parsed.getFullYear();
 };
 
+const formatPrice = (value?: number | null, currency = "EUR") => {
+  if (value == null) return "-";
+  return new Intl.NumberFormat("de-DE", { style: "currency", currency, minimumFractionDigits: 2, maximumFractionDigits: 4 }).format(Number(value));
+};
+
 interface SortableLineRowProps {
   line: PurchaseOrderDto["lines"][number];
   isDraft: boolean;
   qty: number;
+  priceNet: number | null;
+  taxRate: number | null;
   lineActionLoading: boolean;
   linesCount: number;
   onQtyChange: (id: string, qty: number) => void;
+  onPriceChange: (id: string, field: "priceNet" | "taxRate", value: number | null) => void;
   onBlur: (id: string) => void;
   onRemove: (id: string) => void;
 }
 
-const SortableLineRow: React.FC<SortableLineRowProps> = ({ line, isDraft, qty, lineActionLoading, linesCount, onQtyChange, onBlur, onRemove }) => {
+const SortableLineRow: React.FC<SortableLineRowProps> = ({ line, isDraft, qty, priceNet, taxRate, lineActionLoading, linesCount, onQtyChange, onPriceChange, onBlur, onRemove }) => {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: line.id });
   return (
     <TableRow ref={setNodeRef} style={{ transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.4 : 1 }}>
@@ -126,6 +134,50 @@ const SortableLineRow: React.FC<SortableLineRowProps> = ({ line, isDraft, qty, l
           />
         ) : (
           line.quantity
+        )}
+      </TableCell>
+      <TableCell align="right">
+        {isDraft ? (
+          <TextField
+            type="number"
+            size="small"
+            placeholder="0.0000"
+            value={priceNet ?? ""}
+            onChange={(e) => {
+              const val = e.target.value === "" ? null : Math.max(0, parseFloat(e.target.value) || 0);
+              onPriceChange(line.id, "priceNet", val);
+            }}
+            onBlur={() => onBlur(line.id)}
+            onFocus={(e) => e.target.select()}
+            inputProps={{ min: 0, step: 0.01 }}
+            sx={{ width: 100 }}
+            disabled={lineActionLoading}
+            InputProps={{ endAdornment: <Typography variant="caption" sx={{ ml: 0.5 }}>{line.currency || "EUR"}</Typography> }}
+          />
+        ) : (
+          formatPrice(line.unitPriceNet, line.currency || "EUR")
+        )}
+      </TableCell>
+      <TableCell align="right">
+        {isDraft ? (
+          <TextField
+            type="number"
+            size="small"
+            placeholder="19"
+            value={taxRate ?? ""}
+            onChange={(e) => {
+              const val = e.target.value === "" ? null : Math.max(0, parseFloat(e.target.value) || 0);
+              onPriceChange(line.id, "taxRate", val);
+            }}
+            onBlur={() => onBlur(line.id)}
+            onFocus={(e) => e.target.select()}
+            inputProps={{ min: 0, max: 100 }}
+            sx={{ width: 70 }}
+            disabled={lineActionLoading}
+            InputProps={{ endAdornment: <Typography variant="caption" sx={{ ml: 0.5 }}>%</Typography> }}
+          />
+        ) : (
+          line.taxRate != null ? `${Number(line.taxRate).toFixed(0)} %` : "-"
         )}
       </TableCell>
       {isDraft && (
@@ -176,11 +228,15 @@ const ActiveOrdersTab: React.FC = () => {
 
   // Positions-Verwaltung im Edit-Dialog
   const [lineQtyMap, setLineQtyMap] = useState<Record<string, number>>({});
+  const [linePriceNetMap, setLinePriceNetMap] = useState<Record<string, number | null>>({});
+  const [lineTaxRateMap, setLineTaxRateMap] = useState<Record<string, number | null>>({});
   const [lineActionLoading, setLineActionLoading] = useState(false);
   const [addItemSearch, setAddItemSearch] = useState("");
   const [addItemOptions, setAddItemOptions] = useState<ItemDto[]>([]);
   const [addItem, setAddItem] = useState<ItemDto | null>(null);
   const [addQty, setAddQty] = useState(1);
+  const [addPriceNet, setAddPriceNet] = useState<number | null>(null);
+  const [addTaxRate, setAddTaxRate] = useState<number | null>(null);
 
   const loadOrders = async (status?: PurchaseOrderStatus, signal?: { aborted: boolean }) => {
     setLoading(true);
@@ -260,10 +316,20 @@ const ActiveOrdersTab: React.FC = () => {
       note: order.note || "",
     });
     const qtys: Record<string, number> = {};
-    order.lines.forEach((l) => { qtys[l.id] = l.quantity; });
+    const prices: Record<string, number | null> = {};
+    const taxes: Record<string, number | null> = {};
+    order.lines.forEach((l) => {
+      qtys[l.id] = l.quantity;
+      prices[l.id] = l.unitPriceNet ?? null;
+      taxes[l.id] = l.taxRate ?? null;
+    });
     setLineQtyMap(qtys);
+    setLinePriceNetMap(prices);
+    setLineTaxRateMap(taxes);
     setAddItem(null);
     setAddQty(1);
+    setAddPriceNet(null);
+    setAddTaxRate(null);
     setAddItemSearch("");
     setAddItemOptions([]);
     setEditDialogOpen(true);
@@ -287,11 +353,14 @@ const ActiveOrdersTab: React.FC = () => {
     if (!activeOrder || !canEdit) return;
     const qty = lineQtyMap[lineId];
     if (!qty || qty < 1) return;
-    const original = activeOrder.lines.find((l) => l.id === lineId)?.quantity;
-    if (qty === original) return;
     setLineActionLoading(true);
     try {
-      const updated = await updatePurchaseOrderLine(activeOrder.id, lineId, { quantity: qty });
+      const payload: { quantity: number; unitPriceNet?: number; taxRate?: number } = { quantity: qty };
+      const priceNet = linePriceNetMap[lineId];
+      const taxRate = lineTaxRateMap[lineId];
+      if (priceNet != null) payload.unitPriceNet = priceNet;
+      if (taxRate != null) payload.taxRate = taxRate;
+      const updated = await updatePurchaseOrderLine(activeOrder.id, lineId, payload);
       setOrders((prev) => prev.map((o) => (o.id === updated.id ? updated : o)));
       setActiveOrder(updated);
     } catch (err: any) {
@@ -309,6 +378,8 @@ const ActiveOrdersTab: React.FC = () => {
       setOrders((prev) => prev.map((o) => (o.id === updated.id ? updated : o)));
       setActiveOrder(updated);
       setLineQtyMap((prev) => { const next = { ...prev }; delete next[lineId]; return next; });
+      setLinePriceNetMap((prev) => { const next = { ...prev }; delete next[lineId]; return next; });
+      setLineTaxRateMap((prev) => { const next = { ...prev }; delete next[lineId]; return next; });
     } catch (err: any) {
       alert(`Fehler: ${err?.response?.data?.message || err?.message || "Unbekannt"}`);
     } finally {
@@ -320,14 +391,27 @@ const ActiveOrdersTab: React.FC = () => {
     if (!activeOrder || !addItem || addQty < 1 || !canEdit) return;
     setLineActionLoading(true);
     try {
-      const updated = await addPurchaseOrderLine(activeOrder.id, { itemId: addItem.id, quantity: addQty });
+      const payload: Parameters<typeof addPurchaseOrderLine>[1] = { itemId: addItem.id, quantity: addQty };
+      if (addPriceNet != null) payload.unitPriceNet = addPriceNet;
+      if (addTaxRate != null) payload.taxRate = addTaxRate;
+      const updated = await addPurchaseOrderLine(activeOrder.id, payload);
       setOrders((prev) => prev.map((o) => (o.id === updated.id ? updated : o)));
       setActiveOrder(updated);
       const qtys: Record<string, number> = {};
-      updated.lines.forEach((l) => { qtys[l.id] = l.quantity; });
+      const prices: Record<string, number | null> = {};
+      const taxes: Record<string, number | null> = {};
+      updated.lines.forEach((l) => {
+        qtys[l.id] = l.quantity;
+        prices[l.id] = l.unitPriceNet ?? null;
+        taxes[l.id] = l.taxRate ?? null;
+      });
       setLineQtyMap(qtys);
+      setLinePriceNetMap(prices);
+      setLineTaxRateMap(taxes);
       setAddItem(null);
       setAddQty(1);
+      setAddPriceNet(null);
+      setAddTaxRate(null);
       setAddItemSearch("");
     } catch (err: any) {
       alert(`Fehler: ${err?.response?.data?.message || err?.message || "Unbekannt"}`);
@@ -618,6 +702,8 @@ const ActiveOrdersTab: React.FC = () => {
                                   <TableCell sx={{ fontWeight: 700 }}>Artikel</TableCell>
                                   <TableCell align="right" sx={{ fontWeight: 700 }}>Bestellt</TableCell>
                                   <TableCell align="right" sx={{ fontWeight: 700 }}>Geliefert</TableCell>
+                                  <TableCell align="right" sx={{ fontWeight: 700 }}>Netto/Stk.</TableCell>
+                                  <TableCell align="right" sx={{ fontWeight: 700 }}>Gesamt netto</TableCell>
                                   <TableCell sx={{ fontWeight: 700 }}>Status</TableCell>
                                 </TableRow>
                               </TableHead>
@@ -626,6 +712,9 @@ const ActiveOrdersTab: React.FC = () => {
                                   const received = line.receivedQuantity ?? 0;
                                   const isFullyDelivered = received >= line.quantity;
                                   const isPartial = received > 0 && received < line.quantity;
+                                  const lineTotalNet = line.unitPriceNet != null
+                                    ? Math.round(line.quantity * Number(line.unitPriceNet) * 10000) / 10000
+                                    : null;
                                   return (
                                     <TableRow key={line.id}>
                                       <TableCell>
@@ -634,6 +723,12 @@ const ActiveOrdersTab: React.FC = () => {
                                       </TableCell>
                                       <TableCell align="right">{line.quantity}</TableCell>
                                       <TableCell align="right">{received}</TableCell>
+                                      <TableCell align="right">
+                                        <Typography variant="caption">{formatPrice(line.unitPriceNet, line.currency || "EUR")}</Typography>
+                                      </TableCell>
+                                      <TableCell align="right">
+                                        <Typography variant="caption">{formatPrice(lineTotalNet, line.currency || "EUR")}</Typography>
+                                      </TableCell>
                                       <TableCell>
                                         {isFullyDelivered ? (
                                           <Chip label="Geliefert" color="success" size="small" />
@@ -710,6 +805,8 @@ const ActiveOrdersTab: React.FC = () => {
                       {activeOrder.status === "DRAFT" && <TableCell sx={{ width: 28, px: 0.5 }} />}
                       <TableCell>Artikel</TableCell>
                       <TableCell align="right">Menge</TableCell>
+                      <TableCell align="right">Netto-Preis</TableCell>
+                      <TableCell align="right">MwSt.</TableCell>
                       {activeOrder.status === "DRAFT" && <TableCell />}
                     </TableRow>
                   </TableHead>
@@ -723,9 +820,15 @@ const ActiveOrdersTab: React.FC = () => {
                               line={line}
                               isDraft
                               qty={lineQtyMap[line.id] ?? line.quantity}
+                              priceNet={linePriceNetMap[line.id] ?? (line.unitPriceNet ?? null)}
+                              taxRate={lineTaxRateMap[line.id] ?? (line.taxRate ?? null)}
                               lineActionLoading={lineActionLoading}
                               linesCount={activeOrder.lines.length}
                               onQtyChange={(id, qty) => setLineQtyMap((prev) => ({ ...prev, [id]: qty }))}
+                              onPriceChange={(id, field, value) => {
+                                if (field === "priceNet") setLinePriceNetMap((prev) => ({ ...prev, [id]: value }));
+                                else setLineTaxRateMap((prev) => ({ ...prev, [id]: value }));
+                              }}
                               onBlur={(id) => void handleUpdateLine(id)}
                               onRemove={(id) => void handleRemoveLine(id)}
                             />
@@ -739,9 +842,12 @@ const ActiveOrdersTab: React.FC = () => {
                           line={line}
                           isDraft={false}
                           qty={line.quantity}
+                          priceNet={line.unitPriceNet ?? null}
+                          taxRate={line.taxRate ?? null}
                           lineActionLoading={false}
                           linesCount={activeOrder.lines.length}
                           onQtyChange={() => {}}
+                          onPriceChange={() => {}}
                           onBlur={() => {}}
                           onRemove={() => {}}
                         />
@@ -778,6 +884,32 @@ const ActiveOrdersTab: React.FC = () => {
                       inputProps={{ min: 1 }}
                       sx={{ width: 90 }}
                       disabled={lineActionLoading}
+                    />
+                    <TextField
+                      type="number"
+                      size="small"
+                      label="Netto-Preis (opt.)"
+                      placeholder="0.0000"
+                      value={addPriceNet ?? ""}
+                      onChange={(e) => setAddPriceNet(e.target.value === "" ? null : Math.max(0, parseFloat(e.target.value) || 0))}
+                      onFocus={(e) => e.target.select()}
+                      inputProps={{ min: 0, step: 0.01 }}
+                      sx={{ width: 130 }}
+                      disabled={lineActionLoading}
+                      InputProps={{ endAdornment: <Typography variant="caption">EUR</Typography> }}
+                    />
+                    <TextField
+                      type="number"
+                      size="small"
+                      label="MwSt. (opt.)"
+                      placeholder="19"
+                      value={addTaxRate ?? ""}
+                      onChange={(e) => setAddTaxRate(e.target.value === "" ? null : Math.max(0, parseFloat(e.target.value) || 0))}
+                      onFocus={(e) => e.target.select()}
+                      inputProps={{ min: 0, max: 100 }}
+                      sx={{ width: 90 }}
+                      disabled={lineActionLoading}
+                      InputProps={{ endAdornment: <Typography variant="caption">%</Typography> }}
                     />
                     <Button
                       variant="contained"

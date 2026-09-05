@@ -5,11 +5,12 @@ export class SecurityHardeningFixes1755600000000 implements MigrationInterface {
 
   public async up(queryRunner: QueryRunner): Promise<void> {
     // Clean up expired and used password reset tokens (DSGVO data minimisation)
+    // Column names are camelCase as TypeORM created them (expiresAt, createdAt)
     await queryRunner.query(`
       DELETE FROM password_reset_tokens
       WHERE used = 1
-         OR expires_at < NOW()
-         OR created_at < DATE_SUB(NOW(), INTERVAL 2 HOUR)
+         OR expiresAt < NOW()
+         OR createdAt < DATE_SUB(NOW(), INTERVAL 2 HOUR)
     `);
 
     // Add index on token column for fast lookup (SEC-002)
