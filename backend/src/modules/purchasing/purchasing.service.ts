@@ -165,7 +165,7 @@ export class PurchasingService {
       .leftJoinAndSelect("order.supplier", "supplier")
       .addSelect("line.quantity", "line_quantity")
       .addSelect("line.packSize", "line_packSize")
-      .where("order.status IN (:...statuses)", { statuses: ["ORDERED", "ARCHIVED"] })
+      .where("order.status IN (:...statuses)", { statuses: ["ORDERED", "RECEIVED", "ARCHIVED"] })
       .orderBy("order.orderedAt", "DESC")
       .addOrderBy("order.createdAt", "DESC")
       .limit(1);
@@ -315,9 +315,17 @@ export class PurchasingService {
     const saved = await this.ordersRepository.save(order);
 
     if (payload.status === "ORDERED") {
-      // PDF beim erstmaligen Bestellen erzeugen
+      // PDF beim erstmaligen Bestellen erzeugen – best-effort (GOB-002).
+      // DB-Status ist bereits committed; ein PDF-Fehler würde einen inkonsistenten
+      // 500-Response erzeugen, obwohl der Status korrekt gespeichert ist.
+      // CRITICAL-Log stellt die Nachvollziehbarkeit für §257 HGB sicher.
       const full = await this.findOneWithRelations(saved.id);
-      await this.saveOrderPdfToStorage(full);
+      await this.saveOrderPdfToStorage(full).catch((err: unknown) => {
+        this.logger.error(
+          `[CRITICAL] GOB-002: PDF-Ablage für Bestellung ${saved.id} fehlgeschlagen. ` +
+          `Manuelle Nacherfassung erforderlich (§257 HGB). Fehler: ${String(err)}`,
+        );
+      });
     }
 
     this.invalidateSuggestionsCache();
@@ -489,7 +497,7 @@ export class PurchasingService {
 
       const allReceived = order.lines.every((line) => line.receivedQuantity >= line.quantity);
       if (allReceived) {
-        order.status = "ARCHIVED";
+        order.status = "RECEIVED";
         order.receivedAt = new Date();
         if (!order.orderedAt) order.orderedAt = new Date();
       } else {

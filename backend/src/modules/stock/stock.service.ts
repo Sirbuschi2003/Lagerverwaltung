@@ -971,10 +971,12 @@ export class StockService {
 
     await this.dataSource.transaction(async (manager) => {
       // Write lock serializes concurrent syncRestockRequest calls for the same
-      // StockLevel so that the SELECT + INSERT on RestockRequest is atomic.
+      // StockLevel so that SELECT + INSERT on RestockRequest is atomic.
+      // SKIP LOCKED: background sync yields instead of blocking user transactions
+      // (APPROVED/FULFILLED PATCHes) for up to innodb_lock_wait_timeout seconds.
       const lockedStockLevel = await manager.findOne(StockLevel, {
         where: { id: stockLevelId },
-        lock: { mode: "pessimistic_write" },
+        lock: { mode: "pessimistic_write", onLocked: "skip_locked" },
       });
       if (!lockedStockLevel) return;
 

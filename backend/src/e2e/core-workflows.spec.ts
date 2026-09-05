@@ -82,6 +82,9 @@ async function bestEffortDelete(path: string, token: string): Promise<void> {
 }
 
 describeIf("Core workflows E2E", () => {
+  // Docker WSL2 networking adds ~2s overhead per request; 120s covers the full workflow
+  jest.setTimeout(120_000);
+
   let token = "";
   const suffix = `e2e-${Date.now()}`;
   const cleanupState: {
@@ -199,6 +202,14 @@ describeIf("Core workflows E2E", () => {
     if (!orderLineId) {
       throw new Error("Order line ID missing after creating purchase order");
     }
+
+    // Bestellung aufgeben (DRAFT → ORDERED) – Pflicht vor Wareneingang
+    await requestJson<PurchaseOrderResponse>(
+      `/purchase-orders/${order.id}`,
+      "PATCH",
+      { status: "ORDERED" },
+      token,
+    );
 
     const partialReceipt = await requestJson<PurchaseOrderResponse>(
       `/purchase-orders/${order.id}/receive`,

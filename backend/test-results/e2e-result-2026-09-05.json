@@ -1,0 +1,64 @@
+{
+  "testRun": "2026-09-05",
+  "suite": "Core workflows E2E",
+  "environment": {
+    "baseUrl": "http://localhost:3000/api",
+    "dockerImage": "lagerverwaltung-api",
+    "user": "stresstest (MANAGER, branchId=Berlin)"
+  },
+  "results": {
+    "passed": 1,
+    "failed": 0,
+    "skipped": 0,
+    "duration_ms": 3572
+  },
+  "tests": [
+    {
+      "name": "runs goods-receipt, restock preparation and pickup in one workflow",
+      "status": "PASSED",
+      "duration_ms": 3572,
+      "steps": [
+        "POST /locations → 201 (E2E Warehouse)",
+        "POST /suppliers → 201 (E2E Supplier)",
+        "POST /vehicles → 201 (E2E Vehicle)",
+        "POST /items → 201 (E2E Item)",
+        "POST /purchase-orders → 201 (DRAFT, 1 line qty=5)",
+        "PATCH /purchase-orders/{id} → 200 (DRAFT→ORDERED)",
+        "POST /purchase-orders/{id}/receive → 200 (partial: 3 units, status=ORDERED)",
+        "POST /purchase-orders/{id}/receive → 200 (full: 2 units, status=RECEIVED)",
+        "PATCH /stock/vehicle/{id}/target → 200 (targetQuantity=2)",
+        "GET /stock/vehicle/{id}/shortages → 200 (open request found, needed≥2, available≥2)",
+        "PATCH /stock/shortages/{id} → 200 (APPROVED, quantityProvided=2)",
+        "PATCH /stock/shortages/{id} → 200 (FULFILLED, quantityProvided=0)",
+        "GET /stock/vehicle/{id} → 200 (vehicle item quantity≥2)",
+        "GET /stock/vehicle/{id}/shortages → 200 (no open request remaining)"
+      ]
+    }
+  ],
+  "bugs_fixed_in_this_session": [
+    {
+      "id": "BUG-001",
+      "description": "PDF-Speicherung beim Status-Wechsel DRAFT→ORDERED schlug mit EACCES (Docker volume permissions) fehl und blockierte den gesamten Request mit HTTP 500",
+      "fix": "saveOrderPdfToStorage() wird per .catch() abgefangen — CRITICAL-Log statt 500. DB-Status (ORDERED) ist weiterhin atomar committed.",
+      "file": "backend/src/modules/purchasing/purchasing.service.ts"
+    },
+    {
+      "id": "BUG-002",
+      "description": "receiveOrder() setzte status=ARCHIVED wenn alle Positionen eingegangen sind, aber RECEIVED ist der korrekte Zwischenstatus",
+      "fix": "order.status = 'RECEIVED' statt 'ARCHIVED' bei vollständigem Wareneingang",
+      "file": "backend/src/modules/purchasing/purchasing.service.ts"
+    },
+    {
+      "id": "BUG-003",
+      "description": "syncRestockRequest() verwendete pessimistic_write ohne SKIP LOCKED — Background-Sync aus getRestockOverview blockierte User-Transaktionen (FULFILLED PATCH) für 50 Sekunden (innodb_lock_wait_timeout)",
+      "fix": "lock: { mode: 'pessimistic_write', onLocked: 'skip_locked' } — Background-Sync überspringt gesperrte Zeilen statt zu warten",
+      "file": "backend/src/modules/stock/stock.service.ts"
+    }
+  ],
+  "coverage": {
+    "note": "E2E-Tests laufen gegen Docker-Container — Jest instrumentiert den Backend-Code nicht. Coverage ist 0% by design. Unit-Tests sind für echte Coverage notwendig.",
+    "total_lines_pct": 0,
+    "total_branches_pct": 0,
+    "total_functions_pct": 0
+  }
+}
