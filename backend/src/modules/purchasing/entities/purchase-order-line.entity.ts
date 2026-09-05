@@ -32,10 +32,10 @@ export class PurchaseOrderLine {
   sortOrder!: number;
 
   // §240 HGB / GoBD GOB-003: Einstandspreise für Bestandsbewertung
-  @Column({ type: "decimal", precision: 12, scale: 4, nullable: true })
+  @Column({ name: "unit_price_net", type: "decimal", precision: 12, scale: 4, nullable: true })
   unitPriceNet!: number | null;
 
-  @Column({ type: "decimal", precision: 5, scale: 2, nullable: true, default: 19.0 })
+  @Column({ name: "tax_rate", type: "decimal", precision: 5, scale: 2, nullable: true, default: 19.0 })
   taxRate!: number | null;
 
   @Column({ type: "varchar", length: 3, default: "EUR" })

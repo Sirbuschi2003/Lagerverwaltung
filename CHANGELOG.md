@@ -5,7 +5,7 @@ Format orientiert sich an [Keep a Changelog](https://keepachangelog.com/de/1.0.0
 
 ---
 
-## [4.3.0] – 2026-09-04 · Security & Compliance Release
+## [4.3.0] – 2026-09-05 · Security & Compliance Release (inkl. Ergänzungen 05.09.2026)
 
 > **Wichtig:** Dieses Release behebt kritische Sicherheits- und Compliance-Findings aus dem Vollaudit vom 04.09.2026 (22 Agenten, 98 Findings). Alle 10 KRITISCH-Findings und die wichtigsten HOCH-Findings wurden adressiert.  
 > **Pflicht vor dem Produktiveinsatz:** `.env` um `DEFAULT_ADMIN_PASSWORD` und `DB_POOL_SIZE` ergänzen (siehe Installationsanleitung).
@@ -53,7 +53,37 @@ Format orientiert sich an [Keep a Changelog](https://keepachangelog.com/de/1.0.0
 ### Infrastruktur
 - **socket-proxy Container:** Neuer `socket-proxy`-Service in `docker-compose.main.yml` (startet vor dem Backend, `depends_on`).
 - **DEFAULT_ADMIN_PASSWORD:** In Production wird beim Fehlen dieser Umgebungsvariable ein Fehler geworfen statt einen unsicheren Standardwert zu verwenden.
-- **TypeORM-Migration `1755600000000-SecurityHardeningFixes`:** Bereinigt abgelaufene Password-Reset-Tokens und legt einen Index auf `password_reset_tokens.token` an.
+- **docker-compose.yml:** `DEFAULT_ADMIN_PASSWORD`, `INVENTORY_HMAC_SECRET`, `DB_POOL_SIZE` als Env-Variablen ergänzt (05.09.2026).
+- **TypeORM-Migration `1755600000000-SecurityHardeningFixes`:** Bereinigt abgelaufene Password-Reset-Tokens und legt einen Index auf `password_reset_tokens.token` an. Spaltennamen auf TypeORM-Konvention (`expiresAt`, `createdAt`) korrigiert.
+
+### DSGVO-002 – Consent-Management (Art. 6/7) — *05.09.2026*
+- Neues Modul `ConsentModule` mit Entity `UserConsent`, `ConsentService` und `ConsentController`.
+- **Endpunkte:**
+  - `GET /consent` — aktive Einwilligungen des aktuellen Benutzers
+  - `GET /consent/history` — komplette Einwilligungshistorie
+  - `POST /consent` — Einwilligung gewähren oder aktualisieren (purpose, version, granted, IP-anon., UA)
+  - `DELETE /consent/:purpose` — Einzelne Einwilligung widerrufen
+  - `DELETE /consent` — Alle Einwilligungen widerrufen (z. B. vor Konto-Löschung)
+- **Migration `1755800000000-CreateUserConsents`:** Neue Tabelle `user_consents` mit Indizes auf `userId`, `purpose`.
+- IP-Adressen werden beim Speichern automatisch anonymisiert (IPv4: letztes Oktett → 0, IPv6: ab Gruppe 4 → 0).
+
+### GOB-003 – Einstandspreise (§240 HGB) – Frontend *05.09.2026*
+- Bestellwizard und `ActiveOrdersTab`: optionale Felder `Netto-Preis` und `MwSt.` pro Position.
+- Anzeige von `Netto/Stk.` und `Gesamt netto` in der Bestell-Detailansicht.
+- API-Typen (`PurchaseOrderLineDto`, `createPurchaseOrder`, `addPurchaseOrderLine`, `updatePurchaseOrderLine`) erweitert.
+- TypeORM-Entity `PurchaseOrderLine`: explizite `name`-Attribute für `unit_price_net` und `tax_rate` ergänzt (Mapping zwischen camelCase-Property und snake_case-Spalte).
+
+### GOB-005 – GDPdU-Export (§147 AO / §257 HGB) *05.09.2026*
+- Neuer Service `GdpduExportService` erstellt ZIP-Archiv im GDPdU-Format (IDEA-kompatibel):
+  - `index.xml` – Tabellenstruktur und Metadaten (Unternehmen, Zeitraum, DTD-Referenz)
+  - `gdpdu-01-09-2004.dtd` – GDPdU-DTD für Steuerprüfer-Software
+  - `Lagerbewegungen.csv` – alle Lagerbewegungen im Exportzeitraum
+  - `Bestellungen.csv` – Bestellkopfdaten inkl. Gesamtbetrag netto
+  - `Bestellpositionen.csv` – Positionen mit Einstandspreisen (§240 HGB)
+  - `Artikel.csv` – Artikelstammdaten
+  - `Lieferanten.csv` – Lieferantenstammdaten
+- Neuer Endpunkt `GET /api/reports/gdpdu?from=YYYY-MM-DD&to=YYYY-MM-DD` (Rolle: MANAGER).
+- Frontend: Download-Button „GDPdU-Export" in Berichte & Analysen (nur MANAGER sichtbar).
 
 ---
 

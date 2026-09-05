@@ -6,6 +6,7 @@ import { JwtAuthGuard } from "../auth/guards/jwt-auth.guard";
 import { RolesGuard } from "../auth/guards/roles.guard";
 
 import { ExportService } from "./export.service";
+import { GdpduExportService } from "./gdpdu-export.service";
 import { ReportsService } from "./reports.service";
 import { ItemsService } from "../items/items.service";
 
@@ -19,6 +20,7 @@ export class ReportsController {
   constructor(
     private readonly reportsService: ReportsService,
     private readonly exportService: ExportService,
+    private readonly gdpduExportService: GdpduExportService,
     private readonly itemsService: ItemsService,
   ) {}
 
@@ -215,5 +217,39 @@ export class ReportsController {
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', `attachment; filename="wagen_qr_katalog_${new Date().toISOString().split('T')[0]}.pdf"`);
     res.send(pdfBuffer);
+  }
+
+  /**
+   * GOB-005: GDPdU-Export gem. §147 AO / §257 HGB
+   * Gibt ein ZIP-Archiv mit index.xml und CSV-Dateien zurück.
+   * Kompatibel mit IDEA und gängiger Steuerprüfer-Software.
+   */
+  @Get("gdpdu")
+  @Roles("MANAGER")
+  async exportGdpdu(
+    @Req() req: ReportsRequest,
+    @Res() res: Response,
+    @Query("from") from?: string,
+    @Query("to") to?: string,
+    @Query("companyName") companyName?: string,
+    @Query("taxId") taxId?: string,
+  ) {
+    const today = new Date();
+    const startOfYear = new Date(today.getFullYear(), 0, 1);
+    const dateFrom = from ? new Date(from) : startOfYear;
+    const dateTo = to ? new Date(to) : today;
+
+    const zipBuffer = await this.gdpduExportService.buildExportZip({
+      from: dateFrom,
+      to: dateTo,
+      branchId: req.user?.branchId ?? null,
+      companyName: companyName ?? "Lagerverwaltung",
+      taxId: taxId ?? "",
+    });
+
+    const filename = `GDPdU_Export_${dateFrom.toISOString().slice(0, 10)}_${dateTo.toISOString().slice(0, 10)}.zip`;
+    res.setHeader("Content-Type", "application/zip");
+    res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+    res.send(zipBuffer);
   }
 }

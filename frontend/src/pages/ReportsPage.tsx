@@ -48,6 +48,7 @@ import {
   ArrowUpward as ArrowUpIcon,
   ArrowDownward as ArrowDownIcon,
   InfoOutlined as InfoIcon,
+  FolderZip as FolderZipIcon,
 } from "@mui/icons-material";
 
 import {
@@ -1400,20 +1401,64 @@ const TABS = [
 const ReportsPage: React.FC<{ embedded?: boolean }> = ({ embedded = false }) => {
   const { user: authUser } = useAuthStore();
   const hasLocationScope = (authUser?.locationIds?.length ?? 0) > 0;
+  const isManager = authUser?.role === "MANAGER";
   const [tab, setTab] = useState(0);
   const [warehouses, setWarehouses] = useState<LocationDto[]>([]);
   const [warehouseId, setWarehouseId] = useState<string>("");
   const [includeVehicles, setIncludeVehicles] = useState(!hasLocationScope);
+  const [gdpduLoading, setGdpduLoading] = useState(false);
 
   useEffect(() => {
     fetchWarehouses().then(setWarehouses).catch(() => null);
   }, []);
 
+  const handleGdpduExport = async () => {
+    setGdpduLoading(true);
+    try {
+      const from = new Date(new Date().getFullYear(), 0, 1).toISOString().slice(0, 10);
+      const to = new Date().toISOString().slice(0, 10);
+      const { SecureTokenManager } = await import("../utils/securityUtils");
+      const token = SecureTokenManager.getToken();
+      const resp = await fetch(`/api/reports/gdpdu?from=${from}&to=${to}`, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
+      if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+      const blob = await resp.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `GDPdU_Export_${from}_${to}.zip`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch {
+      /* ignore – Nutzer sieht leeres Tab */
+    } finally {
+      setGdpduLoading(false);
+    }
+  };
+
   return (
     <Box sx={embedded ? {} : { p: { xs: 1, sm: 2 } }}>
       {!embedded && (
         <>
-          <Typography variant="h5" sx={{ fontWeight: 700, mb: 2 }}>Berichte & Analysen</Typography>
+          <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mb: 2 }}>
+            <Typography variant="h5" sx={{ fontWeight: 700 }}>Berichte & Analysen</Typography>
+            {isManager && (
+              <Tooltip title="GDPdU-Export (§147 AO) als ZIP herunterladen">
+                <span>
+                  <Button
+                    variant="outlined"
+                    size="small"
+                    startIcon={gdpduLoading ? <CircularProgress size={14} /> : <FolderZipIcon />}
+                    onClick={handleGdpduExport}
+                    disabled={gdpduLoading}
+                  >
+                    GDPdU-Export
+                  </Button>
+                </span>
+              </Tooltip>
+            )}
+          </Stack>
           <Divider sx={{ mb: 2 }} />
         </>
       )}
