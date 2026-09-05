@@ -73,6 +73,12 @@ Format orientiert sich an [Keep a Changelog](https://keepachangelog.com/de/1.0.0
 - API-Typen (`PurchaseOrderLineDto`, `createPurchaseOrder`, `addPurchaseOrderLine`, `updatePurchaseOrderLine`) erweitert.
 - TypeORM-Entity `PurchaseOrderLine`: explizite `name`-Attribute für `unit_price_net` und `tax_rate` ergänzt (Mapping zwischen camelCase-Property und snake_case-Spalte).
 
+### Bugfixes Wareneingang + Restock-Workflow *05.09.2026*
+- **BUG-001 – PDF-Speicherung nicht mehr request-blockierend:** `saveOrderPdfToStorage()` wirft bei Filesystem-Fehlern (z.B. Docker-Volume-Berechtigungen) keinen HTTP 500 mehr auf den bereits committeten Status-Wechsel. Stattdessen CRITICAL-Log für manuelle Nacherfassung (§257 HGB Nachvollziehbarkeit bleibt erhalten).
+- **BUG-002 – Status RECEIVED statt ARCHIVED bei vollständigem Wareneingang:** `receiveOrder()` setzte fälschlicherweise `status = ARCHIVED` wenn alle Positionen eingegangen waren. Korrekt ist `RECEIVED`; ARCHIVED ist ein separater manueller Schritt.
+- **BUG-003 – Background-Sync ohne Lock-Konflikt:** `syncRestockRequest()` verwendete `pessimistic_write` ohne `SKIP LOCKED` — Background-Syncs aus `getRestockOverview()` blockierten FULFILLED-Transaktionen für bis zu 50 Sekunden (MySQL `innodb_lock_wait_timeout`). Fix: `onLocked: 'skip_locked'`.
+- **E2E-Test:** `jest.setTimeout(120_000)` für Docker-WSL2-Netzwerklatenz; Testergebnis gespeichert unter `backend/test-results/e2e-result-2026-09-05.json`.
+
 ### GOB-005 – GDPdU-Export (§147 AO / §257 HGB) *05.09.2026*
 - Neuer Service `GdpduExportService` erstellt ZIP-Archiv im GDPdU-Format (IDEA-kompatibel):
   - `index.xml` – Tabellenstruktur und Metadaten (Unternehmen, Zeitraum, DTD-Referenz)
