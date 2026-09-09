@@ -184,22 +184,28 @@ const useFrontendLogStore = create<FrontendLogState>()(
           // Ignore auth store errors
         }
 
-        const { lastSyncTimestamp } = get();
         const db = await getDb();
-        const allLogs = await db.getAll(STORE_NAME);
+        // lastSyncTimestamp wird NICHT persistiert (nur In-Memory) und ist daher nach
+        // jedem Seiten-Reload wieder null - ein Filter darauf wuerde bei jedem Neuladen
+        // den kompletten bisherigen Log-Verlauf erneut senden. Stattdessen werden
+        // erfolgreich gesendete Eintraege direkt aus IndexedDB geloescht (siehe unten),
+        // das ist die einzige verlaessliche Quelle der Wahrheit fuer "noch nicht synct".
+        const allLogs: FrontendLogEntry[] = await db.getAll(STORE_NAME);
 
-        const logsToSync = lastSyncTimestamp
-          ? allLogs.filter(log => new Date(log.timestamp) > new Date(lastSyncTimestamp))
-          : allLogs;
-        
-        if (logsToSync.length === 0) {
+        if (allLogs.length === 0) {
           return;
         }
 
+        // Harte Obergrenze pro Sync-Durchlauf: verhindert dass ein groesserer
+        // Alt-Bestand (z.B. aus der Zeit vor diesem Fix) das Rate-Limit sprengt.
+        // Der Rest wird beim naechsten Intervall (60s) weiter abgearbeitet.
+        const maxPerRun = 500;
+        const logsToSync = allLogs.slice(0, maxPerRun);
+
+        const { default: api } = await import('../utils/api');
         const batchSize = 100;
         for (let i = 0; i < logsToSync.length; i += batchSize) {
           const batch = logsToSync.slice(i, i + batchSize);
-          const { default: api } = await import('../utils/api');
           await api.post('/logs/frontend', batch.map(log => ({
             timestamp: log.timestamp,
             level: log.level,
@@ -208,6 +214,18 @@ const useFrontendLogStore = create<FrontendLogState>()(
             url: log.url,
             details: log.details,
           })));
+
+          // Erfolgreich gesendete Eintraege sofort loeschen - verhindert erneuten
+          // Versand beim naechsten Reload und haelt die lokale DB klein.
+          const tx = db.transaction(STORE_NAME, 'readwrite');
+          await Promise.all(batch.map((log) => tx.objectStore(STORE_NAME).delete(log.id)));
+          await tx.done;
+
+          // Kleine Pause zwischen Batches, um bei einem groesseren Rueckstand
+          // nicht sofort ins Rate-Limit zu laufen.
+          if (i + batchSize < logsToSync.length) {
+            await new Promise((resolve) => setTimeout(resolve, 250));
+          }
         }
 
         const now = new Date().toISOString();

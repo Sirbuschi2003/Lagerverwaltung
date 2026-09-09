@@ -92,24 +92,24 @@ export const logApiCall = async (
     return;
   }
 
+  // Nur Fehler loggen. Erfolgreiche Calls (insbesondere haeufiges Hintergrund-
+  // Polling wie stock/fleet oder stock/shortages alle ~15s) erzeugten frueher
+  // pro Nutzer und Tag mehrere tausend "debug"-Eintraege - das liess die lokale
+  // IndexedDB unbegrenzt wachsen und fuehrte bei jedem Sync zu einer Log-Flut
+  // (siehe useFrontendLogStore.syncToBackend).
+  if (!error) {
+    return;
+  }
+
   // DSGVO: URL-Pfad ohne Query-Parameter loggen (Query-Parameter können IDs/Suchbegriffe enthalten)
   const urlPath = url.split('?')[0];
 
-  if (error) {
-    await addLog('error', 'api-error', `API-Fehler: ${method} ${urlPath}`, {
-      method,
-      path: urlPath,
-      status,
-      duration,
-      // Nur den Fehlertyp, keine Response-Daten (könnten sensible Fehlermeldungen enthalten)
-      error: error?.message || String(status),
-    });
-  } else {
-    await addLog('debug', 'api-call', `API-Call: ${method} ${urlPath}`, {
-      method,
-      path: urlPath,
-      status,
-      duration,
-    });
-  }
+  await addLog('error', 'api-error', `API-Fehler: ${method} ${urlPath}`, {
+    method,
+    path: urlPath,
+    status,
+    duration,
+    // Nur den Fehlertyp, keine Response-Daten (könnten sensible Fehlermeldungen enthalten)
+    error: error?.message || String(status),
+  });
 };
