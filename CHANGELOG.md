@@ -5,6 +5,27 @@ Format orientiert sich an [Keep a Changelog](https://keepachangelog.com/de/1.0.0
 
 ---
 
+## [4.4.0] – 2026-09-09 · Deployment-Infrastruktur & Code-Qualität
+
+### Deployment / CI
+- **GitHub Actions → ghcr.io:** Neuer Workflow `docker-publish.yml` baut Backend und Frontend bei jedem Push auf `master` automatisch und veröffentlicht sie als Images unter `ghcr.io/sirbuschi2003/lagerverwaltung-{backend,frontend}`. Kein lokales Bauen mehr auf NAS/Portainer nötig.
+- **`docker-compose.portainer.yml` (neu):** Eigenständiger Stack für Neuaufsetzungen über Portainer GitOps, ausschließlich mit fertigen ghcr.io-Images. Feste, stackname-unabhängige Volume-Namen (`lagerverwaltung_mysql_data`, `_backups`, `_purchase_orders`) verhindern Verwechslungen bei Redeploys. `APP_HOST`/`ALLOWED_ORIGINS` für CORS, `COOKIE_SECURE=false` als Default für Deployments ohne eigene TLS-Terminierung.
+- **`NAS-SETUP.md` (neu):** Schritt-für-Schritt-Anleitung für ein komplett neues System ohne technisches Vorwissen, inklusive eindeutigem Reset-Pfad bei Problemen.
+- **`COOKIE_SECURE`-Umgebungsvariable:** Refresh-Token-Cookie war hart an `NODE_ENV=production` gekoppelt (`secure: true`), wodurch es auf HTTP-only-Systemen (ohne Reverse-Proxy/TLS) vom Browser verworfen wurde → Nutzer wurden nach Ablauf des Access-Tokens ausgeloggt ("Kein Refresh-Token gefunden"). Jetzt explizit konfigurierbar.
+
+### Bugfixes
+- **Docker-Healthcheck:** `backend/Dockerfile` prüfte `/health` statt `/api/health` (globaler API-Präfix) — der Backend-Container zeigte dauerhaft fälschlich „unhealthy", obwohl er einwandfrei lief.
+- **nginx Upload-Limit:** `client_max_body_size` fehlte im Frontend-nginx — ZIP-Backup-Wiederherstellung über einige MB schlug mit HTTP 413 fehl.
+- **Wareneingang (`purchasing.service.ts`):** Vollständiger Wareneingang setzte fälschlich Status `ARCHIVED` statt `RECEIVED` (ARCHIVED ist ein separater, manueller Schritt). PDF-Speicherfehler (z. B. Docker-Volume-Rechte) ließen den gesamten Status-Wechsel mit HTTP 500 fehlschlagen, obwohl der DB-Status bereits committed war — jetzt CRITICAL-Log statt Request-Fehler.
+- **Restock-Workflow (`stock.service.ts`):** Background-Sync hielt `pessimistic_write`-Locks ohne `SKIP LOCKED` und blockierte parallele Nutzer-Transaktionen (z. B. FULFILLED-Buchung) bis zu 50 Sekunden (MySQL-Lock-Timeout).
+- **Artikelsuche nach Alias-/Alternativ-Code (`items.service.ts`):** `item_codes.branchId` ist `NOT NULL` (seit Migration `ItemCodesPerBranch`), vier Codestellen nutzten dennoch `IsNull()` als Fallback-Filter für Alias-Suche und Duplikat-Prüfung — traf dadurch nie eine Zeile. Betraf u. a. die niederlassungsübergreifende Suche (Super-Admin) nach Artikeln per Alternativ-Code, die fälschlich „nicht gefunden" meldete.
+- **Backup-Sicherheitsnetz (`setup.service.ts`, `streamFullArchive`):** Die Passwort-Hash-Bereinigung für den vollständigen ZIP-Export griff auf den falschen Objektpfad zu (`backup.users` statt `backup.data.users`) und lief dadurch nie. Kein aktives Datenleck (`createBackup()` befüllt `passwordHash` ohnehin nie), aber das SEC-013-Sicherheitsnetz war wirkungslos — jetzt korrekt.
+
+### Code-Qualität
+- **1382 ESLint-Fehler auf 0 reduziert** (gesamter Backend-Code). Wesentliche Ursachen: fehlende globale Typisierung von `req.user` (jetzt via `src/types/express.d.ts`), durchgängig `any`-typisierte Backup/Restore-Payloads (jetzt vollständig typisiert in `src/modules/setup/backup-payload.types.ts`), sowie verstreute `any`-Nutzung in ca. 76 weiteren Dateien. Reine Typsicherheits-Bereinigung ohne Verhaltensänderung (unabhängig verifiziert: Build, Lint und E2E-Test grün).
+
+---
+
 ## [4.3.0] – 2026-09-05 · Security & Compliance Release (inkl. Ergänzungen 05.09.2026)
 
 > **Wichtig:** Dieses Release behebt kritische Sicherheits- und Compliance-Findings aus dem Vollaudit vom 04.09.2026 (22 Agenten, 98 Findings). Alle 10 KRITISCH-Findings und die wichtigsten HOCH-Findings wurden adressiert.  

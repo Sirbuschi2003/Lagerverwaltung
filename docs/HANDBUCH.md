@@ -1,6 +1,6 @@
 # KFZ Lagerverwaltung – Benutzerhandbuch
 
-**Version 4.3 · Stand: September 2026**
+**Version 4.4 · Stand: September 2026**
 
 ---
 
