@@ -3,6 +3,7 @@ import { InjectRepository } from "@nestjs/typeorm";
 import { Repository, SelectQueryBuilder } from "typeorm";
 
 import { LocationsService } from "../locations/locations.service";
+
 import { StockMovement, StockMovementType } from "./entities/stock-movement.entity";
 
 interface MovementSummaryRow {

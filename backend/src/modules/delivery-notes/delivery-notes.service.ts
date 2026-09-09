@@ -1,14 +1,15 @@
-import { Injectable, Logger, OnApplicationBootstrap } from "@nestjs/common";
-import { InjectRepository } from "@nestjs/typeorm";
-import { Cron, CronExpression } from "@nestjs/schedule";
-import { Repository } from "typeorm";
-import { InjectDataSource } from "@nestjs/typeorm";
-import { DataSource } from "typeorm";
+import { randomUUID } from "node:crypto";
 import fs from "node:fs/promises";
 import path from "node:path";
-import { randomUUID } from "node:crypto";
-import { DeliveryNote } from "./entities/delivery-note.entity";
+
+import { Injectable, Logger, OnApplicationBootstrap } from "@nestjs/common";
+import { Cron, CronExpression } from "@nestjs/schedule";
+import { InjectRepository } from "@nestjs/typeorm";
+import { Repository } from "typeorm";
+
 import { Branch } from "../branches/entities/branch.entity";
+
+import { DeliveryNote } from "./entities/delivery-note.entity";
 
 @Injectable()
 export class DeliveryNotesService implements OnApplicationBootstrap {

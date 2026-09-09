@@ -12,13 +12,10 @@ import { Request } from 'express';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
+import { LogCategory } from '../logging/entities/system-log.entity';
 import { LoggingService } from '../logging/services/logging.service';
 
 import { EmailService, EmailConfig } from './email.service';
-
-interface EmailRequest extends Request {
-  user?: { id?: string; username?: string; branchId?: string | null };
-}
 
 @Controller('email')
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -30,7 +27,7 @@ export class EmailController {
 
   @Get('config')
   @Roles('MANAGER')
-  async getEmailConfig(@Req() req: EmailRequest) {
+  async getEmailConfig(@Req() req: Request) {
     const branchId = req.user?.branchId ?? null;
     const config = await this.emailService.getConfiguration(branchId);
     const isConfigured = await this.emailService.isConfigured(branchId);
@@ -39,7 +36,7 @@ export class EmailController {
 
   @Post('config')
   @Roles('MANAGER')
-  async setEmailConfig(@Body() config: EmailConfig, @Req() req: EmailRequest) {
+  async setEmailConfig(@Body() config: EmailConfig, @Req() req: Request) {
     if (!config.host || !config.port || !config.auth?.user || !config.auth?.pass || !config.from) {
       throw new BadRequestException('Alle Felder sind erforderlich');
     }
@@ -78,7 +75,7 @@ export class EmailController {
 
   @Post('test')
   @Roles('MANAGER')
-  async sendTestEmail(@Body() body: { email: string }, @Req() req: EmailRequest) {
+  async sendTestEmail(@Body() body: { email: string }, @Req() req: Request) {
     if (!body.email || !this.isValidEmail(body.email)) {
       throw new BadRequestException('Gültige Email-Adresse erforderlich');
     }
@@ -90,7 +87,7 @@ export class EmailController {
 
       if (req.user) {
         await this.loggingService.logInfo(
-          'SYSTEM' as any,
+          LogCategory.SYSTEM,
           'EMAIL_TEST_SENT',
           `Test-Email gesendet an ${body.email} von ${req.user.username}`,
           { userId: req.user.id, metadata: { recipient: body.email } },
@@ -106,7 +103,7 @@ export class EmailController {
   }
 
   @Post('password-reset')
-  async requestPasswordReset(@Body() body: { username: string }) {
+  requestPasswordReset(@Body() body: { username: string }) {
     if (!body.username) {
       throw new BadRequestException('Benutzername erforderlich');
     }

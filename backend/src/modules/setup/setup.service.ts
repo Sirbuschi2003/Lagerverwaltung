@@ -1,30 +1,48 @@
-import { Injectable, Logger, OnModuleInit } from "@nestjs/common";
-import { InjectRepository } from "@nestjs/typeorm";
-import { Repository, DataSource } from "typeorm";
 import * as fs from 'fs';
 import * as path from 'path';
 
-import { UsersService } from "../users/users.service";
-import { User } from "../users/entities/user.entity";
-import { Item } from "../items/entities/item.entity";
-import { Vehicle } from "../vehicles/entities/vehicle.entity";
-import { Location } from "../locations/entities/location.entity";
-import { StockLevel } from "../stock/entities/stock-level.entity";
-import { StockMovement } from "../stock/entities/stock-movement.entity";
-import { InventorySession } from "../inventory/entities/inventory-session.entity";
-import { InventoryLine } from "../inventory/entities/inventory-line.entity";
-import { SystemConfig } from "../logging/entities/system-config.entity";
-import { BranchConfig } from "../logging/entities/branch-config.entity";
-import { Supplier } from "../suppliers/entities/supplier.entity";
-import { PurchaseOrder } from "../purchasing/entities/purchase-order.entity";
-import { PurchaseOrderLine } from "../purchasing/entities/purchase-order-line.entity";
-import { Branch } from "../branches/entities/branch.entity";
-import { Role } from "../access-control/entities/role.entity";
+import { Injectable, Logger, OnModuleInit } from "@nestjs/common";
+import { InjectRepository } from "@nestjs/typeorm";
+import AdmZip from "adm-zip";
+import { Repository, DataSource, DeepPartial } from "typeorm";
+
 import { Permission } from "../access-control/entities/permission.entity";
 import { RolePermission } from "../access-control/entities/role-permission.entity";
+import { Role } from "../access-control/entities/role.entity";
 import { UserPermission } from "../access-control/entities/user-permission.entity";
+import { Branch } from "../branches/entities/branch.entity";
+import { InventoryLine } from "../inventory/entities/inventory-line.entity";
+import { InventorySession } from "../inventory/entities/inventory-session.entity";
 import { ItemCode } from "../items/entities/item-code.entity";
+import { Item } from "../items/entities/item.entity";
+import { Location } from "../locations/entities/location.entity";
+import { BranchConfig } from "../logging/entities/branch-config.entity";
+import { SystemConfig } from "../logging/entities/system-config.entity";
+import { LogCategory } from "../logging/entities/system-log.entity";
 import { LoggingService } from "../logging/services/logging.service";
+import { PurchaseOrderLine } from "../purchasing/entities/purchase-order-line.entity";
+import { PurchaseOrder } from "../purchasing/entities/purchase-order.entity";
+import { StockLevel } from "../stock/entities/stock-level.entity";
+import { StockMovement } from "../stock/entities/stock-movement.entity";
+import { Supplier } from "../suppliers/entities/supplier.entity";
+import { User } from "../users/entities/user.entity";
+import { UsersService } from "../users/users.service";
+import { Vehicle } from "../vehicles/entities/vehicle.entity";
+
+import {
+  BackupData,
+  BackupInventoryLine,
+  BackupItem,
+  BackupItemCode,
+  BackupLocation,
+  BackupPayload,
+  BackupPurchaseOrder,
+  BackupPurchaseOrderLine,
+  BackupStockLevel,
+  BackupStockMovement,
+  BackupUser,
+  RestoreFilters,
+} from "./backup-payload.types";
 
 @Injectable()
 export class SetupService implements OnModuleInit {
@@ -107,7 +125,7 @@ export class SetupService implements OnModuleInit {
     }
   }
 
-  async createBackup(): Promise<any> {
+  async createBackup(): Promise<BackupPayload> {
     const [
       users,
       items,
@@ -178,7 +196,7 @@ export class SetupService implements OnModuleInit {
         permissions,
         rolePermissions,
         userPermissions,
-        users: users.map(u => ({
+        users: users.map((u): BackupUser => ({
           id: u.id,
           username: u.username,
           displayName: u.displayName,
@@ -188,18 +206,18 @@ export class SetupService implements OnModuleInit {
           vehicleId: u.vehicleId ?? null,
           branchId: u.branchId ?? null,
           refreshInterval: u.refreshInterval,
-          locationIds: (u as any).locations?.map((l: any) => l.id) ?? [],
+          locationIds: u.locations?.map((l) => l.id) ?? [],
         })),
-        items: items.map((item) => ({
+        items: items.map((item): BackupItem => ({
           ...item,
           storageLocationId: item.storageLocation?.id ?? null,
           storageLocation: undefined,
-          supplierId: (item as any).supplier?.id ?? (item as any).supplierId ?? null,
+          supplierId: item.supplier?.id ?? (item as unknown as { supplierId?: string }).supplierId ?? null,
           supplier: undefined,
         })),
         vehicles,
         suppliers,
-        purchaseOrders: purchaseOrders.map((order) => ({
+        purchaseOrders: purchaseOrders.map((order): BackupPurchaseOrder => ({
           id: order.id,
           supplierId: order.supplier?.id ?? null,
           status: order.status,
@@ -207,32 +225,32 @@ export class SetupService implements OnModuleInit {
           orderedAt: order.orderedAt,
           receivedAt: order.receivedAt,
           note: order.note,
-          deliveryNoteNumber: (order as any).deliveryNoteNumber ?? null,
-          branchId: (order as any).branchId ?? null,
-          locationId: (order as any).locationId ?? null,
+          deliveryNoteNumber: order.deliveryNoteNumber ?? null,
+          branchId: order.branchId ?? null,
+          locationId: order.locationId ?? null,
           createdAt: order.createdAt,
           updatedAt: order.updatedAt,
         })),
-        purchaseOrderLines: purchaseOrderLines.map((line) => ({
+        purchaseOrderLines: purchaseOrderLines.map((line): BackupPurchaseOrderLine => ({
           id: line.id,
-          orderId: line.order?.id ?? (line as any).orderId ?? null,
-          itemId: line.item?.id ?? (line as any).itemId ?? null,
+          orderId: line.order?.id ?? (line as unknown as { orderId?: string }).orderId ?? null,
+          itemId: line.item?.id ?? (line as unknown as { itemId?: string }).itemId ?? null,
           quantity: line.quantity,
           receivedQuantity: line.receivedQuantity,
           packSize: line.packSize,
         })),
-        locations: locations.map((location) => ({
+        locations: locations.map((location): BackupLocation => ({
           id: location.id,
           type: location.type,
           code: location.code,
           name: location.name,
           parentId: location.parent?.id ?? null,
           vehicleId: location.vehicle?.id ?? null,
-          branchId: (location as any).branchId ?? null,
+          branchId: location.branchId ?? null,
           createdAt: location.createdAt,
           updatedAt: location.updatedAt,
         })),
-        stockLevels: stockLevels.map(sl => ({
+        stockLevels: stockLevels.map((sl): BackupStockLevel => ({
           id: sl.id,
           itemId: sl.item?.id ?? null,
           vehicleId: sl.vehicle?.id ?? null,
@@ -242,10 +260,10 @@ export class SetupService implements OnModuleInit {
         })),
         stockMovements: stockMovements
           .filter(sm => sm.item != null)
-          .map(sm => ({
+          .map((sm): BackupStockMovement => ({
             id: sm.id,
             type: sm.type,
-            itemId: sm.item!.id,
+            itemId: sm.item.id,
             vehicleId: sm.vehicle?.id ?? null,
             locationId: sm.location?.id ?? null,
             quantity: sm.quantity,
@@ -260,7 +278,7 @@ export class SetupService implements OnModuleInit {
             voidReason: sm.voidReason,
           })),
         inventorySessions,
-        inventoryLines: inventoryLines.map(il => ({
+        inventoryLines: inventoryLines.map((il): BackupInventoryLine => ({
           id: il.id,
           sessionId: il.session?.id ?? null,
           itemId: il.item?.id ?? null,
@@ -270,12 +288,12 @@ export class SetupService implements OnModuleInit {
           countedQuantity: il.countedQuantity,
           note: il.note,
         })),
-        itemCodes: itemCodes.map(ic => ({
+        itemCodes: itemCodes.map((ic): BackupItemCode => ({
           id: ic.id,
           branchId: ic.branchId,
           code: ic.code,
           kind: ic.kind,
-          itemId: (ic as any).item?.id ?? null,
+          itemId: ic.item?.id ?? null,
         })),
         // Hinweis: Artikel-Bilder und Bestellungs-PDFs werden NICHT im JSON-Backup gesichert.
         // Diese liegen in Docker-Volumes und werden über die Volume-Backup-Infrastruktur (rsync/NAS) gesichert.
@@ -283,11 +301,11 @@ export class SetupService implements OnModuleInit {
     };
   }
 
-  async restoreBackup(backup: any): Promise<void> {
+  async restoreBackup(backup: BackupPayload): Promise<void> {
     const { data } = backup;
     // branchId fallback: Lagerorte im Backup haben ggf. null (Altdaten vor Branch-Isolation)
     const fallbackBranchId = data.branches?.[0]?.id
-      ?? data.locations?.find((l: any) => l.branchId)?.branchId
+      ?? data.locations?.find((l) => l.branchId)?.branchId
       ?? null;
 
     const queryRunner = this.dataSource.createQueryRunner();
@@ -319,14 +337,14 @@ export class SetupService implements OnModuleInit {
       await mgr.getRepository(Permission).clear();
       await mgr.getRepository(Branch).clear();
 
-      if (data.branches?.length > 0) await mgr.getRepository(Branch).save(data.branches);
-      if (data.permissions?.length > 0) await mgr.getRepository(Permission).save(data.permissions);
-      if (data.roles?.length > 0) await mgr.getRepository(Role).save(data.roles);
-      if (data.systemConfigs?.length > 0) await mgr.getRepository(SystemConfig).save(data.systemConfigs);
-      if (data.branchConfigs?.length > 0) await mgr.getRepository(BranchConfig).save(data.branchConfigs);
+      if (data.branches && data.branches.length > 0) await mgr.getRepository(Branch).save(data.branches);
+      if (data.permissions && data.permissions.length > 0) await mgr.getRepository(Permission).save(data.permissions);
+      if (data.roles && data.roles.length > 0) await mgr.getRepository(Role).save(data.roles);
+      if (data.systemConfigs && data.systemConfigs.length > 0) await mgr.getRepository(SystemConfig).save(data.systemConfigs);
+      if (data.branchConfigs && data.branchConfigs.length > 0) await mgr.getRepository(BranchConfig).save(data.branchConfigs);
 
-      if (data.users?.length > 0) {
-        await mgr.getRepository(User).save(data.users.map((u: any) => ({
+      if (data.users && data.users.length > 0) {
+        await mgr.getRepository(User).save(data.users.map((u) => ({
           id: u.id, username: u.username, displayName: u.displayName,
           email: u.email ?? null,
           // passwordHash fehlt in Download-Backups (SEC-013); Konto wird gesperrt → Admin muss PW zurücksetzen
@@ -337,49 +355,53 @@ export class SetupService implements OnModuleInit {
         })));
       }
 
-      if (data.vehicles?.length > 0) await mgr.getRepository(Vehicle).save(data.vehicles);
+      if (data.vehicles && data.vehicles.length > 0) await mgr.getRepository(Vehicle).save(data.vehicles);
 
-      if (data.locations?.length > 0) {
-        await mgr.getRepository(Location).save(data.locations.map((loc: any) => ({
+      if (data.locations && data.locations.length > 0) {
+        await mgr.getRepository(Location).save(data.locations.map((loc) => ({
           id: loc.id, type: loc.type, code: loc.code, name: loc.name ?? null,
           parent: null, vehicle: loc.vehicleId ? { id: loc.vehicleId } : null,
           branchId: loc.branchId ?? fallbackBranchId,
           createdAt: loc.createdAt, updatedAt: loc.updatedAt,
         })));
-        const withParent = data.locations.filter((l: any) => l.parentId)
-          .map((l: any) => ({ id: l.id, parent: { id: l.parentId } }));
+        const withParent = data.locations.filter((l) => l.parentId)
+          .map((l) => ({ id: l.id, parent: { id: l.parentId as string } }));
         if (withParent.length > 0) await mgr.getRepository(Location).save(withParent);
       }
 
-      if (data.users?.length > 0) {
+      if (data.users && data.users.length > 0) {
         for (const u of data.users) {
           if (Array.isArray(u.locationIds) && u.locationIds.length > 0) {
-            await mgr.getRepository(User).save({ id: u.id, locations: u.locationIds.map((lid: string) => ({ id: lid })) });
+            await mgr.getRepository(User).save({ id: u.id, locations: u.locationIds.map((lid) => ({ id: lid })) });
           }
         }
       }
 
-      if (data.suppliers?.length > 0) await mgr.getRepository(Supplier).save(data.suppliers);
+      if (data.suppliers && data.suppliers.length > 0) await mgr.getRepository(Supplier).save(data.suppliers);
 
-      if (data.items?.length > 0) {
-        await mgr.getRepository(Item).save(data.items.map((item: any) => {
+      if (data.items && data.items.length > 0) {
+        await mgr.getRepository(Item).save(data.items.map((item) => {
           const { storageLocationId, supplierId, ...rest } = item;
           return { ...rest, storageLocation: storageLocationId ? { id: storageLocationId } : null, supplier: supplierId ? { id: supplierId } : null };
         }));
       }
 
-      if (data.itemCodes?.length > 0) {
-        await mgr.getRepository(ItemCode).save(data.itemCodes.map((ic: any) => ({
+      if (data.itemCodes && data.itemCodes.length > 0) {
+        // item ist bei ItemCode eine Pflicht-Relation; `null` bei fehlender itemId ist bewusst
+        // beibehaltenes Bestandsverhalten (siehe Bericht) — DeepPartial erlaubt hier keinen expliziten Null-Wert.
+        await mgr.getRepository(ItemCode).save(data.itemCodes.map((ic) => ({
           id: ic.id, branchId: ic.branchId, code: ic.code, kind: ic.kind,
           item: ic.itemId ? { id: ic.itemId } : null,
-        })));
+        })) as DeepPartial<ItemCode>[]);
       }
 
-      if (data.rolePermissions?.length > 0) await mgr.getRepository(RolePermission).save(data.rolePermissions);
-      if (data.userPermissions?.length > 0) await mgr.getRepository(UserPermission).save(data.userPermissions);
+      if (data.rolePermissions && data.rolePermissions.length > 0) await mgr.getRepository(RolePermission).save(data.rolePermissions);
+      if (data.userPermissions && data.userPermissions.length > 0) await mgr.getRepository(UserPermission).save(data.userPermissions);
 
-      if (data.purchaseOrders?.length > 0) {
-        await mgr.getRepository(PurchaseOrder).save(data.purchaseOrders.map((o: any) => ({
+      if (data.purchaseOrders && data.purchaseOrders.length > 0) {
+        // supplier ist bei PurchaseOrder eine Pflicht-Relation; `null` bei fehlender supplierId ist
+        // bewusst beibehaltenes Bestandsverhalten (siehe Bericht) — DeepPartial erlaubt hier keinen expliziten Null-Wert.
+        await mgr.getRepository(PurchaseOrder).save(data.purchaseOrders.map((o) => ({
           id: o.id, supplier: o.supplierId ? { id: o.supplierId } : null,
           status: o.status, orderNumber: o.orderNumber, orderedAt: o.orderedAt,
           receivedAt: o.receivedAt, note: o.note ?? null,
@@ -387,28 +409,28 @@ export class SetupService implements OnModuleInit {
           branchId: o.branchId ?? null,
           locationId: o.locationId ?? null,
           createdAt: o.createdAt, updatedAt: o.updatedAt,
-        })));
+        })) as DeepPartial<PurchaseOrder>[]);
       }
 
-      if (data.purchaseOrderLines?.length > 0) {
-        await mgr.getRepository(PurchaseOrderLine).save(data.purchaseOrderLines.map((l: any) => ({
-          id: l.id, order: { id: l.orderId }, item: { id: l.itemId },
+      if (data.purchaseOrderLines && data.purchaseOrderLines.length > 0) {
+        await mgr.getRepository(PurchaseOrderLine).save(data.purchaseOrderLines.map((l) => ({
+          id: l.id, order: { id: l.orderId as string }, item: { id: l.itemId as string },
           quantity: l.quantity, receivedQuantity: l.receivedQuantity, packSize: l.packSize,
         })));
       }
 
-      if (data.stockLevels?.length > 0) {
-        await mgr.getRepository(StockLevel).save(data.stockLevels.map((sl: any) => ({
-          id: sl.id, item: { id: sl.itemId },
+      if (data.stockLevels && data.stockLevels.length > 0) {
+        await mgr.getRepository(StockLevel).save(data.stockLevels.map((sl) => ({
+          id: sl.id, item: { id: sl.itemId as string },
           vehicle: sl.vehicleId ? { id: sl.vehicleId } : null,
           location: sl.locationId ? { id: sl.locationId } : null,
           quantity: sl.quantity, targetQuantity: sl.targetQuantity,
         })));
       }
 
-      const validMovements = (data.stockMovements ?? []).filter((sm: any) => sm.itemId);
+      const validMovements = (data.stockMovements ?? []).filter((sm) => sm.itemId);
       if (validMovements.length > 0) {
-        await mgr.getRepository(StockMovement).save(validMovements.map((sm: any) => ({
+        await mgr.getRepository(StockMovement).save(validMovements.map((sm) => ({
           id: sm.id, type: sm.type, item: { id: sm.itemId },
           vehicle: sm.vehicleId ? { id: sm.vehicleId } : null,
           location: sm.locationId ? { id: sm.locationId } : null,
@@ -423,11 +445,11 @@ export class SetupService implements OnModuleInit {
         })));
       }
 
-      if (data.inventorySessions?.length > 0) await mgr.getRepository(InventorySession).save(data.inventorySessions);
+      if (data.inventorySessions && data.inventorySessions.length > 0) await mgr.getRepository(InventorySession).save(data.inventorySessions);
 
-      if (data.inventoryLines?.length > 0) {
-        await mgr.getRepository(InventoryLine).save(data.inventoryLines.map((il: any) => ({
-          id: il.id, session: { id: il.sessionId }, item: { id: il.itemId },
+      if (data.inventoryLines && data.inventoryLines.length > 0) {
+        await mgr.getRepository(InventoryLine).save(data.inventoryLines.map((il) => ({
+          id: il.id, session: { id: il.sessionId as string }, item: { id: il.itemId as string },
           vehicle: il.vehicleId ? { id: il.vehicleId } : null,
           location: il.locationId ? { id: il.locationId } : null,
           expectedQuantity: il.expectedQuantity, countedQuantity: il.countedQuantity, note: il.note,
@@ -444,10 +466,10 @@ export class SetupService implements OnModuleInit {
       await queryRunner.release();
     }
 
-    if (data.purchaseOrderPdfs?.length > 0) {
+    if (data.purchaseOrderPdfs && data.purchaseOrderPdfs.length > 0) {
       await this.restorePurchaseOrderPdfs(data.purchaseOrderPdfs);
     }
-    if (data.itemImages?.length > 0) {
+    if (data.itemImages && data.itemImages.length > 0) {
       await this.restoreItemImages(data.itemImages);
     }
   }
@@ -458,14 +480,14 @@ export class SetupService implements OnModuleInit {
    * Abhängigkeiten (z.B. items für stockLevels) müssen bereits in der DB existieren.
    */
   async restoreSelective(
-    backup: any,
+    backup: BackupPayload,
     sections: string[],
-    filters?: { targetBranchId?: string | null; vehicleIds?: string[] | null; locationIds?: string[] | null },
+    filters?: RestoreFilters,
   ): Promise<void> {
     const rawData = backup.data;
     const fallbackBranchId = filters?.targetBranchId
       ?? rawData.branches?.[0]?.id
-      ?? rawData.locations?.find((l: any) => l.branchId)?.branchId
+      ?? rawData.locations?.find((l) => l.branchId)?.branchId
       ?? null;
 
     const data = this.applyRestoreFilters(rawData, filters);
@@ -512,12 +534,12 @@ export class SetupService implements OnModuleInit {
 
       // --- 2. Daten wiederherstellen ---
       if (sections.includes('systemConfig')) {
-        if (data.systemConfigs?.length > 0) await mgr.getRepository(SystemConfig).save(data.systemConfigs);
-        if (data.branchConfigs?.length > 0) await mgr.getRepository(BranchConfig).save(data.branchConfigs);
+        if (data.systemConfigs && data.systemConfigs.length > 0) await mgr.getRepository(SystemConfig).save(data.systemConfigs);
+        if (data.branchConfigs && data.branchConfigs.length > 0) await mgr.getRepository(BranchConfig).save(data.branchConfigs);
       }
 
-      if (sections.includes('users') && data.users?.length > 0) {
-        await mgr.getRepository(User).save(data.users.map((u: any) => ({
+      if (sections.includes('users') && data.users && data.users.length > 0) {
+        await mgr.getRepository(User).save(data.users.map((u) => ({
           id: u.id, username: u.username, displayName: u.displayName,
           email: u.email ?? null,
           passwordHash: u.passwordHash ?? '$LOCKED$NO_PW_SET_RESET_REQUIRED$',
@@ -525,53 +547,53 @@ export class SetupService implements OnModuleInit {
           vehicleId: u.vehicleId ?? null, branchId: u.branchId ?? null,
           refreshInterval: u.refreshInterval, locations: [],
         })));
-        if (data.rolePermissions?.length > 0) await mgr.getRepository(RolePermission).save(data.rolePermissions);
-        if (data.userPermissions?.length > 0) await mgr.getRepository(UserPermission).save(data.userPermissions);
+        if (data.rolePermissions && data.rolePermissions.length > 0) await mgr.getRepository(RolePermission).save(data.rolePermissions);
+        if (data.userPermissions && data.userPermissions.length > 0) await mgr.getRepository(UserPermission).save(data.userPermissions);
         for (const u of data.users) {
           if (Array.isArray(u.locationIds) && u.locationIds.length > 0) {
-            await mgr.getRepository(User).save({ id: u.id, locations: u.locationIds.map((lid: string) => ({ id: lid })) });
+            await mgr.getRepository(User).save({ id: u.id, locations: u.locationIds.map((lid) => ({ id: lid })) });
           }
         }
       }
 
-      if (sections.includes('vehicles') && data.vehicles?.length > 0) {
+      if (sections.includes('vehicles') && data.vehicles && data.vehicles.length > 0) {
         await mgr.getRepository(Vehicle).save(data.vehicles);
       }
 
-      if (sections.includes('locations') && data.locations?.length > 0) {
-        await mgr.getRepository(Location).save(data.locations.map((loc: any) => ({
+      if (sections.includes('locations') && data.locations && data.locations.length > 0) {
+        await mgr.getRepository(Location).save(data.locations.map((loc) => ({
           id: loc.id, type: loc.type, code: loc.code, name: loc.name ?? null,
           parent: null, vehicle: loc.vehicleId ? { id: loc.vehicleId } : null,
           branchId: loc.branchId ?? fallbackBranchId,
           createdAt: loc.createdAt, updatedAt: loc.updatedAt,
         })));
-        const withParent = data.locations.filter((l: any) => l.parentId)
-          .map((l: any) => ({ id: l.id, parent: { id: l.parentId } }));
+        const withParent = data.locations.filter((l) => l.parentId)
+          .map((l) => ({ id: l.id, parent: { id: l.parentId as string } }));
         if (withParent.length > 0) await mgr.getRepository(Location).save(withParent);
       }
 
-      if (sections.includes('suppliers') && data.suppliers?.length > 0) {
+      if (sections.includes('suppliers') && data.suppliers && data.suppliers.length > 0) {
         await mgr.getRepository(Supplier).save(data.suppliers);
       }
 
       if (sections.includes('items')) {
-        if (data.items?.length > 0) {
-          await mgr.getRepository(Item).save(data.items.map((item: any) => {
+        if (data.items && data.items.length > 0) {
+          await mgr.getRepository(Item).save(data.items.map((item) => {
             const { storageLocationId, supplierId, ...rest } = item;
             return { ...rest, storageLocation: storageLocationId ? { id: storageLocationId } : null, supplier: supplierId ? { id: supplierId } : null };
           }));
         }
-        if (data.itemCodes?.length > 0) {
-          await mgr.getRepository(ItemCode).save(data.itemCodes.map((ic: any) => ({
+        if (data.itemCodes && data.itemCodes.length > 0) {
+          await mgr.getRepository(ItemCode).save(data.itemCodes.map((ic) => ({
             id: ic.id, branchId: ic.branchId, code: ic.code, kind: ic.kind,
             item: ic.itemId ? { id: ic.itemId } : null,
-          })));
+          })) as DeepPartial<ItemCode>[]);
         }
       }
 
       if (sections.includes('purchaseOrders')) {
-        if (data.purchaseOrders?.length > 0) {
-          await mgr.getRepository(PurchaseOrder).save(data.purchaseOrders.map((o: any) => ({
+        if (data.purchaseOrders && data.purchaseOrders.length > 0) {
+          await mgr.getRepository(PurchaseOrder).save(data.purchaseOrders.map((o) => ({
             id: o.id, supplier: o.supplierId ? { id: o.supplierId } : null,
             status: o.status, orderNumber: o.orderNumber, orderedAt: o.orderedAt,
             receivedAt: o.receivedAt, note: o.note ?? null,
@@ -579,45 +601,48 @@ export class SetupService implements OnModuleInit {
             branchId: o.branchId ?? fallbackBranchId,
             locationId: o.locationId ?? null,
             createdAt: o.createdAt, updatedAt: o.updatedAt,
-          })));
+          })) as DeepPartial<PurchaseOrder>[]);
         }
-        if (data.purchaseOrderLines?.length > 0) {
-          await mgr.getRepository(PurchaseOrderLine).save(data.purchaseOrderLines.map((l: any) => ({
-            id: l.id, order: { id: l.orderId }, item: { id: l.itemId },
+        if (data.purchaseOrderLines && data.purchaseOrderLines.length > 0) {
+          await mgr.getRepository(PurchaseOrderLine).save(data.purchaseOrderLines.map((l) => ({
+            id: l.id, order: { id: l.orderId as string }, item: { id: l.itemId as string },
             quantity: l.quantity, receivedQuantity: l.receivedQuantity, packSize: l.packSize,
           })));
         }
       }
 
-      if (sections.includes('stockLevels') && data.stockLevels?.length > 0) {
+      if (sections.includes('stockLevels') && data.stockLevels && data.stockLevels.length > 0) {
         // Backup-ItemIDs können von aktuellen DB-IDs abweichen (z.B. nach Hyreka-Import).
         // Mapping über Artikelcode: backup itemId → aktuelle DB itemId
         const backupItemIdToCode = new Map<string, string>(
-          (data.items ?? []).map((i: any) => [i.id, i.code]),
+          (data.items ?? []).map((i) => [i.id, i.code]),
         );
         const currentItems = await mgr.getRepository(Item).find({ select: ['id', 'code'] });
         const codeToCurrentId = new Map<string, string>(currentItems.map((i) => [i.code, i.id]));
 
-        const resolveItemId = (backupItemId: string): string | null => {
-          const currentId = codeToCurrentId.get(backupItemIdToCode.get(backupItemId) ?? '');
+        const resolveItemId = (backupItemId: string | null): string | null => {
+          const currentId = codeToCurrentId.get(backupItemIdToCode.get(backupItemId ?? '') ?? '');
           return currentId ?? backupItemId; // Fallback: gleiche ID (Items aus Backup)
         };
 
         const resolvedLevels = data.stockLevels
-          .map((sl: any) => ({
-            id: sl.id,
-            item: { id: resolveItemId(sl.itemId) },
-            vehicle: sl.vehicleId ? { id: sl.vehicleId } : null,
-            location: sl.locationId ? { id: sl.locationId } : null,
-            quantity: sl.quantity, targetQuantity: sl.targetQuantity,
-          }))
-          .filter((sl: any) => sl.item.id != null);
+          .map((sl) => {
+            const itemId = resolveItemId(sl.itemId);
+            return {
+              id: sl.id,
+              item: itemId != null ? { id: itemId } : null,
+              vehicle: sl.vehicleId ? { id: sl.vehicleId } : null,
+              location: sl.locationId ? { id: sl.locationId } : null,
+              quantity: sl.quantity, targetQuantity: sl.targetQuantity,
+            };
+          })
+          .filter((sl): sl is typeof sl & { item: { id: string } } => sl.item != null);
         if (resolvedLevels.length > 0) await mgr.getRepository(StockLevel).save(resolvedLevels);
       }
 
-      if (sections.includes('stockMovements') && data.stockMovements?.length > 0) {
+      if (sections.includes('stockMovements') && data.stockMovements && data.stockMovements.length > 0) {
         const backupItemIdToCode = new Map<string, string>(
-          (data.items ?? []).map((i: any) => [i.id, i.code]),
+          (data.items ?? []).map((i) => [i.id, i.code]),
         );
         const currentItems = await mgr.getRepository(Item).find({ select: ['id', 'code'] });
         const codeToCurrentId = new Map<string, string>(currentItems.map((i) => [i.code, i.id]));
@@ -626,8 +651,8 @@ export class SetupService implements OnModuleInit {
 
         await mgr.getRepository(StockMovement).save(
           data.stockMovements
-            .filter((sm: any) => sm.itemId)
-            .map((sm: any) => ({
+            .filter((sm) => sm.itemId)
+            .map((sm) => ({
               id: sm.id, type: sm.type, item: { id: resolveItemId(sm.itemId) },
               vehicle: sm.vehicleId ? { id: sm.vehicleId } : null,
               location: sm.locationId ? { id: sm.locationId } : null,
@@ -644,10 +669,10 @@ export class SetupService implements OnModuleInit {
       }
 
       if (sections.includes('inventorySessions')) {
-        if (data.inventorySessions?.length > 0) await mgr.getRepository(InventorySession).save(data.inventorySessions);
-        if (data.inventoryLines?.length > 0) {
-          await mgr.getRepository(InventoryLine).save(data.inventoryLines.map((il: any) => ({
-            id: il.id, session: { id: il.sessionId }, item: { id: il.itemId },
+        if (data.inventorySessions && data.inventorySessions.length > 0) await mgr.getRepository(InventorySession).save(data.inventorySessions);
+        if (data.inventoryLines && data.inventoryLines.length > 0) {
+          await mgr.getRepository(InventoryLine).save(data.inventoryLines.map((il) => ({
+            id: il.id, session: { id: il.sessionId as string }, item: { id: il.itemId as string },
             vehicle: il.vehicleId ? { id: il.vehicleId } : null,
             location: il.locationId ? { id: il.locationId } : null,
             expectedQuantity: il.expectedQuantity, countedQuantity: il.countedQuantity, note: il.note,
@@ -665,46 +690,46 @@ export class SetupService implements OnModuleInit {
       await queryRunner.release();
     }
 
-    if (sections.includes('purchaseOrders') && data.purchaseOrderPdfs?.length > 0) {
+    if (sections.includes('purchaseOrders') && data.purchaseOrderPdfs && data.purchaseOrderPdfs.length > 0) {
       await this.restorePurchaseOrderPdfs(data.purchaseOrderPdfs);
     }
-    if (sections.includes('items') && data.itemImages?.length > 0) {
+    if (sections.includes('items') && data.itemImages && data.itemImages.length > 0) {
       await this.restoreItemImages(data.itemImages);
     }
   }
 
   private applyRestoreFilters(
-    data: any,
-    filters?: { targetBranchId?: string | null; vehicleIds?: string[] | null; locationIds?: string[] | null },
-  ): any {
+    data: BackupData,
+    filters?: RestoreFilters,
+  ): BackupData {
     if (!filters) return data;
-    let result = { ...data };
+    const result: BackupData = { ...data };
 
     // Branch filter: nur Daten der gewählten Niederlassung (plus branchId=null Daten)
     if (filters.targetBranchId) {
       const bId = filters.targetBranchId;
-      if (result.locations) result.locations = result.locations.filter((l: any) => !l.branchId || l.branchId === bId);
-      if (result.items)     result.items     = result.items.filter((i: any) => !i.branchId || i.branchId === bId);
-      if (result.itemCodes) result.itemCodes = result.itemCodes.filter((ic: any) => !ic.branchId || ic.branchId === bId);
-      if (result.users)     result.users     = result.users.filter((u: any) => !u.branchId || u.branchId === bId);
+      if (result.locations) result.locations = result.locations.filter((l) => !l.branchId || l.branchId === bId);
+      if (result.items)     result.items     = result.items.filter((i) => !i.branchId || i.branchId === bId);
+      if (result.itemCodes) result.itemCodes = result.itemCodes.filter((ic) => !ic.branchId || ic.branchId === bId);
+      if (result.users)     result.users     = result.users.filter((u) => !u.branchId || u.branchId === bId);
     }
 
     // Fahrzeugfilter: Fahrzeuge + fahrzeugbasierte Bestände + Buchungshistorie
     if (filters.vehicleIds?.length) {
       const vIds = new Set(filters.vehicleIds);
-      if (result.vehicles)       result.vehicles       = result.vehicles.filter((v: any) => vIds.has(v.id));
-      if (result.stockLevels)    result.stockLevels    = result.stockLevels.filter((sl: any) => sl.vehicleId && vIds.has(sl.vehicleId));
-      if (result.stockMovements) result.stockMovements = result.stockMovements.filter((sm: any) => sm.vehicleId && vIds.has(sm.vehicleId));
+      if (result.vehicles)       result.vehicles       = result.vehicles.filter((v) => vIds.has(v.id));
+      if (result.stockLevels)    result.stockLevels    = result.stockLevels.filter((sl) => !!sl.vehicleId && vIds.has(sl.vehicleId));
+      if (result.stockMovements) result.stockMovements = result.stockMovements.filter((sm) => !!sm.vehicleId && vIds.has(sm.vehicleId));
     }
 
     // Lagerortfilter: lagerbasierte Bestände + Artikel nach Lagerort
     if (filters.locationIds?.length) {
       const lIds = new Set(filters.locationIds);
-      if (result.stockLevels) result.stockLevels = result.stockLevels.filter((sl: any) => sl.locationId && lIds.has(sl.locationId));
+      if (result.stockLevels) result.stockLevels = result.stockLevels.filter((sl) => !!sl.locationId && lIds.has(sl.locationId));
       if (result.items) {
-        result.items = result.items.filter((i: any) => i.storageLocationId && lIds.has(i.storageLocationId));
-        const filteredItemIds = new Set(result.items.map((i: any) => i.id));
-        if (result.itemCodes) result.itemCodes = result.itemCodes.filter((ic: any) => filteredItemIds.has(ic.itemId));
+        result.items = result.items.filter((i) => !!i.storageLocationId && lIds.has(i.storageLocationId));
+        const filteredItemIds = new Set(result.items.map((i) => i.id));
+        if (result.itemCodes) result.itemCodes = result.itemCodes.filter((ic) => ic.itemId != null && filteredItemIds.has(ic.itemId));
       }
     }
 
@@ -744,7 +769,7 @@ export class SetupService implements OnModuleInit {
   /**
    * Speichert ein Backup als Datei und gibt den Dateinamen zurueck.
    */
-  private saveBackupToFile(backup: any, type: 'auto' | 'manual'): string {
+  private saveBackupToFile(backup: BackupPayload, type: 'auto' | 'manual'): string {
     const backupDir = this.ensureBackupDir();
     const timestamp = new Date().toISOString().replace(/:/g, '-').slice(0, 19);
     const filename = `${type}-backup-${timestamp}.json`;
@@ -791,7 +816,7 @@ export class SetupService implements OnModuleInit {
 
       return {
         enabled: enabledConfig?.value === 'true',
-        frequency: (frequencyConfig?.value as any) || 'daily',
+        frequency: (frequencyConfig?.value as 'daily' | 'weekly' | 'monthly' | undefined) || 'daily',
         time: timeConfig?.value || '02:00',
         lastBackup: lastBackupConfig?.value,
         retentionDays: retentionConfig?.value ? parseInt(retentionConfig.value, 10) : 30,
@@ -836,7 +861,7 @@ export class SetupService implements OnModuleInit {
     }
 
     await this.loggingService.logInfo(
-      'SYSTEM' as any,
+      LogCategory.SYSTEM,
       'AUTO_BACKUP_CONFIG_CHANGED',
       `Automatisches Backup ${config.enabled ? 'aktiviert' : 'deaktiviert'}: ${config.frequency} um ${config.time}`,
     );
@@ -875,14 +900,16 @@ export class SetupService implements OnModuleInit {
     this.logger.log(`Naechstes automatisches Backup: ${nextBackup.toISOString()} (${localTime}, in ${Math.round(delay / 1000 / 60)} Minuten)`);
 
     // Setze Timeout für das erste Backup
-    this.firstTimeout = setTimeout(async () => {
-      await this.performAutoBackup();
-      
-      // Nach dem ersten Backup, setze Intervall basierend auf Frequenz
-      const intervalMs = this.getIntervalMs(config.frequency);
-      this.backupInterval = setInterval(async () => {
+    this.firstTimeout = setTimeout(() => {
+      void (async () => {
         await this.performAutoBackup();
-      }, intervalMs) as any;
+
+        // Nach dem ersten Backup, setze Intervall basierend auf Frequenz
+        const intervalMs = this.getIntervalMs(config.frequency);
+        this.backupInterval = setInterval(() => {
+          void this.performAutoBackup();
+        }, intervalMs);
+      })();
     }, delay);
   }
 
@@ -919,27 +946,27 @@ export class SetupService implements OnModuleInit {
       await this.cleanupOldBackups(backupDir);
 
       await this.loggingService.logInfo(
-        'SYSTEM' as any,
+        LogCategory.SYSTEM,
         'AUTO_BACKUP_COMPLETED',
         `Automatisches Backup erfolgreich erstellt: ${filename}`
       );
 
       this.logger.log(`Automatisches Backup erfolgreich gespeichert: ${filepath}`);
-    } catch (error: any) {
+    } catch (error) {
       this.logger.error('Fehler beim automatischen Backup:', error);
-      
+
       await this.loggingService.logError(
-        'SYSTEM' as any,
+        LogCategory.SYSTEM,
         'AUTO_BACKUP_FAILED',
-        `Automatisches Backup fehlgeschlagen: ${error?.message || 'Unbekannter Fehler'}`
+        `Automatisches Backup fehlgeschlagen: ${error instanceof Error ? error.message : 'Unbekannter Fehler'}`
       );
     }
   }
 
-  async saveManualBackup(backup: any): Promise<string> {
+  async saveManualBackup(backup: BackupPayload): Promise<string> {
     const filename = this.saveBackupToFile(backup, 'manual');
     await this.loggingService.logInfo(
-      'SYSTEM' as any,
+      LogCategory.SYSTEM,
       'MANUAL_BACKUP_CREATED',
       `Manuelles Backup gespeichert: ${filename}`
     );
@@ -985,30 +1012,40 @@ export class SetupService implements OnModuleInit {
           ? `Limit: ${maxAutoBackups} Backups / ${retentionDays} Tage`
           : `älter als ${retentionDays} Tage`;
         await this.loggingService.logInfo(
-          'SYSTEM' as any,
+          LogCategory.SYSTEM,
           'AUTO_BACKUP_CLEANUP',
           `${deletedCount} alte Backup-Dateien gelöscht (${reason})`
         );
         this.logger.log(`Backup-Bereinigung: ${deletedCount} alte Dateien geloescht`);
       }
-    } catch (error: any) {
+    } catch (error) {
       this.logger.error('Fehler bei der Backup-Bereinigung:', error);
     }
   }
 
   async streamFullArchive(res: import('express').Response): Promise<void> {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const AdmZip = require('adm-zip') as new (input?: Buffer | string) => any;
     const zip = new AdmZip();
     const timestamp = new Date().toISOString().slice(0, 19).replace(/:/g, '-');
     const filename = `lagerverwaltung-vollbackup-${timestamp}.zip`;
 
     const backup = await this.createBackup();
-    // Passwort-Hashes werden aus dem Download-Backup entfernt (SEC-013, DSGVO)
-    // Server-seitige Auto-Backups behalten die Hashes für Disaster-Recovery
-    const sanitizedBackup = {
+    // Passwort-Hashes werden aus dem Download-Backup entfernt (SEC-013, DSGVO).
+    // createBackup() liefert users bereits ohne passwordHash — diese Bereinigung
+    // ist ein zusaetzliches Sicherheitsnetz (defense-in-depth) falls sich das
+    // je aendert. FIX: die Nutzerliste liegt unter backup.data.users, nicht
+    // backup.users — der vorherige Pfad griff ins Leere und die Bereinigung
+    // lief faktisch nie (kein aktives Datenleck, da createBackup() das Feld
+    // ohnehin nie befuellt, aber das Sicherheitsnetz war damit wirkungslos).
+    const sanitizedBackup: BackupPayload = {
       ...backup,
-      users: (backup.users ?? []).map(({ passwordHash: _ph, ...rest }: any) => rest),
+      data: {
+        ...backup.data,
+        users: (backup.data.users ?? []).map((u) => {
+          // eslint-disable-next-line @typescript-eslint/no-unused-vars
+          const { passwordHash, ...rest } = u;
+          return rest;
+        }),
+      },
     };
     zip.addFile('data.json', Buffer.from(JSON.stringify(sanitizedBackup, null, 2), 'utf8'));
 
@@ -1032,21 +1069,19 @@ export class SetupService implements OnModuleInit {
   }
 
   async restoreFromArchive(buffer: Buffer): Promise<void> {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const AdmZip = require('adm-zip') as new (buffer: Buffer) => any;
     const zip = new AdmZip(buffer);
 
     const dataEntry = zip.getEntry('data.json');
     if (!dataEntry) throw new Error('data.json nicht im Archiv gefunden');
-    const backup = JSON.parse(dataEntry.getData().toString('utf8'));
+    const backup = JSON.parse(dataEntry.getData().toString('utf8')) as BackupPayload;
     await this.restoreBackup(backup);
 
     const imageDir = this.getItemImageStoragePath();
     const pdfDir = this.getPurchaseOrderStoragePath();
 
-    for (const entry of zip.getEntries() as any[]) {
+    for (const entry of zip.getEntries()) {
       if (entry.isDirectory) continue;
-      const name = entry.entryName as string;
+      const name = entry.entryName;
 
       if (name.startsWith('item-images/')) {
         const filename = path.basename(name);
@@ -1079,6 +1114,8 @@ export class SetupService implements OnModuleInit {
   }
 
   async listAutoBackups(): Promise<Array<{ filename: string; size: number; created: string; type: 'auto' | 'manual' }>> {
+    // Kein DB-/IO-Await nötig (nur synchrone fs-Zugriffe); await hält die Methode als Promise-API konsistent zu anderen Backup-Methoden.
+    await Promise.resolve();
     try {
       const backupDir = this.ensureBackupDir();
       
@@ -1127,6 +1164,8 @@ export class SetupService implements OnModuleInit {
   }
 
   async getAutoBackupPath(filename: string): Promise<string> {
+    // Kein DB-/IO-Await nötig (nur synchrone fs-Zugriffe); await hält die Methode als Promise-API konsistent zu anderen Backup-Methoden.
+    await Promise.resolve();
     if (!this.isValidBackupFilename(filename)) {
       throw new Error('Ungültiger Dateiname');
     }
@@ -1146,7 +1185,7 @@ export class SetupService implements OnModuleInit {
     fs.unlinkSync(filepath);
 
     await this.loggingService.logInfo(
-      'SYSTEM' as any,
+      LogCategory.SYSTEM,
       'AUTO_BACKUP_DELETED',
       `Backup-Datei manuell gelöscht: ${filename}`
     );
@@ -1161,16 +1200,15 @@ export class SetupService implements OnModuleInit {
 
       lines.push(`-- Lagerverwaltung MySQL Dump`);
       lines.push(`-- Erstellt: ${ts}`);
-      lines.push(`-- Server: ${this.dataSource.options.database}`);
+      lines.push(`-- Server: ${String(this.dataSource.options.database)}`);
       lines.push(``);
       lines.push(`SET FOREIGN_KEY_CHECKS=0;`);
       lines.push(`SET SQL_MODE='NO_AUTO_VALUE_ON_ZERO';`);
       lines.push(`SET NAMES utf8mb4;`);
       lines.push(``);
 
-      const tableRows: Array<{ Tables_in_db: string }> = await qr.query(`SHOW TABLES`);
-      const dbName = this.dataSource.options.database as string;
-      const tableNames = tableRows.map(r => Object.values(r)[0] as string);
+      const tableRows = (await qr.query(`SHOW TABLES`)) as Array<{ Tables_in_db: string }>;
+      const tableNames = tableRows.map(r => Object.values(r)[0]);
 
       for (const table of tableNames) {
         lines.push(`-- ----------------------------`);
@@ -1178,12 +1216,12 @@ export class SetupService implements OnModuleInit {
         lines.push(`-- ----------------------------`);
         lines.push(`DROP TABLE IF EXISTS \`${table}\`;`);
 
-        const [createResult]: Array<Record<string, string>> = await qr.query(`SHOW CREATE TABLE \`${table}\``);
+        const [createResult] = (await qr.query(`SHOW CREATE TABLE \`${table}\``)) as Array<Record<string, string>>;
         const createSql = createResult['Create Table'];
         lines.push(`${createSql};`);
         lines.push(``);
 
-        const rows: Record<string, unknown>[] = await qr.query(`SELECT * FROM \`${table}\``);
+        const rows = (await qr.query(`SELECT * FROM \`${table}\``)) as Record<string, unknown>[];
         if (rows.length === 0) {
           lines.push(`-- (keine Datensätze)`);
           lines.push(``);

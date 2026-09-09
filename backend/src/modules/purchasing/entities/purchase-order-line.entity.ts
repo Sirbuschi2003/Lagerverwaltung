@@ -6,6 +6,7 @@ import {
 } from "typeorm";
 
 import { Item } from "../../items/entities/item.entity";
+
 import { PurchaseOrder } from "./purchase-order.entity";
 
 @Entity({ name: "purchase_order_lines" })

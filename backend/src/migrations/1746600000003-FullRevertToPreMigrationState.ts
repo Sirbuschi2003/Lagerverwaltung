@@ -216,6 +216,7 @@ export class FullRevertToPreMigrationState1746600000003 implements MigrationInte
     `);
   }
 
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars -- MigrationInterface erfordert diesen Parameter; down() ist absichtlich ein No-Op
   public async down(_queryRunner: QueryRunner): Promise<void> {
     // No down - data-repair migration
   }

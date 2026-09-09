@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import * as nodemailer from 'nodemailer';
 
+import { LogCategory } from '../logging/entities/system-log.entity';
 import { LoggingService } from '../logging/services/logging.service';
 
 export interface EmailConfig {
@@ -66,14 +67,14 @@ export class EmailService {
       await this.loggingService.setConfig('email.from', config.from, 'Standard Absender-Adresse', false, branchId ?? undefined);
 
       await this.loggingService.logInfo(
-        'SYSTEM' as any,
+        LogCategory.SYSTEM,
         'EMAIL_CONFIG_UPDATED',
         `Email-Konfiguration aktualisiert: ${config.host}:${config.port}${branchId ? ` (Niederlassung: ${branchId})` : ' (global)'}`,
         { metadata: { host: config.host, port: config.port, secure: config.secure, user: config.auth.user, branchId } },
       );
     } catch (error) {
       await this.loggingService.logError(
-        'SYSTEM' as any,
+        LogCategory.SYSTEM,
         'EMAIL_CONFIG_FAILED',
         `Email-Konfiguration fehlgeschlagen: ${error instanceof Error ? error.message : 'Unbekannter Fehler'}`,
         { metadata: { error: error instanceof Error ? error.message : 'Unbekannter Fehler' } },
@@ -154,14 +155,14 @@ export class EmailService {
       const info = await transporter.sendMail(mailOptions) as { messageId?: string };
 
       await this.loggingService.logInfo(
-        'SYSTEM' as any,
+        LogCategory.SYSTEM,
         'EMAIL_SENT',
         `Email gesendet: "${options.subject}" an ${mailOptions.to}`,
         { metadata: { to: mailOptions.to, subject: options.subject, messageId: info.messageId || 'unknown' } },
       );
     } catch (error) {
       await this.loggingService.logError(
-        'SYSTEM' as any,
+        LogCategory.SYSTEM,
         'EMAIL_SEND_FAILED',
         `Email-Versand fehlgeschlagen: ${error instanceof Error ? error.message : 'Unbekannter Fehler'}`,
         { metadata: { to: options.to, subject: options.subject, error: error instanceof Error ? error.message : 'Unbekannter Fehler' } },

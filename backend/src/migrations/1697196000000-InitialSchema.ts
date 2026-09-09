@@ -494,7 +494,7 @@ export class InitialSchema1697196000000 implements MigrationInterface {
     );
 
     // Add indexes / foreign keys (skip if they already exist)
-    const extractRows = (raw: any): any[] => {
+    const extractRows = (raw: unknown): unknown[] => {
       if (Array.isArray(raw)) {
         if (raw.length > 0 && Array.isArray(raw[0])) return raw[0];
         return raw;

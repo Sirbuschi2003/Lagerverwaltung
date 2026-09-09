@@ -1,7 +1,9 @@
 import { Injectable, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
-import { LoggingService } from './logging.service';
-import { LogArchiveService } from './log-archive.service';
+
 import { LogCategory } from '../entities/system-log.entity';
+
+import { LogArchiveService } from './log-archive.service';
+import { LoggingService } from './logging.service';
 
 @Injectable()
 export class LoggingCleanupService implements OnModuleInit, OnModuleDestroy {
@@ -29,29 +31,32 @@ export class LoggingCleanupService implements OnModuleInit, OnModuleDestroy {
         `Nächste automatische Log-Bereinigung geplant für ${next.toISOString()}`,
       );
 
-      this.firstTimeout = setTimeout(async () => {
-        await this.runCleanupOnce();
-        // Danach täglich wiederholen (24h)
-        this.dailyInterval = setInterval(async () => {
-          await this.runCleanupOnce();
-        }, 24 * 60 * 60 * 1000);
+      this.firstTimeout = setTimeout(() => {
+        void this.runCleanupOnce().then(() => {
+          // Danach täglich wiederholen (24h)
+          this.dailyInterval = setInterval(() => {
+            void this.runCleanupOnce();
+          }, 24 * 60 * 60 * 1000);
+        });
       }, safeDelay);
-    } catch (err: any) {
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err);
       await this.loggingService.logError(
         LogCategory.SYSTEM,
         'AUTO_LOG_CLEANUP_INIT_FAILED',
-        `Fehler beim Planen der automatischen Log-Bereinigung: ${err?.message || err}`,
+        `Fehler beim Planen der automatischen Log-Bereinigung: ${message}`,
       );
     }
   }
 
+  // eslint-disable-next-line @typescript-eslint/require-await -- must stay async to satisfy OnModuleDestroy interface
   async onModuleDestroy() {
     if (this.firstTimeout) {
       clearTimeout(this.firstTimeout);
       this.firstTimeout = null;
     }
     if (this.dailyInterval) {
-      clearInterval(this.dailyInterval as any);
+      clearInterval(this.dailyInterval);
       this.dailyInterval = null;
     }
   }
@@ -93,11 +98,12 @@ export class LoggingCleanupService implements OnModuleInit, OnModuleDestroy {
         'AUTO_LOG_CLEANUP_COMPLETED',
         `Tägliche Log-Archivierung: ${pastDates.length} Tage archiviert (${totalArchived} Einträge), ${removedDirs} alte Archive entfernt, ${deleted} Reste bereinigt (Log-Aufbewahrung: ${logRetentionDays} Tage, Archiv-Aufbewahrung: ${archiveRetentionDays} Tage)`,
       );
-    } catch (err: any) {
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err);
       await this.loggingService.logError(
         LogCategory.SYSTEM,
         'AUTO_LOG_CLEANUP_FAILED',
-        `Tägliche Log-Archivierung fehlgeschlagen: ${err?.message || err}`,
+        `Tägliche Log-Archivierung fehlgeschlagen: ${message}`,
       );
     }
   }

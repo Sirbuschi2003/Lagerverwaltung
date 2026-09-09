@@ -1,4 +1,5 @@
 ﻿import { Column, Entity, JoinColumn, ManyToOne, PrimaryGeneratedColumn } from "typeorm";
+
 import { Branch } from "../../branches/entities/branch.entity";
 
 @Entity({ name: "vehicles" })

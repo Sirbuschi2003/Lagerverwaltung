@@ -5,9 +5,9 @@ export class UpdateSystemLogsCategory1735008000000 implements MigrationInterface
 
   public async up(queryRunner: QueryRunner): Promise<void> {
     const tableExists = (
-      await queryRunner.query(
+      (await queryRunner.query(
         `SELECT 1 FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'system_logs' LIMIT 1`,
-      )
+      )) as unknown[]
     ).length > 0;
 
     if (tableExists) {

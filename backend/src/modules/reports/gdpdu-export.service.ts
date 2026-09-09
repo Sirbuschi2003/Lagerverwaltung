@@ -1,12 +1,12 @@
 import { Injectable } from "@nestjs/common";
 import { InjectRepository } from "@nestjs/typeorm";
-import { Between, Repository } from "typeorm";
 import AdmZip from "adm-zip";
+import { Repository } from "typeorm";
 
-import { StockMovement } from "../stock/entities/stock-movement.entity";
-import { PurchaseOrder } from "../purchasing/entities/purchase-order.entity";
-import { PurchaseOrderLine } from "../purchasing/entities/purchase-order-line.entity";
 import { Item } from "../items/entities/item.entity";
+import { PurchaseOrderLine } from "../purchasing/entities/purchase-order-line.entity";
+import { PurchaseOrder } from "../purchasing/entities/purchase-order.entity";
+import { StockMovement } from "../stock/entities/stock-movement.entity";
 import { Supplier } from "../suppliers/entities/supplier.entity";
 
 export interface GdpduExportOptions {
@@ -91,13 +91,13 @@ export class GdpduExportService {
   private async fetchItems(branchId?: string | null): Promise<Item[]> {
     const where: Record<string, unknown> = {};
     if (branchId) where.branchId = branchId;
-    return this.itemsRepo.find({ where: where as any, relations: ["supplier"], take: 50000 });
+    return this.itemsRepo.find({ where, relations: ["supplier"], take: 50000 });
   }
 
   private async fetchSuppliers(branchId?: string | null): Promise<Supplier[]> {
     const where: Record<string, unknown> = {};
     if (branchId) where.branchId = branchId;
-    return this.suppliersRepo.find({ where: where as any, take: 10000 });
+    return this.suppliersRepo.find({ where, take: 10000 });
   }
 }
 

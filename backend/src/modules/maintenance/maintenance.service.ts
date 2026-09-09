@@ -1,10 +1,11 @@
 import { Injectable, Logger, OnModuleInit, OnModuleDestroy } from "@nestjs/common";
 import { InjectRepository } from "@nestjs/typeorm";
 import { Repository, IsNull, DataSource, LessThan } from "typeorm";
+
+import { SystemConfig } from "../logging/entities/system-config.entity";
 import { RestockRequest } from "../stock/entities/restock-request.entity";
 import { StockLevel } from "../stock/entities/stock-level.entity";
 import { StockMovement } from "../stock/entities/stock-movement.entity";
-import { SystemConfig } from "../logging/entities/system-config.entity";
 
 export interface DbTableStat {
   tableName: string;
@@ -49,19 +50,22 @@ export class MaintenanceService implements OnModuleInit, OnModuleDestroy {
     private readonly dataSource: DataSource,
   ) {}
 
+  // eslint-disable-next-line @typescript-eslint/require-await -- must stay async to satisfy OnModuleInit interface
   async onModuleInit() {
     const next = this.getNextRunTime("04:00");
     const delay = Math.max(next.getTime() - Date.now(), 60_000);
-    this.cleanupTimeout = setTimeout(async () => {
-      await this.runMovementCleanup();
-      this.cleanupInterval = setInterval(() => this.runMovementCleanup(), 24 * 60 * 60 * 1000);
+    this.cleanupTimeout = setTimeout(() => {
+      void this.runMovementCleanup().then(() => {
+        this.cleanupInterval = setInterval(() => void this.runMovementCleanup(), 24 * 60 * 60 * 1000);
+      });
     }, delay);
     this.logger.log(`Nächste Bewegungs-Bereinigung geplant für ${next.toISOString()}`);
   }
 
+  // eslint-disable-next-line @typescript-eslint/require-await -- must stay async to satisfy OnModuleDestroy interface
   async onModuleDestroy() {
     if (this.cleanupTimeout) clearTimeout(this.cleanupTimeout);
-    if (this.cleanupInterval) clearInterval(this.cleanupInterval as any);
+    if (this.cleanupInterval) clearInterval(this.cleanupInterval);
   }
 
   private getNextRunTime(time: string): Date {
@@ -77,8 +81,9 @@ export class MaintenanceService implements OnModuleInit, OnModuleDestroy {
       const days = await this.getMovementRetentionDays();
       const result = await this.deleteOldMovements(days);
       this.logger.log(`Automatische Bewegungs-Bereinigung: ${result.deleted} Einträge gelöscht (>${days} Tage)`);
-    } catch (err: any) {
-      this.logger.error(`Automatische Bewegungs-Bereinigung fehlgeschlagen: ${err?.message}`);
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err);
+      this.logger.error(`Automatische Bewegungs-Bereinigung fehlgeschlagen: ${message}`);
     }
   }
 
@@ -124,8 +129,8 @@ export class MaintenanceService implements OnModuleInit, OnModuleDestroy {
       .where("r.status IN (:...statuses)", { statuses: ["PENDING", "APPROVED"] })
       .groupBy("r.stockLevelId")
       .having("COUNT(*) > 1")
-      .getRawMany();
-    const dupCount = duplicates.reduce((sum, d) => sum + (parseInt(d.cnt) - 1), 0);
+      .getRawMany<{ stockLevelId: string; cnt: string }>();
+    const dupCount = duplicates.reduce((sum, d) => sum + (parseInt(d.cnt, 10) - 1), 0);
     if (dupCount > 0) {
       issues.push({
         type: "DUPLICATE_RESTOCK_REQUESTS",
@@ -170,7 +175,7 @@ export class MaintenanceService implements OnModuleInit, OnModuleDestroy {
       .select("r.id", "id")
       .leftJoin("stock_levels", "sl", "sl.id = r.stockLevelId")
       .where("sl.id IS NULL")
-      .getRawMany();
+      .getRawMany<{ id: string }>();
     if (orphanedIds.length > 0) {
       await this.restockRepo.delete(orphanedIds.map((r) => r.id));
       fixed += orphanedIds.length;
@@ -193,7 +198,7 @@ export class MaintenanceService implements OnModuleInit, OnModuleDestroy {
       .where("r.status IN (:...statuses)", { statuses: ["PENDING", "APPROVED"] })
       .groupBy("r.stockLevelId")
       .having("COUNT(*) > 1")
-      .getRawMany();
+      .getRawMany<{ stockLevelId: string; cnt: string }>();
 
     for (const dup of duplicates) {
       const requests = await this.restockRepo.find({
@@ -252,7 +257,7 @@ export class MaintenanceService implements OnModuleInit, OnModuleDestroy {
 
     const totalMb = tables.reduce((s, t) => s + t.totalMb, 0);
 
-    const [{ db }] = await this.dataSource.query(`SELECT DATABASE() AS db`);
+    const [{ db }] = await this.dataSource.query<{ db: string }[]>(`SELECT DATABASE() AS db`);
 
     return {
       databaseName: db,

@@ -1,8 +1,9 @@
 import { Module } from "@nestjs/common";
 import { TypeOrmModule } from "@nestjs/typeorm";
-import { UserConsent } from "./entities/user-consent.entity";
-import { ConsentService } from "./consent.service";
+
 import { ConsentController } from "./consent.controller";
+import { ConsentService } from "./consent.service";
+import { UserConsent } from "./entities/user-consent.entity";
 
 @Module({
   imports: [TypeOrmModule.forFeature([UserConsent])],

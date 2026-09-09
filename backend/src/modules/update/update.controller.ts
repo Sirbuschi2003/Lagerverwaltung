@@ -7,9 +7,12 @@ import {
   ForbiddenException,
   Request,
 } from "@nestjs/common";
-import { UpdateService, UpdateStatus } from "./update.service";
-import { JwtAuthGuard } from "../auth/guards/jwt-auth.guard";
 import { SkipThrottle } from "@nestjs/throttler";
+import type { Request as ExpressRequest } from "express";
+
+import { JwtAuthGuard } from "../auth/guards/jwt-auth.guard";
+
+import { UpdateService, UpdateStatus } from "./update.service";
 
 @Controller("update")
 @UseGuards(JwtAuthGuard)
@@ -32,9 +35,9 @@ export class UpdateController {
   }
 
   @Post("apply")
-  async applyUpdate(
-    @Request() req: any,
-  ): Promise<{ message: string }> {
+  applyUpdate(
+    @Request() req: ExpressRequest,
+  ): { message: string } {
     const user = req.user;
     if (!user || user.role !== "MANAGER") {
       throw new ForbiddenException("Nur Administratoren können Updates einspielen.");

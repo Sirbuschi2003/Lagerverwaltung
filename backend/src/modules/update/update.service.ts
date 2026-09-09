@@ -1,6 +1,8 @@
-import { Injectable, Logger } from "@nestjs/common";
 import { spawn } from "child_process";
 import * as https from "https";
+import { hostname } from "os";
+
+import { Injectable, Logger } from "@nestjs/common";
 
 export type UpdatePhase =
   | "idle"
@@ -71,11 +73,12 @@ export class UpdateService {
         error: null,
       };
       this.lastCheckTime = now;
-    } catch (err: any) {
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err);
       this.cachedStatus = {
         ...this.cachedStatus,
         checking: false,
-        error: err.message || "Unbekannter Fehler beim Update-Check",
+        error: message || "Unbekannter Fehler beim Update-Check",
       };
     }
     return this.cachedStatus;
@@ -107,7 +110,7 @@ export class UpdateService {
     });
   }
 
-  async applyUpdate(): Promise<{ message: string }> {
+  applyUpdate(): { message: string } {
     if (this.cachedStatus.updateRunning) {
       return { message: "Update läuft bereits." };
     }
@@ -139,7 +142,9 @@ export class UpdateService {
       }
     }, 10 * 60 * 1000);
 
-    setImmediate(() => this.runUpdate(projectName, backendImage));
+    setImmediate(() => {
+      void this.runUpdate(projectName, backendImage);
+    });
 
     return { message: "Update wird eingespielt. Die Container werden in Kürze neu gestartet." };
   }
@@ -295,7 +300,6 @@ export class UpdateService {
    */
   private getHostProjectPath(): Promise<string | null> {
     return new Promise((resolve) => {
-      const { hostname } = require("os");
       const containerId = hostname();
       const child = spawn(
         "sh",

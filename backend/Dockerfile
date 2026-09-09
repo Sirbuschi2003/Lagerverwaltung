@@ -55,7 +55,7 @@ USER nestjs
 
 # Health check
 HEALTHCHECK --interval=15s --timeout=5s --retries=5 \
-    CMD curl -f http://localhost:3000/health || exit 1
+    CMD curl -f http://localhost:3000/api/health || exit 1
 
 EXPOSE 3000
 CMD ["/app/start.sh"]

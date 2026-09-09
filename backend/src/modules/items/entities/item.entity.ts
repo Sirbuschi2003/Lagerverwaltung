@@ -1,3 +1,4 @@
+import { Transform } from "class-transformer";
 import {
   Column,
   CreateDateColumn,
@@ -8,12 +9,12 @@ import {
   PrimaryGeneratedColumn,
   UpdateDateColumn,
 } from "typeorm";
-import { Transform } from "class-transformer";
 
-import { ItemCode } from "./item-code.entity";
+import { Branch } from "../../branches/entities/branch.entity";
 import { Location } from "../../locations/entities/location.entity";
 import { Supplier } from "../../suppliers/entities/supplier.entity";
-import { Branch } from "../../branches/entities/branch.entity";
+
+import { ItemCode } from "./item-code.entity";
 
 @Entity({ name: "items" })
 export class Item {
@@ -87,7 +88,7 @@ export class Item {
   updatedAt!: Date;
 
   // Virtual field für Frontend-Kompatibilität
-  @Transform(({ obj }) => obj.codes ? obj.codes.map((code: ItemCode) => code.code) : [], { toPlainOnly: true })
+  @Transform(({ obj }: { obj: Item }) => obj.codes ? obj.codes.map((code: ItemCode) => code.code) : [], { toPlainOnly: true })
   get alternateCodes(): string[] {
     return this.codes ? this.codes.map(code => code.code) : [];
   }

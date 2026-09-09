@@ -1,22 +1,19 @@
 import { Body, Controller, Delete, Get, NotFoundException, Param, Patch, Post, Query, Req, UseGuards, InternalServerErrorException, BadRequestException, Logger, Res, UseInterceptors, UploadedFile, Header } from "@nestjs/common";
 import { FileInterceptor } from "@nestjs/platform-express";
-import { memoryStorage } from "multer";
-import { plainToInstance } from "class-transformer";
+import { SkipThrottle, Throttle } from "@nestjs/throttler";
 import type { Request, Response } from "express";
+import { memoryStorage } from "multer";
 
-interface ItemsRequest extends Request {
-  user?: { id?: string; username?: string; role?: string; branchId?: string | null; locationIds?: string[] };
-}
-
-import { CreateItemDto } from "./dto/create-item.dto";
-import { UpdateItemDto } from "./dto/update-item.dto";
-import { ItemsService } from "./items.service";
-import { Item } from "./entities/item.entity";
-import { JwtAuthGuard } from "../auth/guards/jwt-auth.guard";
 import { Permissions } from "../access-control/decorators/permissions.decorator";
 import { PermissionsGuard } from "../access-control/guards/permissions.guard";
 import { Public } from "../auth/decorators/public.decorator";
-import { SkipThrottle, Throttle } from "@nestjs/throttler";
+import { JwtAuthGuard } from "../auth/guards/jwt-auth.guard";
+
+import { CreateItemDto } from "./dto/create-item.dto";
+import { UpdateItemDto } from "./dto/update-item.dto";
+import { Item } from "./entities/item.entity";
+import { ItemsService } from "./items.service";
+
 
 /**
  * Prüft die Magic Bytes eines Buffers auf erlaubte Bildformate.
@@ -48,7 +45,7 @@ export class ItemsController {
   @Get()
   @Permissions("items.view")
   async findAll(
-    @Req() req: ItemsRequest,
+    @Req() req: Request,
     @Query("page") page?: string,
     @Query("limit") limit?: string,
     @Query("search") search?: string,
@@ -104,7 +101,7 @@ export class ItemsController {
 
   @Post()
   @Permissions("items.create")
-  async create(@Body() dto: CreateItemDto, @Req() req: ItemsRequest) {
+  async create(@Body() dto: CreateItemDto, @Req() req: Request) {
     try {
       this.logger.debug(`Erstelle neuen Artikel: ${dto.code}`);
       return await this.itemsService.create({ ...dto, branchId: req.user?.branchId });
@@ -120,7 +117,7 @@ export class ItemsController {
   @Post("bulk")
   @Throttle({ default: { ttl: 60000, limit: 5 } })
   @Permissions("items.create")
-  async createBulk(@Body() dto: CreateItemDto[], @Req() req: ItemsRequest) {
+  async createBulk(@Body() dto: CreateItemDto[], @Req() req: Request) {
     try {
       this.logger.debug(`Erstelle ${dto?.length || 0} Artikel in Bulk`);
       return await this.itemsService.createBulk(dto, req.user?.branchId);
@@ -135,7 +132,7 @@ export class ItemsController {
   @Permissions("items.create")
   async previewBulk(
     @Body() dto: CreateItemDto[],
-    @Req() req: ItemsRequest,
+    @Req() req: Request,
   ): Promise<{
     created: number;
     updated: number;
@@ -168,7 +165,7 @@ export class ItemsController {
 
   @Get("reset-preview")
   @Permissions("items.delete")
-  async resetPreview(@Req() req: ItemsRequest, @Query("branchId") branchIdParam?: string) {
+  async resetPreview(@Req() req: Request, @Query("branchId") branchIdParam?: string) {
     try {
       // Super-Admin (branchId=null im JWT) darf Ziel-Branch per Query-Param wählen
       const effectiveBranchId = req.user?.branchId !== null && req.user?.branchId !== undefined
@@ -184,7 +181,7 @@ export class ItemsController {
   @Delete("bulk")
   @Permissions("items.delete")
   async removeAll(
-    @Req() req: ItemsRequest,
+    @Req() req: Request,
     @Query("includeLocations") includeLocations?: string,
     @Query("branchId") branchIdParam?: string,
   ) {
@@ -206,7 +203,7 @@ export class ItemsController {
   @Get("export/csv")
   @Permissions("items.view")
   async exportCsv(
-    @Req() req: ItemsRequest,
+    @Req() req: Request,
     @Res() res: Response,
     @Query("search") search?: string,
     @Query("manufacturer") manufacturer?: string,
@@ -233,7 +230,7 @@ export class ItemsController {
   @SkipThrottle()
   @Get("by-code/:code")
   @Permissions("items.view")
-  async findByCode(@Req() req: ItemsRequest, @Param("code") code: string) {
+  async findByCode(@Req() req: Request, @Param("code") code: string) {
     try {
       this.logger.debug(`Suche Artikel nach Code: ${code}`);
       const item = await this.itemsService.findOneByAnyCode(code, req.user?.branchId, req.user?.locationIds);
@@ -256,7 +253,7 @@ export class ItemsController {
   @Post(":id/image")
   @Permissions("items.edit")
   @UseInterceptors(FileInterceptor("image", { storage: memoryStorage(), limits: { fileSize: 25 * 1024 * 1024 } }))
-  async uploadImage(@Param("id") id: string, @UploadedFile() file: Express.Multer.File, @Req() req: ItemsRequest) {
+  async uploadImage(@Param("id") id: string, @UploadedFile() file: Express.Multer.File, @Req() req: Request) {
     if (!file) throw new BadRequestException("Keine Datei angegeben");
 
     // Magic-Bytes prüfen – verhindert gefälschte MIME-Types (keine externe Abhängigkeit nötig)
@@ -275,7 +272,7 @@ export class ItemsController {
 
   @Delete(":id/image")
   @Permissions("items.edit")
-  async deleteImage(@Param("id") id: string, @Req() req: ItemsRequest) {
+  async deleteImage(@Param("id") id: string, @Req() req: Request) {
     try {
       const item = await this.itemsService.deleteImage(id, req.user?.branchId);
       return { ...item, alternateCodes: item.codes ? item.codes.map(c => c.code) : [] };
@@ -303,7 +300,7 @@ export class ItemsController {
   @SkipThrottle()
   @Get(":id")
   @Permissions("items.view")
-  async findOne(@Req() req: ItemsRequest, @Param("id") id: string) {
+  async findOne(@Req() req: Request, @Param("id") id: string) {
     try {
       this.logger.debug(`Suche Artikel nach ID: ${id}`);
       const item = await this.itemsService.findOne(id, req.user?.branchId);
@@ -325,7 +322,7 @@ export class ItemsController {
 
   @Patch("bulk")
   @Permissions("items.edit")
-  async updateBulk(@Body() updates: Array<UpdateItemDto & { id: string }>, @Req() req: ItemsRequest) {
+  async updateBulk(@Body() updates: Array<UpdateItemDto & { id: string }>, @Req() req: Request) {
     try {
       this.logger.debug(`Bulk-Update von ${updates?.length || 0} Artikeln`);
       return await this.itemsService.updateBulk(updates, req.user?.branchId);
@@ -337,7 +334,7 @@ export class ItemsController {
 
   @Patch(":id")
   @Permissions("items.edit")
-  async update(@Req() req: ItemsRequest, @Param("id") id: string, @Body() dto: UpdateItemDto) {
+  async update(@Req() req: Request, @Param("id") id: string, @Body() dto: UpdateItemDto) {
     try {
       this.logger.debug(`Aktualisiere Artikel ${id}`);
       const item = await this.itemsService.update(id, dto, req.user?.branchId);
@@ -359,7 +356,7 @@ export class ItemsController {
 
   @Delete(":id")
   @Permissions("items.delete")
-  async remove(@Req() req: ItemsRequest, @Param("id") id: string) {
+  async remove(@Req() req: Request, @Param("id") id: string) {
     try {
       await this.itemsService.remove(id, req.user?.id, req.user?.branchId);
     } catch (error) {

@@ -4,7 +4,7 @@ export class AddItemDescriptionSecondary1731348000000 implements MigrationInterf
   name = "AddItemDescriptionSecondary1731348000000";
 
   public async up(queryRunner: QueryRunner): Promise<void> {
-    const extractRows = (raw: any): any[] => {
+    const extractRows = (raw: unknown): unknown[] => {
       if (Array.isArray(raw)) {
         if (raw.length > 0 && Array.isArray(raw[0])) return raw[0];
         return raw;

@@ -11,6 +11,7 @@ import {
 import { Server, Socket } from 'socket.io';
 
 import { WsJwtGuard } from '../../common/guards/ws-jwt.guard';
+
 import { StockService } from './stock.service';
 
 export interface QuickBookingEntry {
@@ -46,7 +47,7 @@ export class StockGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
   handleConnection(client: Socket) {
     void client;
-    const branchId: string | undefined = client.data?.user?.branchId;
+    const branchId: string | undefined = (client.data as { user?: { branchId?: string } })?.user?.branchId;
     if (branchId) {
       void client.join('restock:' + branchId);
     }

@@ -22,6 +22,7 @@ export class RemoveOrphanedStockLevels1746500000000 implements MigrationInterfac
     `);
   }
 
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars -- MigrationInterface erfordert diesen Parameter; down() ist absichtlich ein No-Op
   public async down(_queryRunner: QueryRunner): Promise<void> {
     // Stale records cannot be restored — down is intentionally a no-op.
   }

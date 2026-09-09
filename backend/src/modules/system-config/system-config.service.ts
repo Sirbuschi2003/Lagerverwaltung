@@ -136,7 +136,7 @@ export class SystemConfigService {
     return this.getCompanyConfig(branchId);
   }
 
-  async getJsonConfig<T = any>(key: string, branchId?: string | null): Promise<T | null> {
+  async getJsonConfig<T = unknown>(key: string, branchId?: string | null): Promise<T | null> {
     const val = await this.getEffectiveValue(key, branchId);
     if (!val) return null;
     try {
@@ -146,7 +146,7 @@ export class SystemConfigService {
     }
   }
 
-  async setJsonConfig(key: string, value: any, branchId?: string | null, description?: string): Promise<void> {
+  async setJsonConfig(key: string, value: unknown, branchId?: string | null, description?: string): Promise<void> {
     await this.ensureValueColumnIsLongText();
     await this.saveEffectiveValue(key, JSON.stringify(value ?? {}), branchId, description);
   }
@@ -730,13 +730,16 @@ body {
   private async ensureValueColumnIsLongText(): Promise<void> {
     if (!this.ensureValueColumnPromise) {
       this.ensureValueColumnPromise = (async () => {
-        const rows: any[] = await this.configRepository.query(
+        interface ColumnTypeRow {
+          DATA_TYPE: string;
+        }
+        const rows: unknown = await this.configRepository.query(
           `SELECT DATA_TYPE FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'system_config' AND COLUMN_NAME = 'value' LIMIT 1`,
         );
-        const extractRows = (raw: any): any[] => {
+        const extractRows = (raw: unknown): ColumnTypeRow[] => {
           if (Array.isArray(raw)) {
-            if (raw.length > 0 && Array.isArray(raw[0])) return raw[0];
-            return raw;
+            if (raw.length > 0 && Array.isArray(raw[0])) return raw[0] as ColumnTypeRow[];
+            return raw as ColumnTypeRow[];
           }
           return [];
         };

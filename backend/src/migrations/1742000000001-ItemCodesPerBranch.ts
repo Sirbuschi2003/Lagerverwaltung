@@ -7,34 +7,34 @@ import { MigrationInterface, QueryRunner } from "typeorm";
  */
 export class ItemCodesPerBranch1742000000001 implements MigrationInterface {
   private async columnExists(queryRunner: QueryRunner, table: string, column: string): Promise<boolean> {
-    const rows: any[] = await queryRunner.query(
+    const rows = (await queryRunner.query(
       `SELECT COUNT(*) as cnt FROM INFORMATION_SCHEMA.COLUMNS
        WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND COLUMN_NAME = ?`,
       [table, column],
-    );
+    )) as Array<{ cnt: number }>;
     return Number(rows[0]?.cnt ?? 0) > 0;
   }
 
   private async indexExists(queryRunner: QueryRunner, table: string, indexName: string): Promise<boolean> {
-    const rows: any[] = await queryRunner.query(
+    const rows = (await queryRunner.query(
       `SELECT COUNT(*) as cnt FROM INFORMATION_SCHEMA.STATISTICS
        WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND INDEX_NAME = ?`,
       [table, indexName],
-    );
+    )) as Array<{ cnt: number }>;
     return Number(rows[0]?.cnt ?? 0) > 0;
   }
 
   private async fkExists(queryRunner: QueryRunner, table: string, fkName: string): Promise<boolean> {
-    const rows: any[] = await queryRunner.query(
+    const rows = (await queryRunner.query(
       `SELECT COUNT(*) as cnt FROM INFORMATION_SCHEMA.TABLE_CONSTRAINTS
        WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND CONSTRAINT_NAME = ? AND CONSTRAINT_TYPE = 'FOREIGN KEY'`,
       [table, fkName],
-    );
+    )) as Array<{ cnt: number }>;
     return Number(rows[0]?.cnt ?? 0) > 0;
   }
 
   private async findGlobalUniqueOnCode(queryRunner: QueryRunner): Promise<string | null> {
-    const rows: Array<{ INDEX_NAME: string }> = await queryRunner.query(
+    const rows = (await queryRunner.query(
       `SELECT DISTINCT INDEX_NAME FROM INFORMATION_SCHEMA.STATISTICS
        WHERE TABLE_SCHEMA = DATABASE()
          AND TABLE_NAME = 'item_codes'
@@ -42,7 +42,7 @@ export class ItemCodesPerBranch1742000000001 implements MigrationInterface {
          AND INDEX_NAME != 'PRIMARY'
          AND INDEX_NAME != 'IDX_item_codes_branch_code'
        LIMIT 1`,
-    );
+    )) as Array<{ INDEX_NAME: string }>;
     return rows.length > 0 ? rows[0].INDEX_NAME : null;
   }
 

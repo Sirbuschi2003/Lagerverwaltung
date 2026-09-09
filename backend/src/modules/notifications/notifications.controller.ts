@@ -1,6 +1,10 @@
 import { Body, Controller, Get, Post, Req, UseGuards } from "@nestjs/common";
+import { Request } from "express";
+import type { PushSubscription } from "web-push";
+
 import { JwtAuthGuard } from "../auth/guards/jwt-auth.guard";
 import { RolesGuard } from "../auth/guards/roles.guard";
+
 import { NotificationsService } from "./notifications.service";
 
 @Controller("notifications")
@@ -15,7 +19,7 @@ export class NotificationsController {
   }
 
   @Post("subscribe")
-  async subscribe(@Req() req: any, @Body() body: { subscription: any }) {
+  async subscribe(@Req() req: Request, @Body() body: { subscription: PushSubscription }) {
     const userId = req.user?.id;
     if (!userId || !body?.subscription) {
       return { success: false };

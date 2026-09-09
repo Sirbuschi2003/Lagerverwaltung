@@ -30,6 +30,7 @@ export class FixStockLevelUniqueConstraint1746200000000 implements MigrationInte
     `);
   }
 
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars -- MigrationInterface erfordert diesen Parameter; down() ist absichtlich ein No-Op
   public async down(_queryRunner: QueryRunner): Promise<void> {
     // Deduplication is not reversible
   }

@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, Between } from 'typeorm';
+import { Repository } from 'typeorm';
 
 import { User } from '../../users/entities/user.entity';
 import { BranchConfig } from '../entities/branch-config.entity';
@@ -12,7 +12,7 @@ export interface LogContext {
   user?: User;
   ipAddress?: string;
   userAgent?: string;
-  metadata?: any;
+  metadata?: Record<string, unknown>;
 }
 
 export interface LogFilters {
@@ -317,8 +317,8 @@ export class LoggingService {
     quantity: number,
     context?: LogContext
   ): Promise<void> {
-    const itemCode = context?.metadata?.itemCode || itemId;
-    const itemDescription = context?.metadata?.itemDescription;
+    const itemCode = (context?.metadata?.itemCode as string | undefined) || itemId;
+    const itemDescription = context?.metadata?.itemDescription as string | undefined;
     const itemDisplay = itemDescription ? `${itemCode} (${itemDescription})` : itemCode;
 
     return this.logInfo(
@@ -510,10 +510,10 @@ export class LoggingService {
   /**
    * Entfernt potentiell sensible Schlüssel aus Metadaten vor der Speicherung.
    */
-  private sanitizeMetadata(metadata: any): any {
+  private sanitizeMetadata(metadata: Record<string, unknown>): Record<string, unknown> {
     if (typeof metadata !== 'object' || metadata === null) return metadata;
     const sensitiveKeys = ['password', 'token', 'secret', 'key', 'hash', 'credential', 'email', 'to', 'username'];
-    const sanitized: Record<string, any> = {};
+    const sanitized: Record<string, unknown> = {};
     for (const [k, v] of Object.entries(metadata)) {
       if (sensitiveKeys.some((s) => k.toLowerCase().includes(s))) {
         sanitized[k] = '[ENTFERNT]';

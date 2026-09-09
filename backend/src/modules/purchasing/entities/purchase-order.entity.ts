@@ -9,10 +9,11 @@ import {
   UpdateDateColumn,
 } from "typeorm";
 
-import { Supplier } from "../../suppliers/entities/supplier.entity";
-import { PurchaseOrderLine } from "./purchase-order-line.entity";
 import { Branch } from "../../branches/entities/branch.entity";
 import { Location } from "../../locations/entities/location.entity";
+import { Supplier } from "../../suppliers/entities/supplier.entity";
+
+import { PurchaseOrderLine } from "./purchase-order-line.entity";
 
 export const PURCHASE_ORDER_STATUSES = ["DRAFT", "ORDERED", "RECEIVED", "CANCELLED", "ARCHIVED"] as const;
 export type PurchaseOrderStatus = (typeof PURCHASE_ORDER_STATUSES)[number];

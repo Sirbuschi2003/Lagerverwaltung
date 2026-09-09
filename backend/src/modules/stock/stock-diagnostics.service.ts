@@ -131,8 +131,8 @@ export class StockDiagnosticsService {
       .filter(([, levels]) => levels.length > 1)
       .map(([key, stockLevels]) => ({
         key,
-        item: stockLevels[0]!.item.code,
-        vehicle: stockLevels[0]!.vehicle.licensePlate,
+        item: stockLevels[0].item.code,
+        vehicle: stockLevels[0].vehicle.licensePlate,
         count: stockLevels.length,
         stockLevels,
       }));
@@ -151,7 +151,7 @@ export class StockDiagnosticsService {
 
     for (const duplicate of duplicates) {
       this.logger.debug(`Repariere Duplikat: ${duplicate.item} auf ${duplicate.vehicle}`);
-      const primaryStockLevel = duplicate.stockLevels[0]!;
+      const primaryStockLevel = duplicate.stockLevels[0];
       const duplicateStockLevels = duplicate.stockLevels.slice(1);
 
       let maxQuantity = primaryStockLevel.quantity;

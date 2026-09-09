@@ -1,4 +1,4 @@
-import { IsBoolean, IsIn, IsOptional, IsString, MaxLength } from "class-validator";
+import { IsBoolean, IsString, MaxLength } from "class-validator";
 
 export class GrantConsentDto {
   @IsString()

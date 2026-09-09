@@ -79,7 +79,7 @@ export class AddGranularPermissions1740000000007 implements MigrationInterface {
       );
     }
 
-    const extractRows = (raw: any): any[] => {
+    const extractRows = (raw: unknown): unknown[] => {
       if (Array.isArray(raw)) {
         if (raw.length > 0 && Array.isArray(raw[0])) return raw[0];
         return raw;
@@ -88,10 +88,10 @@ export class AddGranularPermissions1740000000007 implements MigrationInterface {
     };
 
     const permRows = extractRows(await queryRunner.query(`SELECT id, perm_key AS permKey FROM permissions`));
-    const permIdByKey = new Map<string, number>(permRows.map((p: any) => [p.permKey, p.id]));
+    const permIdByKey = new Map<string, number>((permRows as Array<{ permKey: string; id: number }>).map((p) => [p.permKey, p.id]));
 
     const roleRows = extractRows(await queryRunner.query(`SELECT id, name FROM roles`));
-    const roleIdByName = new Map<string, number>(roleRows.map((r: any) => [r.name, r.id]));
+    const roleIdByName = new Map<string, number>((roleRows as Array<{ name: string; id: number }>).map((r) => [r.name, r.id]));
 
     const assign = async (roleName: string, keys: string[]) => {
       const roleId = roleIdByName.get(roleName);

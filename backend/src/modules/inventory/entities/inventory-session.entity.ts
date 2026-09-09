@@ -9,9 +9,10 @@
   PrimaryGeneratedColumn,
 } from "typeorm";
 
+import { Branch } from "../../branches/entities/branch.entity";
+
 import { InventoryLine } from "./inventory-line.entity";
 import { InventoryVehicleStatus } from "./inventory-vehicle-status.entity";
-import { Branch } from "../../branches/entities/branch.entity";
 
 export enum InventorySessionStatus {
   DRAFT = "DRAFT",

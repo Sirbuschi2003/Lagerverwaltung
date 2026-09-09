@@ -10,8 +10,8 @@ import {
   UpdateDateColumn,
 } from "typeorm";
 
-import { Vehicle } from "../../vehicles/entities/vehicle.entity";
 import { Branch } from "../../branches/entities/branch.entity";
+import { Vehicle } from "../../vehicles/entities/vehicle.entity";
 
 export const LOCATION_TYPES = ["WAREHOUSE", "SHELF", "BIN", "VEHICLE"] as const;
 export type LocationType = (typeof LOCATION_TYPES)[number];

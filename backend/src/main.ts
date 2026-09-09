@@ -1,11 +1,11 @@
-import bodyParser from "body-parser";
-import compression from "compression";
-import cookieParser from "cookie-parser";
-import helmet from "helmet";
 import { ClassSerializerInterceptor, Logger, ValidationPipe } from "@nestjs/common";
 import { Reflector } from "@nestjs/core";
 import { NestFactory } from "@nestjs/core";
+import bodyParser from "body-parser";
+import compression from "compression";
+import cookieParser from "cookie-parser";
 import { NextFunction, Request, Response } from "express";
+import helmet from "helmet";
 import { DataSource } from "typeorm";
 
 import { AppModule } from "./app.module";

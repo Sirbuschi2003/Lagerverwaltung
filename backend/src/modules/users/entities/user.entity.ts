@@ -9,6 +9,7 @@ import {
   ManyToOne,
   PrimaryGeneratedColumn,
 } from "typeorm";
+
 import { Branch } from "../../branches/entities/branch.entity";
 import { Location } from "../../locations/entities/location.entity";
 

@@ -7,9 +7,9 @@ import { TypeOrmModule } from "@nestjs/typeorm";
 import { AccessControlModule } from "../access-control/access-control.module";
 import { EmailModule } from "../email/email.module";
 import { LoggingModule } from "../logging/logging.module";
+import { User } from "../users/entities/user.entity";
 import { UsersModule } from "../users/users.module";
 
-import { User } from "../users/entities/user.entity";
 
 import { AuthCleanupService } from "./auth-cleanup.service";
 import { AuthController } from "./auth.controller";

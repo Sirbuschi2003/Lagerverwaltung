@@ -1,6 +1,8 @@
 import * as bcrypt from "bcrypt";
 import { Repository } from "typeorm";
 
+import { PasswordHistory } from "../../modules/auth/entities/password-history.entity";
+
 /**
  * Anzahl der Passwort-Hashes, die pro Benutzer in der Historie gespeichert werden.
  * Verhindert die Wiederverwendung der letzten N Passwoerter.
@@ -11,7 +13,7 @@ export const PASSWORD_HISTORY_LIMIT = 5;
  * Prueft ob ein Klartext-Passwort in den letzten N gespeicherten Hashes des Benutzers vorkommt.
  */
 export async function isPasswordInHistory(
-  repo: Repository<any>,
+  repo: Repository<PasswordHistory>,
   userId: string,
   plainPassword: string,
 ): Promise<boolean> {
@@ -32,7 +34,7 @@ export async function isPasswordInHistory(
  * die das Limit ueberschreiten (aelteste zuerst).
  */
 export async function addToPasswordHistory(
-  repo: Repository<any>,
+  repo: Repository<PasswordHistory>,
   userId: string,
   passwordHash: string,
 ): Promise<void> {

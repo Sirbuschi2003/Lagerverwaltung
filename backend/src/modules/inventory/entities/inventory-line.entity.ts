@@ -6,8 +6,8 @@ import {
 } from "typeorm";
 
 import { Item } from "../../items/entities/item.entity";
-import { Vehicle } from "../../vehicles/entities/vehicle.entity";
 import { Location } from "../../locations/entities/location.entity";
+import { Vehicle } from "../../vehicles/entities/vehicle.entity";
 
 import { InventorySession } from "./inventory-session.entity";
 

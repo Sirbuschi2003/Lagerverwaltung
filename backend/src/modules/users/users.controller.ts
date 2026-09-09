@@ -1,17 +1,13 @@
 ﻿import { Body, ClassSerializerInterceptor, Controller, Delete, Get, Header, HttpCode, HttpStatus, NotFoundException, Param, Patch, Post, Put, Req, UseGuards, UseInterceptors, ForbiddenException, BadRequestException } from "@nestjs/common";
 import type { Request } from "express";
 
-interface UsersRequest extends Request {
-  user?: { id?: string; role?: string; branchId?: string | null; locationIds?: string[] };
-}
-
+import { Permissions } from "../access-control/decorators/permissions.decorator";
+import { PermissionsGuard } from "../access-control/guards/permissions.guard";
 import { CurrentUser } from "../auth/decorators/current-user.decorator";
 import { Roles } from "../auth/decorators/roles.decorator";
 import { JwtAuthGuard } from "../auth/guards/jwt-auth.guard";
 import { RolesGuard } from "../auth/guards/roles.guard";
 import { LoggingService } from "../logging/services/logging.service";
-import { Permissions } from "../access-control/decorators/permissions.decorator";
-import { PermissionsGuard } from "../access-control/guards/permissions.guard";
 
 import { ChangePasswordDto } from "./dto/change-password.dto";
 import { CreateUserDto } from "./dto/create-user.dto";
@@ -65,7 +61,7 @@ export class UsersController {
   @Get()
   @Roles("MANAGER")
   @Permissions("users.view")
-  findAll(@Req() req: UsersRequest) {
+  findAll(@Req() req: Request) {
     return this.usersService.findAll(req.user?.branchId);
   }
 
@@ -94,7 +90,7 @@ export class UsersController {
 
   @Get("technicians")
   @Roles("WAREHOUSE", "MANAGER")
-  findTechnicians(@Req() req: UsersRequest) {
+  findTechnicians(@Req() req: Request) {
     return this.usersService.findTechnicians(req.user?.branchId);
   }
 
@@ -137,8 +133,8 @@ export class UsersController {
       throw new ForbiddenException("Keine Berechtigung");
     }
     if (currentUser.role !== "MANAGER") {
-      delete (dto as any).role; delete (dto as any).branchId;
-      delete (dto as any).vehicleId; delete (dto as any).locationIds;
+      delete dto.role; delete dto.branchId;
+      delete dto.vehicleId; delete dto.locationIds;
     }
     const currentData = await this.usersService.findOneById(id);
     const result = await this.usersService.update(id, dto);
@@ -166,7 +162,7 @@ export class UsersController {
    * Kein @Roles-Guard hier, da die Autorisierung methodenseitig geprueft wird (isSelf || isSuperAdmin). */
   @Post(":id/anonymize")
   @HttpCode(HttpStatus.OK)
-  async anonymizeUser(@Param("id") id: string, @Req() req: UsersRequest, @CurrentUser() currentUser: User) {
+  async anonymizeUser(@Param("id") id: string, @Req() req: Request, @CurrentUser() currentUser: User) {
     const isSelf = req.user?.id === id;
     const isSuperAdmin = req.user?.role === "SUPER_ADMIN";
     if (!isSelf && !isSuperAdmin) {

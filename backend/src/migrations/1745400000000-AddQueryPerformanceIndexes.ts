@@ -14,12 +14,12 @@ export class AddQueryPerformanceIndexes1745400000000 implements MigrationInterfa
     tableName: string,
     columns: string,
   ): Promise<void> {
-    const rows = await queryRunner.query(
+    const rows = (await queryRunner.query(
       `SELECT COUNT(*) AS cnt FROM INFORMATION_SCHEMA.STATISTICS
        WHERE TABLE_SCHEMA = DATABASE()
          AND TABLE_NAME = ? AND INDEX_NAME = ?`,
       [tableName, indexName],
-    );
+    )) as Array<{ cnt: number }>;
     if (Number(rows[0]?.cnt ?? 0) === 0) {
       await queryRunner.query(
         `CREATE INDEX \`${indexName}\` ON \`${tableName}\` (${columns})`,
@@ -32,12 +32,12 @@ export class AddQueryPerformanceIndexes1745400000000 implements MigrationInterfa
     indexName: string,
     tableName: string,
   ): Promise<void> {
-    const rows = await queryRunner.query(
+    const rows = (await queryRunner.query(
       `SELECT COUNT(*) AS cnt FROM INFORMATION_SCHEMA.STATISTICS
        WHERE TABLE_SCHEMA = DATABASE()
          AND TABLE_NAME = ? AND INDEX_NAME = ?`,
       [tableName, indexName],
-    );
+    )) as Array<{ cnt: number }>;
     if (Number(rows[0]?.cnt ?? 0) > 0) {
       await queryRunner.query(`DROP INDEX \`${indexName}\` ON \`${tableName}\``);
     }

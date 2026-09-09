@@ -1,8 +1,9 @@
 import { Injectable } from "@nestjs/common";
 import { InjectRepository } from "@nestjs/typeorm";
 import type { Repository } from "typeorm";
-import { UserConsent } from "./entities/user-consent.entity";
+
 import type { GrantConsentDto } from "./dto/consent.dto";
+import { UserConsent } from "./entities/user-consent.entity";
 
 @Injectable()
 export class ConsentService {

@@ -1,28 +1,30 @@
-﻿import { BadRequestException, Injectable, Logger, NotFoundException } from "@nestjs/common";
-import { PurchaseSuggestionService } from "./purchase-suggestion.service";
-import { promises as fs, Dirent } from "node:fs";
+﻿import { promises as fs, Dirent } from "node:fs";
 import path from "node:path";
-import puppeteer from "puppeteer";
+
+import { BadRequestException, Injectable, Logger, NotFoundException } from "@nestjs/common";
 import { InjectRepository } from "@nestjs/typeorm";
-import { DataSource, In, MoreThan, Repository } from "typeorm";
+import puppeteer from "puppeteer";
+import { DataSource, In, Repository } from "typeorm";
 
-import { ItemsService } from "../items/items.service";
-import { LocationsService } from "../locations/locations.service";
-import { Location } from "../locations/entities/location.entity";
-import { StockService } from "../stock/stock.service";
-import { StockLevel } from "../stock/entities/stock-level.entity";
 import { Branch } from "../branches/entities/branch.entity";
-import { Supplier } from "../suppliers/entities/supplier.entity";
-import { Item } from "../items/entities/item.entity";
 import { EmailService } from "../email/email.service";
-import { SystemConfigService } from "../system-config/system-config.service";
-import { LoggingService } from "../logging/services/logging.service";
+import { Item } from "../items/entities/item.entity";
+import { ItemsService } from "../items/items.service";
+import { Location } from "../locations/entities/location.entity";
+import { LocationsService } from "../locations/locations.service";
 import { LogCategory } from "../logging/entities/system-log.entity";
-import { PurchaseOrder, PurchaseOrderStatus } from "./entities/purchase-order.entity";
-import { PurchaseOrderLine } from "./entities/purchase-order-line.entity";
+import { LoggingService } from "../logging/services/logging.service";
+import { StockLevel } from "../stock/entities/stock-level.entity";
+import { StockService } from "../stock/stock.service";
+import { Supplier } from "../suppliers/entities/supplier.entity";
+import { SystemConfigService } from "../system-config/system-config.service";
 
-type PurchaseOrderSortField = "createdAt" | "orderedAt" | "supplier";
-type SortDirection = "ASC" | "DESC";
+import { PurchaseOrderLine } from "./entities/purchase-order-line.entity";
+import { PurchaseOrder, PurchaseOrderStatus } from "./entities/purchase-order.entity";
+import { PurchaseSuggestionService } from "./purchase-suggestion.service";
+
+export type PurchaseOrderSortField = "createdAt" | "orderedAt" | "supplier";
+export type SortDirection = "ASC" | "DESC";
 
 interface PurchaseOrderQueryParams {
   status?: PurchaseOrderStatus;
@@ -565,7 +567,8 @@ export class PurchasingService {
 
   // GOB-001: Physisches Löschen von Bestellungen deaktiviert.
   // GoBD Rn. 64-67: Buchungsbelege müssen unveränderlich aufbewahrt werden (§257 HGB: 10 Jahre).
-  async purgeOldOrders(years = 10, branchId?: string | null): Promise<{ deleted: number }> {
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars -- Parameter bleiben Teil der öffentlichen Signatur (Aufrufer übergeben sie weiterhin)
+  purgeOldOrders(years = 10, branchId?: string | null): { deleted: number } {
     this.logger.warn("purgeOldOrders() deaktiviert. GoBD Rn. 64-67: Buchungsbelege unveraenderlich aufbewahren (§257 HGB: 10 Jahre).");
     return { deleted: 0 };
   }
@@ -971,7 +974,7 @@ export class PurchasingService {
     const supplier = order.supplier;
     const companyCityLine = [company.postalCode, company.city].filter(Boolean).join(" ");
 
-    const replaceConditional = (text: string, key: string, value: any) => {
+    const replaceConditional = (text: string, key: string, value: unknown) => {
       const showPattern = new RegExp(`\\{\\{#${key}\\}\\}([\\s\\S]*?)\\{\\{\\/${key}\\}\\}`, "g");
       const hidePattern = new RegExp(`\\{\\{\\^${key}\\}\\}([\\s\\S]*?)\\{\\{\\/${key}\\}\\}`, "g");
       text = text.replace(showPattern, value ? "$1" : "");
@@ -1315,7 +1318,7 @@ export class PurchasingService {
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   private async deleteOrderPdfFromStorage(_order: PurchaseOrder, _overrideOrderNumber?: string): Promise<void> {
     this.logger.warn('deleteOrderPdfFromStorage() deaktiviert. GoBD §257 HGB Belegpflicht.');
-    return;
+    await Promise.resolve();
   }
 
   private async saveOrderPdfToStorage(order: PurchaseOrder, buffer?: Buffer): Promise<void> {

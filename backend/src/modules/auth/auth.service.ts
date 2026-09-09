@@ -1,6 +1,6 @@
 import * as crypto from "crypto";
 
-import { Injectable, Logger, UnauthorizedException, BadRequestException, ForbiddenException } from "@nestjs/common";
+import { Injectable, Logger, UnauthorizedException, BadRequestException } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { JwtService } from "@nestjs/jwt";
 import { InjectRepository } from "@nestjs/typeorm";
@@ -9,13 +9,13 @@ import { generateSecret as otpGenerateSecret, generateURI as otpGenerateURI, ver
 import * as QRCode from "qrcode";
 import { Repository } from "typeorm";
 
+import { addToPasswordHistory, isPasswordInHistory, PASSWORD_HISTORY_LIMIT } from "../../common/utils/password-history.util";
 import { AccessControlService } from "../access-control/access-control.service";
 import { EmailService } from "../email/email.service";
 import { LoggingService } from "../logging/services/logging.service";
 import { User } from "../users/entities/user.entity";
 import { UsersService } from "../users/users.service";
 
-import { addToPasswordHistory, isPasswordInHistory, PASSWORD_HISTORY_LIMIT } from "../../common/utils/password-history.util";
 import { PasswordHistory } from "./entities/password-history.entity";
 import { PasswordResetToken } from "./entities/password-reset-token.entity";
 import { RefreshToken } from "./entities/refresh-token.entity";
@@ -242,7 +242,7 @@ export class AuthService {
   /** MFA-Bootstrap: initiates setup using a mfa-setup token (no full JWT needed). */
   async setupMfaViaSetupToken(mfaSetupToken: string) {
     const payload = await this.verifyMfaSetupToken(mfaSetupToken);
-    return this.setupMfa(payload.sub as string);
+    return this.setupMfa(payload.sub);
   }
 
   /** MFA-Bootstrap: confirms TOTP and issues full auth tokens (no full JWT needed). */
@@ -252,7 +252,7 @@ export class AuthService {
     context?: { ipAddress?: string; userAgent?: string },
   ) {
     const payload = await this.verifyMfaSetupToken(mfaSetupToken);
-    const userId = payload.sub as string;
+    const userId = payload.sub;
     await this.verifyMfaSetup(userId, totpCode);
     const user = await this.userRepo.findOne({ where: { id: userId }, relations: ['locations'] });
     if (!user) throw new UnauthorizedException('User nicht gefunden');
@@ -314,8 +314,9 @@ export class AuthService {
         revokedAt: null,
         isRevoked: false,
       });
-    } catch (err: any) {
-      if (err?.code !== "ER_DUP_ENTRY") throw err;
+    } catch (err: unknown) {
+      const code = err && typeof err === "object" && "code" in err ? (err as { code?: string }).code : undefined;
+      if (code !== "ER_DUP_ENTRY") throw err;
     }
 
     return {

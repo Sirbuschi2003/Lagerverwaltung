@@ -3,7 +3,7 @@ import { MigrationInterface, QueryRunner } from "typeorm";
 export class BranchIdNotNull1741000000001 implements MigrationInterface {
   /** Hilfsfunktion: findet den Namen eines Unique-Index auf einer Spalte */
   private async findUniqueIndexName(queryRunner: QueryRunner, table: string, column: string): Promise<string | null> {
-    const rows: Array<{ INDEX_NAME: string }> = await queryRunner.query(
+    const rows = (await queryRunner.query(
       `SELECT INDEX_NAME FROM INFORMATION_SCHEMA.STATISTICS
        WHERE TABLE_SCHEMA = DATABASE()
          AND TABLE_NAME = ?
@@ -12,7 +12,7 @@ export class BranchIdNotNull1741000000001 implements MigrationInterface {
          AND INDEX_NAME != 'PRIMARY'
        LIMIT 1`,
       [table, column],
-    );
+    )) as Array<{ INDEX_NAME: string }>;
     return rows.length > 0 ? rows[0].INDEX_NAME : null;
   }
 

@@ -4,14 +4,14 @@ import { Response } from 'express';
 import { Roles } from "../auth/decorators/roles.decorator";
 import { JwtAuthGuard } from "../auth/guards/jwt-auth.guard";
 import { RolesGuard } from "../auth/guards/roles.guard";
+import { ItemsService } from "../items/items.service";
 
 import { ExportService } from "./export.service";
 import { GdpduExportService } from "./gdpdu-export.service";
 import { ReportsService } from "./reports.service";
-import { ItemsService } from "../items/items.service";
 
 interface ReportsRequest {
-  user?: { id?: string; role?: string; branchId?: string | null; vehicleId?: string | null; locationIds?: string[] };
+  user?: { id?: string; role?: string; branchId?: string | null; vehicleId?: string | null; locationIds?: string[]; displayName?: string };
 }
 
 @Controller("reports")
@@ -63,12 +63,12 @@ export class ReportsController {
     const movements = await this.reportsService.consumptionReport(start, end, req.user?.branchId, req.user?.locationIds, warehouseId, includeVehicles === "true");
 
     if (format === 'csv') {
-      const csvBuffer = await this.exportService.exportMovementsToCsv(movements);
+      const csvBuffer = this.exportService.exportMovementsToCsv(movements);
       res.setHeader('Content-Type', 'text/csv; charset=utf-8');
       res.setHeader('Content-Disposition', `attachment; filename="bewegungsbericht_${start.toISOString().split('T')[0]}_${end.toISOString().split('T')[0]}.csv"`);
       res.send(csvBuffer);
     } else {
-      const pdfBuffer = await this.exportService.exportMovementsToPdf(movements);
+      const pdfBuffer = this.exportService.exportMovementsToPdf(movements);
       res.setHeader('Content-Type', 'application/pdf');
       res.setHeader('Content-Disposition', `attachment; filename="bewegungsbericht_${start.toISOString().split('T')[0]}_${end.toISOString().split('T')[0]}.pdf"`);
       res.send(pdfBuffer);
@@ -86,12 +86,12 @@ export class ReportsController {
     const stockLevels = await this.reportsService.stockStatusSummary(req.user?.branchId, req.user?.locationIds, includeVehicles === "true");
 
     if (format === 'csv') {
-      const csvBuffer = await this.exportService.exportStockToCsv(stockLevels);
+      const csvBuffer = this.exportService.exportStockToCsv(stockLevels);
       res.setHeader('Content-Type', 'text/csv; charset=utf-8');
       res.setHeader('Content-Disposition', `attachment; filename="bestandsbericht_${new Date().toISOString().split('T')[0]}.csv"`);
       res.send(csvBuffer);
     } else {
-      const pdfBuffer = await this.exportService.exportStockToPdf(stockLevels);
+      const pdfBuffer = this.exportService.exportStockToPdf(stockLevels);
       res.setHeader('Content-Type', 'application/pdf');
       res.setHeader('Content-Disposition', `attachment; filename="bestandsbericht_${new Date().toISOString().split('T')[0]}.pdf"`);
       res.send(pdfBuffer);
@@ -211,7 +211,7 @@ export class ReportsController {
     const pdfBuffer = await this.exportService.renderHtmlToPdf(
       items,
       stock[0]?.vehicle?.licensePlate || effectiveVehicleId,
-      (req as any)?.user?.displayName || undefined,
+      req.user?.displayName || undefined,
     );
 
     res.setHeader('Content-Type', 'application/pdf');

@@ -1,34 +1,35 @@
 import { Module } from "@nestjs/common";
-import { APP_GUARD } from "@nestjs/core";
 import { ConfigModule } from "@nestjs/config";
-import { TypeOrmModule } from "@nestjs/typeorm";
-import { ThrottlerModule, ThrottlerGuard } from "@nestjs/throttler";
+import { APP_GUARD } from "@nestjs/core";
 import { ScheduleModule } from "@nestjs/schedule";
+import { ThrottlerModule, ThrottlerGuard } from "@nestjs/throttler";
+import { TypeOrmModule } from "@nestjs/typeorm";
+
 import { AppController } from "./app.controller";
 import configuration from "./config/configuration";
 import { DatabaseConfigService } from "./config/database-config.service";
+import { AccessControlModule } from "./modules/access-control/access-control.module";
 import { AuthModule } from "./modules/auth/auth.module";
+import { BranchesModule } from "./modules/branches/branches.module";
+import { ConsentModule } from "./modules/consent/consent.module";
+import { DatabaseModule } from "./modules/database/database.module";
+import { DeliveryNotesModule } from "./modules/delivery-notes/delivery-notes.module";
 import { EmailModule } from "./modules/email/email.module";
 import { InventoryModule } from "./modules/inventory/inventory.module";
 import { ItemsModule } from "./modules/items/items.module";
+import { LocationsModule } from "./modules/locations/locations.module";
 import { LoggingModule } from "./modules/logging/logging.module";
-import { AccessControlModule } from "./modules/access-control/access-control.module";
+import { MaintenanceModule } from "./modules/maintenance/maintenance.module";
 import { NotificationsModule } from "./modules/notifications/notifications.module";
+import { PurchasingModule } from "./modules/purchasing/purchasing.module";
 import { ReportsModule } from "./modules/reports/reports.module";
 import { SetupModule } from "./modules/setup/setup.module";
 import { StockModule } from "./modules/stock/stock.module";
+import { SuppliersModule } from "./modules/suppliers/suppliers.module";
 import { SystemConfigModule } from "./modules/system-config/system-config.module";
+import { UpdateModule } from "./modules/update/update.module";
 import { UsersModule } from "./modules/users/users.module";
 import { VehiclesModule } from "./modules/vehicles/vehicles.module";
-import { DatabaseModule } from "./modules/database/database.module";
-import { LocationsModule } from "./modules/locations/locations.module";
-import { SuppliersModule } from "./modules/suppliers/suppliers.module";
-import { PurchasingModule } from "./modules/purchasing/purchasing.module";
-import { UpdateModule } from "./modules/update/update.module";
-import { MaintenanceModule } from "./modules/maintenance/maintenance.module";
-import { BranchesModule } from "./modules/branches/branches.module";
-import { DeliveryNotesModule } from "./modules/delivery-notes/delivery-notes.module";
-import { ConsentModule } from "./modules/consent/consent.module";
 @Module({
   imports: [
     ConfigModule.forRoot({

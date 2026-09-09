@@ -1,18 +1,16 @@
 import { BadRequestException, Body, Controller, Delete, Get, Param, Patch, Post, Query, Req, StreamableFile, UseGuards } from "@nestjs/common";
 import type { Request } from "express";
 
-interface PurchasingRequest extends Request {
-  user?: { id?: string; role?: string; vehicleId?: string | null; branchId?: string | null; locationIds?: string[] };
-}
-
-import { JwtAuthGuard } from "../auth/guards/jwt-auth.guard";
 import { Permissions } from "../access-control/decorators/permissions.decorator";
 import { PermissionsGuard } from "../access-control/guards/permissions.guard";
+import { JwtAuthGuard } from "../auth/guards/jwt-auth.guard";
+
 import { CreatePurchaseOrderDto } from "./dto/create-purchase-order.dto";
 import { ReceivePurchaseOrderDto } from "./dto/receive-purchase-order.dto";
 import { SendPurchaseOrderDto } from "./dto/send-purchase-order.dto";
 import { UpdatePurchaseOrderDto } from "./dto/update-purchase-order.dto";
-import { PurchasingService } from "./purchasing.service";
+import { PurchaseOrderStatus } from "./entities/purchase-order.entity";
+import { PurchasingService, PurchaseOrderSortField, SortDirection } from "./purchasing.service";
 
 @Controller("purchase-orders")
 @UseGuards(JwtAuthGuard, PermissionsGuard)
@@ -22,7 +20,7 @@ export class PurchasingController {
   @Get("suggestions")
   @Permissions("orders.view")
   suggestions(
-    @Req() req: PurchasingRequest,
+    @Req() req: Request,
     @Query("refresh") refresh?: string,
     @Query("warehouseId") warehouseId?: string,
   ) {
@@ -37,7 +35,7 @@ export class PurchasingController {
   @Get()
   @Permissions("orders.view")
   findAll(
-    @Req() req: PurchasingRequest,
+    @Req() req: Request,
     @Query("status") status?: string,
     @Query("year") year?: string,
     @Query("supplierId") supplierId?: string,
@@ -50,11 +48,11 @@ export class PurchasingController {
     const parsedPage = page ? Math.max(1, Number.parseInt(page, 10)) : 1;
     const parsedLimit = limit ? Math.min(500, Math.max(1, Number.parseInt(limit, 10))) : 500;
     return this.purchasingService.findAll({
-      status: status as any,
+      status: status as PurchaseOrderStatus | undefined,
       year: Number.isFinite(parsedYear) ? parsedYear : undefined,
       supplierId: supplierId?.trim() || undefined,
-      sortBy: sortBy as any,
-      sortDir: sortDir as any,
+      sortBy: sortBy as PurchaseOrderSortField | undefined,
+      sortDir: sortDir as SortDirection | undefined,
       branchId: req.user?.branchId,
       locationIds: req.user?.locationIds,
       page: parsedPage,
@@ -65,7 +63,7 @@ export class PurchasingController {
   @Get("documents")
   @Permissions("orders.view")
   listDocuments(
-    @Req() req: PurchasingRequest,
+    @Req() req: Request,
     @Query("year") year?: string,
     @Query("supplierId") supplierId?: string,
   ) {
@@ -81,7 +79,7 @@ export class PurchasingController {
 
   @Get("documents/download")
   @Permissions("orders.view")
-  async downloadDocument(@Req() req: PurchasingRequest, @Query("path") relPath: string) {
+  async downloadDocument(@Req() req: Request, @Query("path") relPath: string) {
     if (!relPath) throw new BadRequestException("Kein Pfad angegeben.");
     const result = await this.purchasingService.getOrderDocument(relPath, req.user?.branchId);
     return new StreamableFile(result.buffer, {
@@ -92,33 +90,33 @@ export class PurchasingController {
 
   @Get("purge-preview")
   @Permissions("orders.delete")
-  purgePreview(@Req() req: PurchasingRequest, @Query("years") years?: string) {
+  purgePreview(@Req() req: Request, @Query("years") years?: string) {
     const y = years ? Number.parseInt(years, 10) : 10;
     return this.purchasingService.previewPurgeOldOrders(Number.isFinite(y) && y > 0 ? y : 10, req.user?.branchId);
   }
 
   @Delete("purge")
   @Permissions("orders.delete")
-  purge(@Req() req: PurchasingRequest, @Query("years") years?: string) {
+  purge(@Req() req: Request, @Query("years") years?: string) {
     const y = years ? Number.parseInt(years, 10) : 10;
     return this.purchasingService.purgeOldOrders(Number.isFinite(y) && y > 0 ? y : 10, req.user?.branchId);
   }
 
   @Get("items/:itemId/last-order")
   @Permissions("orders.view")
-  lastOrderForItem(@Req() req: PurchasingRequest, @Param("itemId") itemId: string) {
+  lastOrderForItem(@Req() req: Request, @Param("itemId") itemId: string) {
     return this.purchasingService.getLastOrderForItem(itemId, req.user?.branchId);
   }
 
   @Get(":id")
   @Permissions("orders.view")
-  findOne(@Req() req: PurchasingRequest, @Param("id") id: string) {
+  findOne(@Req() req: Request, @Param("id") id: string) {
     return this.purchasingService.findOne(id, req.user?.branchId);
   }
 
   @Post()
   @Permissions("orders.create")
-  create(@Body() dto: CreatePurchaseOrderDto, @Req() req: PurchasingRequest) {
+  create(@Body() dto: CreatePurchaseOrderDto, @Req() req: Request) {
     // Erstes Lager des Benutzers als Zuordnung speichern (null = kein Lager-Filter)
     const locationId = req.user?.locationIds?.length ? req.user.locationIds[0] : null;
     return this.purchasingService.create({ ...dto, branchId: req.user?.branchId, locationId });
@@ -126,50 +124,50 @@ export class PurchasingController {
 
   @Patch(":id")
   @Permissions("orders.edit")
-  update(@Req() req: PurchasingRequest, @Param("id") id: string, @Body() dto: UpdatePurchaseOrderDto) {
+  update(@Req() req: Request, @Param("id") id: string, @Body() dto: UpdatePurchaseOrderDto) {
     return this.purchasingService.update(id, dto, req.user?.branchId);
   }
 
   @Post(":id/lines")
   @Permissions("orders.edit")
-  addLine(@Req() req: PurchasingRequest, @Param("id") id: string, @Body() body: { itemId: string; quantity: number }) {
+  addLine(@Req() req: Request, @Param("id") id: string, @Body() body: { itemId: string; quantity: number }) {
     return this.purchasingService.addLine(id, body, req.user?.branchId);
   }
 
   @Patch(":id/lines/:lineId")
   @Permissions("orders.edit")
-  updateLine(@Req() req: PurchasingRequest, @Param("id") id: string, @Param("lineId") lineId: string, @Body() body: { quantity: number }) {
+  updateLine(@Req() req: Request, @Param("id") id: string, @Param("lineId") lineId: string, @Body() body: { quantity: number }) {
     return this.purchasingService.updateLine(id, lineId, body, req.user?.branchId);
   }
 
   @Patch(":id/lines/reorder")
   @Permissions("orders.edit")
-  reorderLines(@Req() req: PurchasingRequest, @Param("id") id: string, @Body("lineIds") lineIds: string[]) {
+  reorderLines(@Req() req: Request, @Param("id") id: string, @Body("lineIds") lineIds: string[]) {
     if (!Array.isArray(lineIds) || lineIds.length === 0) throw new BadRequestException("lineIds erforderlich");
     return this.purchasingService.reorderLines(id, lineIds, req.user?.branchId);
   }
 
   @Delete(":id/lines/:lineId")
   @Permissions("orders.edit")
-  removeLine(@Req() req: PurchasingRequest, @Param("id") id: string, @Param("lineId") lineId: string) {
+  removeLine(@Req() req: Request, @Param("id") id: string, @Param("lineId") lineId: string) {
     return this.purchasingService.removeLine(id, lineId, req.user?.branchId);
   }
 
   @Delete(":id")
   @Permissions("orders.delete")
-  remove(@Req() req: PurchasingRequest, @Param("id") id: string) {
+  remove(@Req() req: Request, @Param("id") id: string) {
     return this.purchasingService.remove(id, req.user?.branchId);
   }
 
   @Post(":id/receive")
   @Permissions("orders.receive")
-  receive(@Req() req: PurchasingRequest, @Param("id") id: string, @Body() dto: ReceivePurchaseOrderDto) {
+  receive(@Req() req: Request, @Param("id") id: string, @Body() dto: ReceivePurchaseOrderDto) {
     return this.purchasingService.receiveOrder(id, dto, req.user?.id, req.user?.branchId);
   }
 
   @Get(":id/pdf")
   @Permissions("orders.view")
-  async downloadPdf(@Req() req: PurchasingRequest, @Param("id") id: string) {
+  async downloadPdf(@Req() req: Request, @Param("id") id: string) {
     const result = await this.purchasingService.getOrderPdf(id, req.user?.branchId);
     return new StreamableFile(result.buffer, {
       type: "application/pdf",
@@ -179,7 +177,7 @@ export class PurchasingController {
 
   @Post(":id/send")
   @Permissions("orders.send")
-  async send(@Req() req: PurchasingRequest, @Param("id") id: string, @Body() dto: SendPurchaseOrderDto) {
+  async send(@Req() req: Request, @Param("id") id: string, @Body() dto: SendPurchaseOrderDto) {
     await this.purchasingService.sendOrderEmail(id, dto, req.user?.branchId);
     return { success: true };
   }

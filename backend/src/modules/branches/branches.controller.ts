@@ -1,8 +1,9 @@
 import { Body, Controller, Delete, Get, Param, Patch, Post, UseGuards } from "@nestjs/common";
 
-import { JwtAuthGuard } from "../auth/guards/jwt-auth.guard";
 import { Permissions } from "../access-control/decorators/permissions.decorator";
 import { PermissionsGuard } from "../access-control/guards/permissions.guard";
+import { JwtAuthGuard } from "../auth/guards/jwt-auth.guard";
+
 import { BranchesService } from "./branches.service";
 import { CreateBranchDto } from "./dto/create-branch.dto";
 import { UpdateBranchDto } from "./dto/update-branch.dto";

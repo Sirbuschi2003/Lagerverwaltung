@@ -1,20 +1,23 @@
+import { Readable } from "stream";
+
 import { BadRequestException, Body, ConflictException, Controller, Delete, Get, Param, Post, Res, StreamableFile, UploadedFile, UseGuards, UseInterceptors } from "@nestjs/common";
 import { FileInterceptor } from "@nestjs/platform-express";
-import { memoryStorage } from "multer";
-import { Readable } from "stream";
 import { Throttle } from "@nestjs/throttler";
 import { Response } from 'express';
+import { memoryStorage } from "multer";
+
+import { Permissions } from "../access-control/decorators/permissions.decorator";
+import { PermissionsGuard } from "../access-control/guards/permissions.guard";
+import { Roles } from "../auth/decorators/roles.decorator";
 import { JwtAuthGuard } from "../auth/guards/jwt-auth.guard";
 import { RolesGuard } from "../auth/guards/roles.guard";
-import { Roles } from "../auth/decorators/roles.decorator";
-
 import { UsersService } from "../users/users.service";
 
+import { BackupPayload } from "./backup-payload.types";
 import { AutoBackupConfigDto } from "./dto/auto-backup-config.dto";
 import { CreateInitialAdminDto } from "./dto/create-admin.dto";
 import { SetupService } from "./setup.service";
-import { PermissionsGuard } from "../access-control/guards/permissions.guard";
-import { Permissions } from "../access-control/decorators/permissions.decorator";
+
 
 @Controller("setup")
 export class SetupController {
@@ -69,7 +72,7 @@ export class SetupController {
   @UseGuards(JwtAuthGuard, RolesGuard, PermissionsGuard)
   @Roles("MANAGER")
   @Permissions("backup.access")
-  async restoreBackup(@Body() backup: any) {
+  async restoreBackup(@Body() backup: BackupPayload) {
     await this.setupService.restoreBackup(backup);
     return { success: true, message: 'Datenbank erfolgreich wiederhergestellt' };
   }
@@ -79,7 +82,7 @@ export class SetupController {
   @Roles("MANAGER")
   @Permissions("backup.access")
   async restoreSelective(@Body() body: {
-    backup: any;
+    backup: BackupPayload;
     sections: string[];
     filters?: { targetBranchId?: string | null; vehicleIds?: string[] | null; locationIds?: string[] | null };
   }) {
@@ -123,7 +126,7 @@ export class SetupController {
     const sql = await this.setupService.createSqlDump();
     const filename = `lagerverwaltung-dump-${new Date().toISOString().slice(0, 10)}.sql`;
     const buffer = Buffer.from(sql, 'utf-8');
-    (res as any).set({
+    res.set({
       'Content-Type': 'application/sql',
       'Content-Disposition': `attachment; filename="${filename}"`,
       'Content-Length': buffer.length,

@@ -1,27 +1,35 @@
-﻿import { Injectable, NotFoundException, ConflictException, BadRequestException, ForbiddenException, Logger } from "@nestjs/common";
-import { Cron, CronExpression } from "@nestjs/schedule";
+﻿import { createHmac } from "crypto";
+
+import { Injectable, NotFoundException, ConflictException, BadRequestException, ForbiddenException, Logger } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
+import { Cron, CronExpression } from "@nestjs/schedule";
 import { InjectRepository } from "@nestjs/typeorm";
 import { DataSource, IsNull, Repository } from "typeorm";
-import { createHmac } from "crypto";
 
 import { ItemsService } from "../items/items.service";
+import { LogLevel, LogCategory } from "../logging/entities/system-log.entity";
+import { LoggingService } from "../logging/services/logging.service";
 import { StockLevel } from "../stock/entities/stock-level.entity";
 import { StockService } from "../stock/stock.service";
-import { VehiclesService } from "../vehicles/vehicles.service";
-import { LoggingService } from "../logging/services/logging.service";
-import { LogLevel, LogCategory } from "../logging/entities/system-log.entity";
 import { User } from "../users/entities/user.entity";
+import { VehiclesService } from "../vehicles/vehicles.service";
 
 import { CompleteInventoryDto } from "./dto/complete-inventory.dto";
-import { RecordInventoryLineDto } from "./dto/record-inventory-line.dto";
 import { FinalizeInventoryDto } from "./dto/finalize-inventory.dto";
-import { SubmitInventoryDto } from "./dto/submit-inventory.dto";
+import { RecordInventoryLineDto } from "./dto/record-inventory-line.dto";
 import { RemoveVehicleStockDto } from "./dto/remove-vehicle-stock.dto";
 import { StartInventoryDto } from "./dto/start-inventory.dto";
+import { SubmitInventoryDto } from "./dto/submit-inventory.dto";
 import { InventoryLine } from "./entities/inventory-line.entity";
 import { InventorySession, InventorySessionStatus } from "./entities/inventory-session.entity";
 import { InventoryVehicleStatus, InventoryVehicleStatusState } from "./entities/inventory-vehicle-status.entity";
+
+/** Minimaler Ausschnitt des angemeldeten Benutzers, der für Sichtbarkeits-/Rollenprüfungen benötigt wird. */
+export interface InventoryUserContext {
+  branchId?: string | null;
+  role?: string;
+  vehicleId?: string | null;
+}
 
 export type InventoryDifference = {
   lineId: string;
@@ -114,7 +122,7 @@ export class InventoryService {
     });
   }
 
-  async getSessionDifferences(sessionId: string, userContext?: any, vehicleIdFilter?: string) {
+  async getSessionDifferences(sessionId: string, userContext?: InventoryUserContext, vehicleIdFilter?: string) {
     const session = await this.findSessionById(sessionId, userContext?.branchId);
     if (!session) {
       throw new NotFoundException("Inventur-Session nicht gefunden");
@@ -193,7 +201,7 @@ export class InventoryService {
   async recordLine(dto: RecordInventoryLineDto, branchId?: string | null) {
     await this.ensureSessionIsEditable(dto.sessionId, branchId);
 
-    const session = await this.sessionsRepository.findOne({ where: this.sessionWhereForBranch(dto.sessionId, branchId) as any });
+    const session = await this.sessionsRepository.findOne({ where: this.sessionWhereForBranch(dto.sessionId, branchId) });
     if (!session) {
       throw new NotFoundException("Inventory session not found");
     }
@@ -359,7 +367,7 @@ export class InventoryService {
    * Techniker: Markiert Session als "Fertig (zur Prüfung)" → SUBMITTED
    * Keine Änderungen mehr für Techniker; Manager kann prüfen/reopen
    */
-  async submitSession(sessionId: string, username: string, userContext?: any, dto?: SubmitInventoryDto) {
+  async submitSession(sessionId: string, username: string, userContext?: InventoryUserContext, dto?: SubmitInventoryDto) {
     const session = await this.sessionsRepository.findOne({
       where: this.sessionWhereForBranch(sessionId, userContext?.branchId),
       relations: ["lines", "lines.location"],
@@ -382,7 +390,7 @@ export class InventoryService {
       );
     }
 
-    const userRole = userContext?.role as string | undefined;
+    const userRole = userContext?.role;
     const userVehicleId = userContext?.vehicleId || null;
     const targetVehicleId = dto?.vehicleId || userVehicleId || null;
 
@@ -875,7 +883,7 @@ export class InventoryService {
    */
   private async ensureSessionIsEditable(sessionId: string, branchId?: string | null) {
     const session = await this.sessionsRepository.findOne({
-      where: this.sessionWhereForBranch(sessionId, branchId) as any,
+      where: this.sessionWhereForBranch(sessionId, branchId),
       select: ["id", "status"],
     });
 

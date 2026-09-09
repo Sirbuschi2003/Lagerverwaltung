@@ -1,6 +1,7 @@
 import { Column, Entity, Index, JoinColumn, ManyToOne, PrimaryGeneratedColumn } from "typeorm";
 
 import { Branch } from "../../branches/entities/branch.entity";
+
 import { Item } from "./item.entity";
 
 export const ITEM_CODE_KINDS = ["ALIAS", "OEM", "SUPPLIER"] as const;

@@ -14,9 +14,9 @@ export class SecurityHardeningFixes1755600000000 implements MigrationInterface {
     `);
 
     // Add index on token column for fast lookup (SEC-002)
-    const indexes = await queryRunner.query(
+    const indexes = (await queryRunner.query(
       `SHOW INDEX FROM password_reset_tokens WHERE Key_name = 'IDX_prt_token'`,
-    );
+    )) as unknown[];
     if (!indexes || indexes.length === 0) {
       await queryRunner.query(
         `CREATE INDEX IDX_prt_token ON password_reset_tokens (token)`,

@@ -42,6 +42,7 @@ export class RepairWarehouseStockLevels1746300000000 implements MigrationInterfa
     `);
   }
 
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars -- MigrationInterface erfordert diesen Parameter; down() ist absichtlich ein No-Op
   public async down(_queryRunner: QueryRunner): Promise<void> {
     // Repair is not reversible
   }

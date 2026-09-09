@@ -1,6 +1,6 @@
 import { IsIn, IsOptional, IsString, MaxLength } from "class-validator";
 
-import { LOCATION_TYPES, LocationType } from "../entities/location.entity";
+import { LocationType } from "../entities/location.entity";
 
 const CREATABLE_TYPES: LocationType[] = ["WAREHOUSE", "SHELF", "BIN"];
 

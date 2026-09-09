@@ -1,24 +1,26 @@
 import { Module } from "@nestjs/common";
 import { TypeOrmModule } from "@nestjs/typeorm";
 
-import { ItemsModule } from "../items/items.module";
-import { LocationsModule } from "../locations/locations.module";
-import { StockModule } from "../stock/stock.module";
-import { SuppliersModule } from "../suppliers/suppliers.module";
+import { AccessControlModule } from "../access-control/access-control.module";
 import { Branch } from "../branches/entities/branch.entity";
-import { Location } from "../locations/entities/location.entity";
-import { StockLevel } from "../stock/entities/stock-level.entity";
-import { Supplier } from "../suppliers/entities/supplier.entity";
+import { EmailModule } from "../email/email.module";
 import { Item } from "../items/entities/item.entity";
-import { PurchaseOrder } from "./entities/purchase-order.entity";
+import { ItemsModule } from "../items/items.module";
+import { Location } from "../locations/entities/location.entity";
+import { LocationsModule } from "../locations/locations.module";
+import { LoggingModule } from "../logging/logging.module";
+import { StockLevel } from "../stock/entities/stock-level.entity";
+import { StockModule } from "../stock/stock.module";
+import { Supplier } from "../suppliers/entities/supplier.entity";
+import { SuppliersModule } from "../suppliers/suppliers.module";
+import { SystemConfigModule } from "../system-config/system-config.module";
+
 import { PurchaseOrderLine } from "./entities/purchase-order-line.entity";
+import { PurchaseOrder } from "./entities/purchase-order.entity";
+import { PurchaseSuggestionService } from "./purchase-suggestion.service";
 import { PurchasingController } from "./purchasing.controller";
 import { PurchasingService } from "./purchasing.service";
-import { PurchaseSuggestionService } from "./purchase-suggestion.service";
-import { AccessControlModule } from "../access-control/access-control.module";
-import { EmailModule } from "../email/email.module";
-import { SystemConfigModule } from "../system-config/system-config.module";
-import { LoggingModule } from "../logging/logging.module";
+
 
 @Module({
   imports: [

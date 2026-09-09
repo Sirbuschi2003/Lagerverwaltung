@@ -440,7 +440,7 @@ export class InventoryTemplateService {
 
           groupTemplate.cells.forEach((cellInfo, cellIndex) => {
             const targetCell = headerRow.getCell(cellIndex + 1);
-            targetCell.style = cellInfo.style ? JSON.parse(JSON.stringify(cellInfo.style)) : {};
+            targetCell.style = cellInfo.style ? JSON.parse(JSON.stringify(cellInfo.style)) as Partial<ExcelJS.Style> : {};
             if (cellInfo.numFmt) {
               targetCell.numFmt = cellInfo.numFmt;
             }
@@ -461,7 +461,7 @@ export class InventoryTemplateService {
 
         templateInfo.cells.forEach((cellInfo, cellIndex) => {
           const targetCell = row.getCell(cellIndex + 1);
-          targetCell.style = cellInfo.style ? JSON.parse(JSON.stringify(cellInfo.style)) : {};
+          targetCell.style = cellInfo.style ? JSON.parse(JSON.stringify(cellInfo.style)) as Partial<ExcelJS.Style> : {};
           if (cellInfo.numFmt) {
             targetCell.numFmt = cellInfo.numFmt;
           }
@@ -510,7 +510,7 @@ export class InventoryTemplateService {
         }
         cells.push({
           value,
-          style: cell.style ? JSON.parse(JSON.stringify(cell.style)) : {},
+          style: cell.style ? JSON.parse(JSON.stringify(cell.style)) as Partial<ExcelJS.Style> : {},
           numFmt: cell.numFmt,
         });
       });
@@ -546,9 +546,13 @@ export class InventoryTemplateService {
   }
 
   private replaceInString(template: string, context: Context) {
-    return template.replace(/{{\s*([^}]+)\s*}}/g, (_, path) => {
+    return template.replace(/{{\s*([^}]+)\s*}}/g, (_: string, path: string) => {
       const resolved = this.getByPath(context, path.trim());
-      return resolved === undefined || resolved === null ? "" : `${resolved}`;
+      if (resolved === undefined || resolved === null) return "";
+      if (typeof resolved === "string" || typeof resolved === "number" || typeof resolved === "boolean") {
+        return `${resolved}`;
+      }
+      return String(resolved);
     });
   }
 
@@ -575,7 +579,7 @@ export class InventoryTemplateService {
         }
         cells.push({
           value,
-          style: cell.style ? JSON.parse(JSON.stringify(cell.style)) : {},
+          style: cell.style ? JSON.parse(JSON.stringify(cell.style)) as Partial<ExcelJS.Style> : {},
           numFmt: cell.numFmt,
         });
       });
@@ -599,14 +603,14 @@ export class InventoryTemplateService {
     return templates.sort((a, b) => a.rowNumber - b.rowNumber);
   }
 
-  private getByPath(object: Context, path: string) {
+  private getByPath(object: Context, path: string): unknown {
     const segments = path.split(".");
-    let current: any = object;
+    let current: unknown = object;
     for (const segment of segments) {
-      if (current == null) {
+      if (current == null || typeof current !== "object") {
         return undefined;
       }
-      current = current[segment];
+      current = (current as Record<string, unknown>)[segment];
     }
     return current;
   }
@@ -811,9 +815,23 @@ export class InventoryTemplateService {
     session: InventorySession,
     context: Context,
   ) {
-    const sessionCtx = (context.session ?? {}) as any;
-    const totalsCtx = (context.totals ?? {}) as any;
-    const companyCtx = (context.company ?? {}) as any;
+    interface SessionCtx {
+      lineCount?: number;
+      createdBy?: string;
+      vehicle?: { licensePlate?: string; technician?: { displayName?: string } | null } | null;
+    }
+    interface TotalsCtx {
+      expected?: number;
+      counted?: number;
+      difference?: number;
+    }
+    interface CompanyCtx {
+      name?: string;
+    }
+
+    const sessionCtx = (context.session ?? {}) as SessionCtx;
+    const totalsCtx = (context.totals ?? {}) as TotalsCtx;
+    const companyCtx = (context.company ?? {}) as CompanyCtx;
 
     const companyName = companyCtx?.name || "Lagerverwaltung";
     const technicianName = sessionCtx?.vehicle?.technician?.displayName || sessionCtx?.createdBy || "";

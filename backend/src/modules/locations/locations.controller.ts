@@ -1,13 +1,10 @@
 import { Body, Controller, Delete, Get, Param, Patch, Post, Query, Req, UseGuards } from "@nestjs/common";
 import type { Request } from "express";
 
-interface LocationsRequest extends Request {
-  user?: { id?: string; role?: string; branchId?: string | null; locationIds?: string[] };
-}
-
-import { JwtAuthGuard } from "../auth/guards/jwt-auth.guard";
 import { Permissions } from "../access-control/decorators/permissions.decorator";
 import { PermissionsGuard } from "../access-control/guards/permissions.guard";
+import { JwtAuthGuard } from "../auth/guards/jwt-auth.guard";
+
 import { CreateLocationDto } from "./dto/create-location.dto";
 import { UpdateLocationDto } from "./dto/update-location.dto";
 import { LocationsService } from "./locations.service";
@@ -20,7 +17,7 @@ export class LocationsController {
   @Get()
   @Permissions("locations.view")
   findAll(
-    @Req() req: LocationsRequest,
+    @Req() req: Request,
     @Query("type") type?: string,
     @Query("parentId") parentId?: string,
     @Query("includeVehicles") includeVehicles?: string,
@@ -41,13 +38,13 @@ export class LocationsController {
 
   @Get(":id")
   @Permissions("locations.view")
-  findOne(@Req() req: LocationsRequest, @Param("id") id: string) {
+  findOne(@Req() req: Request, @Param("id") id: string) {
     return this.locationsService.findOne(id, req.user?.branchId);
   }
 
   @Post()
   @Permissions("locations.create")
-  create(@Body() dto: CreateLocationDto, @Req() req: LocationsRequest) {
+  create(@Body() dto: CreateLocationDto, @Req() req: Request) {
     return this.locationsService.create({ ...dto, branchId: req.user?.branchId });
   }
 

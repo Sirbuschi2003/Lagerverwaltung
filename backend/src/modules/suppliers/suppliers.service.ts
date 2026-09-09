@@ -3,6 +3,7 @@ import { InjectRepository } from "@nestjs/typeorm";
 import { Repository } from "typeorm";
 
 import { Location } from "../locations/entities/location.entity";
+
 import { Supplier } from "./entities/supplier.entity";
 
 @Injectable()
@@ -105,7 +106,7 @@ export class SuppliersService {
 
   async remove(id: string, branchId?: string | null): Promise<void> {
     if (branchId) {
-      const entity = await this.repository.findOne({ where: { id, branchId } as any });
+      const entity = await this.repository.findOne({ where: { id, branchId } });
       if (!entity) throw new NotFoundException("Supplier not found");
     }
     await this.repository.delete(id);

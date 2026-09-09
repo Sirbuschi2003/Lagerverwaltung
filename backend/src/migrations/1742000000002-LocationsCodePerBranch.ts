@@ -7,25 +7,25 @@ import { MigrationInterface, QueryRunner } from "typeorm";
  */
 export class LocationsCodePerBranch1742000000002 implements MigrationInterface {
   private async indexExists(queryRunner: QueryRunner, table: string, indexName: string): Promise<boolean> {
-    const rows: any[] = await queryRunner.query(
+    const rows = (await queryRunner.query(
       `SELECT COUNT(*) as cnt FROM INFORMATION_SCHEMA.STATISTICS
        WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND INDEX_NAME = ?`,
       [table, indexName],
-    );
+    )) as Array<{ cnt: number }>;
     return Number(rows[0]?.cnt ?? 0) > 0;
   }
 
   private async fkExists(queryRunner: QueryRunner, table: string, fkName: string): Promise<boolean> {
-    const rows: any[] = await queryRunner.query(
+    const rows = (await queryRunner.query(
       `SELECT COUNT(*) as cnt FROM INFORMATION_SCHEMA.TABLE_CONSTRAINTS
        WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND CONSTRAINT_NAME = ? AND CONSTRAINT_TYPE = 'FOREIGN KEY'`,
       [table, fkName],
-    );
+    )) as Array<{ cnt: number }>;
     return Number(rows[0]?.cnt ?? 0) > 0;
   }
 
   private async findFkOnColumn(queryRunner: QueryRunner, table: string, column: string): Promise<string | null> {
-    const rows: Array<{ CONSTRAINT_NAME: string }> = await queryRunner.query(
+    const rows = (await queryRunner.query(
       `SELECT CONSTRAINT_NAME FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE
        WHERE TABLE_SCHEMA = DATABASE()
          AND TABLE_NAME = ?
@@ -33,14 +33,14 @@ export class LocationsCodePerBranch1742000000002 implements MigrationInterface {
          AND REFERENCED_TABLE_NAME IS NOT NULL
        LIMIT 1`,
       [table, column],
-    );
+    )) as Array<{ CONSTRAINT_NAME: string }>;
     return rows.length > 0 ? rows[0].CONSTRAINT_NAME : null;
   }
 
   private async findOldParentCodeIndex(queryRunner: QueryRunner): Promise<string | null> {
     // Sucht einen Unique-Index auf locations der parentId UND code enthält,
     // aber NICHT branchId (also den alten globalen Index)
-    const rows: Array<{ INDEX_NAME: string }> = await queryRunner.query(
+    const rows = (await queryRunner.query(
       `SELECT DISTINCT s1.INDEX_NAME
        FROM INFORMATION_SCHEMA.STATISTICS s1
        WHERE s1.TABLE_SCHEMA = DATABASE()
@@ -56,7 +56,7 @@ export class LocationsCodePerBranch1742000000002 implements MigrationInterface {
              AND s2.INDEX_NAME = s1.INDEX_NAME
              AND s2.COLUMN_NAME = 'branchId'
          )`,
-    );
+    )) as Array<{ INDEX_NAME: string }>;
     return rows.length > 0 ? rows[0].INDEX_NAME : null;
   }
 

@@ -18,19 +18,6 @@ import { MovementQueryService } from "./movement-query.service";
 import { StockGateway } from "./stock.gateway";
 import { FleetOverviewResult, StockService } from "./stock.service";
 
-interface StockRequestUser {
-  id?: string;
-  username?: string;
-  role?: string;
-  vehicleId?: string | null;
-  branchId?: string | null;
-  locationIds?: string[];
-}
-
-interface StockRequest extends Request {
-  user?: StockRequestUser;
-}
-
 type HistoryMovementType = "CHECKIN" | "CHECKOUT";
 
 @Controller("stock")
@@ -44,12 +31,12 @@ export class StockController {
   ) {}
 
   @Get("dashboard")
-  getDashboardSnapshot(@Req() req: StockRequest) {
+  getDashboardSnapshot(@Req() req: Request) {
     return this.stockService.findDashboardSnapshot(req.user);
   }
 
   @Get("movements")
-  findMovements(@Req() req: StockRequest, @Query("limit") limit?: string) {
+  findMovements(@Req() req: Request, @Query("limit") limit?: string) {
     const parsed = limit ? Number(limit) : undefined;
     return this.stockService.findMovements(parsed, req.user?.branchId);
   }
@@ -69,13 +56,13 @@ export class StockController {
   }
 
   @Get("location-stock")
-  getLocationStock(@Req() req: StockRequest) {
+  getLocationStock(@Req() req: Request) {
     const locationIds = req.user?.locationIds ?? [];
     return this.stockService.getLocationStock(locationIds, req.user?.branchId);
   }
 
   @Get("vehicle/:vehicleId")
-  getVehicleStock(@Req() req: StockRequest, @Param("vehicleId") vehicleId: string) {
+  getVehicleStock(@Req() req: Request, @Param("vehicleId") vehicleId: string) {
     const user = req.user;
     this.logger.debug(`getVehicleStock vehicleId=${vehicleId} user=${user?.username} userVehicleId=${user?.vehicleId} role=${user?.role}`);
     return this.stockService.getVehicleStock(vehicleId);
@@ -88,14 +75,14 @@ export class StockController {
   }
 
   @Get("fleet")
-  getFleetOverview(@Req() req: StockRequest, @Query("vehicleId") vehicleId?: string, @Query("search") search?: string): Promise<FleetOverviewResult[]> {
+  getFleetOverview(@Req() req: Request, @Query("vehicleId") vehicleId?: string, @Query("search") search?: string): Promise<FleetOverviewResult[]> {
     const user = req.user;
     this.logger.debug(`getFleetOverview vehicleId=${vehicleId} search=${search} user=${user?.username} userVehicleId=${user?.vehicleId} role=${user?.role}`);
     return this.stockService.getFleetOverview({ vehicleId, search, branchId: user?.branchId });
   }
 
   @Get("shortages")
-  getRestockOverview(@Req() req: StockRequest, @Query("status") status?: string) {
+  getRestockOverview(@Req() req: Request, @Query("status") status?: string) {
     this.logger.debug(`getRestockOverview status=${status}`);
     return this.stockService.getRestockOverview(
       { status: this.parseRestockStatus(status) },
@@ -105,21 +92,21 @@ export class StockController {
   }
 
   @Patch("vehicle/:vehicleId/target")
-  async updateTargetQuantity(@Req() req: StockRequest, @Param("vehicleId") vehicleId: string, @Body() dto: UpdateTargetDto) {
+  async updateTargetQuantity(@Req() req: Request, @Param("vehicleId") vehicleId: string, @Body() dto: UpdateTargetDto) {
     const result = await this.stockService.updateTargetQuantity(vehicleId, dto, req.user?.id);
     this.stockGateway.broadcastRestockUpdate();
     return result;
   }
 
   @Post("vehicle/:vehicleId/remove/:itemId")
-  async removeFromVehicle(@Req() req: StockRequest, @Param("vehicleId") vehicleId: string, @Param("itemId") itemId: string) {
+  async removeFromVehicle(@Req() req: Request, @Param("vehicleId") vehicleId: string, @Param("itemId") itemId: string) {
     const result = await this.stockService.removeFromVehicle(vehicleId, itemId, req.user?.id);
     this.stockGateway.broadcastRestockUpdate();
     return result;
   }
 
   @Patch("shortages/:id")
-  async updateRestockStatus(@Req() req: StockRequest, @Param("id") id: string, @Body() dto: UpdateRestockStatusDto) {
+  async updateRestockStatus(@Req() req: Request, @Param("id") id: string, @Body() dto: UpdateRestockStatusDto) {
     this.logger.log(`updateRestockStatus id=${id} status=${dto.status}`);
     const user = req.user;
     const actor = user?.id
@@ -137,7 +124,7 @@ export class StockController {
   @Post("movement")
   @SkipThrottle()
   @Permissions("stock.write")
-  async recordMovement(@Body() dto: RecordMovementDto, @Req() req: StockRequest) {
+  async recordMovement(@Body() dto: RecordMovementDto, @Req() req: Request) {
     if (!dto.userId && req.user?.id) {
       dto.userId = req.user.id;
     }
@@ -166,7 +153,7 @@ export class StockController {
   @Get("movements/history")
   @Permissions("movements.view")
   async getMovementHistory(
-    @Req() req: StockRequest,
+    @Req() req: Request,
     @Query("itemId") itemId?: string,
     @Query("vehicleId") vehicleId?: string,
     @Query("userId") userId?: string,
@@ -210,7 +197,7 @@ export class StockController {
   @Roles("MANAGER")
   @Permissions("movements.cleanup")
   async voidMovementsBatch(
-    @Req() req: StockRequest,
+    @Req() req: Request,
     @Query("before") before: string,
     @Query("type") type?: HistoryMovementType,
   ) {
@@ -236,7 +223,7 @@ export class StockController {
   @Roles("MANAGER")
   @Permissions("movements.cleanup")
   async voidMovement(
-    @Req() req: StockRequest,
+    @Req() req: Request,
     @Param("id") id: string,
     @Body("reason") reason: string,
   ) {
@@ -249,7 +236,7 @@ export class StockController {
 
   @Post("sync")
   @Permissions("stock.write")
-  syncMovements(@Body() dto: SyncPayloadDto, @Req() req: StockRequest) {
+  syncMovements(@Body() dto: SyncPayloadDto, @Req() req: Request) {
     const fallbackUserId = req.user?.id;
     if (fallbackUserId && dto.movements) {
       dto.movements = dto.movements.map((m) => (!m.userId ? { ...m, userId: fallbackUserId } : m));

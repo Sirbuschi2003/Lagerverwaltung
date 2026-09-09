@@ -15,16 +15,16 @@ export class AddBranchPermissions1741000000002 implements MigrationInterface {
     }
 
     // MANAGER-Rolle bekommt beide Rechte (wenn die Rolle existiert)
-    const managerRole = await queryRunner.query(
+    const managerRole = (await queryRunner.query(
       "SELECT `id` FROM `roles` WHERE `name` = 'MANAGER' LIMIT 1",
-    );
+    )) as Array<{ id: number }>;
     if (managerRole.length > 0) {
       const roleId = managerRole[0].id;
       for (const [key] of perms) {
-        const perm = await queryRunner.query(
+        const perm = (await queryRunner.query(
           "SELECT `id` FROM `permissions` WHERE `perm_key` = ? LIMIT 1",
           [key],
-        );
+        )) as Array<{ id: number }>;
         if (perm.length > 0) {
           await queryRunner.query(
             "INSERT IGNORE INTO `role_permissions` (`roleId`, `permissionId`) VALUES (?, ?)",

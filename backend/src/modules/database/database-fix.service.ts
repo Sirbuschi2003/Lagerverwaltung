@@ -1,6 +1,15 @@
 import { Injectable, Logger, OnApplicationBootstrap } from "@nestjs/common";
 import { DataSource } from "typeorm";
 
+interface CountRow {
+  count: number;
+}
+
+/** Ergebnis-Header von MySQL UPDATE-Statements über dataSource.query() (mysql2 ResultSetHeader). */
+interface MySqlWriteResult {
+  affectedRows: number;
+}
+
 /**
  * Service für automatische Datenbank-Korrekturen beim Start.
  * Wird vor den regulären Migrationen ausgeführt.
@@ -22,7 +31,7 @@ export class DatabaseFixService implements OnApplicationBootstrap {
   private async fixInventorySessionStatus() {
     try {
       // Prüfe, ob die Tabelle existiert
-      const tableExists = await this.dataSource.query(`
+      const tableExists = await this.dataSource.query<CountRow[]>(`
         SELECT COUNT(*) as count 
         FROM information_schema.tables 
         WHERE table_schema = DATABASE() 
@@ -35,7 +44,7 @@ export class DatabaseFixService implements OnApplicationBootstrap {
       }
 
       // Prüfe, ob die status-Spalte existiert
-      const columnExists = await this.dataSource.query(`
+      const columnExists = await this.dataSource.query<CountRow[]>(`
         SELECT COUNT(*) as count 
         FROM information_schema.columns 
         WHERE table_schema = DATABASE() 
@@ -49,7 +58,7 @@ export class DatabaseFixService implements OnApplicationBootstrap {
       }
 
       // Zähle Sessions mit ungültigen Status
-      const invalidCount = await this.dataSource.query(`
+      const invalidCount = await this.dataSource.query<CountRow[]>(`
         SELECT COUNT(*) as count 
         FROM inventory_sessions 
         WHERE status NOT IN ('DRAFT', 'SUBMITTED', 'FINALIZED', 'CANCELLED')
@@ -63,7 +72,7 @@ export class DatabaseFixService implements OnApplicationBootstrap {
         );
 
         // Korrigiere ungültige Werte
-        const result = await this.dataSource.query(`
+        const result = await this.dataSource.query<MySqlWriteResult>(`
           UPDATE inventory_sessions 
           SET status = 'DRAFT' 
           WHERE status NOT IN ('DRAFT', 'SUBMITTED', 'FINALIZED', 'CANCELLED')

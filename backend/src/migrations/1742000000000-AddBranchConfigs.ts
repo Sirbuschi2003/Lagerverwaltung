@@ -7,10 +7,10 @@ import { MigrationInterface, QueryRunner } from "typeorm";
  */
 export class AddBranchConfigs1742000000000 implements MigrationInterface {
   public async up(queryRunner: QueryRunner): Promise<void> {
-    const tables: Array<{ TABLE_NAME: string }> = await queryRunner.query(
+    const tables = (await queryRunner.query(
       `SELECT TABLE_NAME FROM INFORMATION_SCHEMA.TABLES
        WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'branch_configs'`,
-    );
+    )) as Array<{ TABLE_NAME: string }>;
     if (tables.length > 0) return; // idempotent
 
     await queryRunner.query(`

@@ -1,21 +1,25 @@
-import { BadRequestException, Injectable, NotFoundException, Logger } from "@nestjs/common";
-import { InjectRepository } from "@nestjs/typeorm";
-import { DataSource, In, IsNull, Repository } from "typeorm";
 import * as fs from "fs/promises";
 import * as path from "path";
+
+import { BadRequestException, Injectable, NotFoundException, Logger } from "@nestjs/common";
+import { InjectRepository } from "@nestjs/typeorm";
 import sharp from "sharp";
+import { DataSource, In, IsNull, Repository } from "typeorm";
+
+
+import { Location } from "../locations/entities/location.entity";
+import { LocationsService } from "../locations/locations.service";
+import { LogCategory, LogLevel } from "../logging/entities/system-log.entity";
+import { LoggingService } from "../logging/services/logging.service";
+import { StockLevel } from "../stock/entities/stock-level.entity";
+import { StockMovement } from "../stock/entities/stock-movement.entity";
+import { Supplier } from "../suppliers/entities/supplier.entity";
 
 import { CreateItemDto } from "./dto/create-item.dto";
 import { UpdateItemDto } from "./dto/update-item.dto";
 import { ItemCode } from "./entities/item-code.entity";
 import { Item } from "./entities/item.entity";
-import { Location } from "../locations/entities/location.entity";
-import { Supplier } from "../suppliers/entities/supplier.entity";
-import { StockLevel } from "../stock/entities/stock-level.entity";
-import { StockMovement } from "../stock/entities/stock-movement.entity";
-import { LoggingService } from "../logging/services/logging.service";
-import { LogCategory, LogLevel } from "../logging/entities/system-log.entity";
-import { LocationsService } from "../locations/locations.service";
+
 
 const sanitizeCodes = (codes: string[] | undefined): string[] => {
   if (!codes) {
@@ -54,6 +58,14 @@ const csvEscape = (value: unknown): string => {
   const raw = value === undefined || value === null ? "" : String(value);
   return `"${raw.replace(/"/g, '""')}"`;
 };
+
+/** Item mit dem zur Laufzeit berechneten, nicht persistierten Bestandsfeld `currentQuantity`. */
+type ItemWithQuantity = Item & { currentQuantity?: number | null };
+
+/** Ergebnis-Header von MySQL DELETE/UPDATE-Statements über dataSource.query() (mysql2 ResultSetHeader). */
+interface MySqlWriteResult {
+  affectedRows: number;
+}
 
 type BulkImportAction = "CREATE" | "UPDATE" | "SKIP" | "ERROR";
 
@@ -227,11 +239,11 @@ export class ItemsService {
         items.forEach((item) => {
           const locationId = item.storageLocation?.id ?? null;
           if (!locationId) {
-            (item as any).currentQuantity = null;
+            (item as ItemWithQuantity).currentQuantity = null;
             return;
           }
           const key = `${item.id}_${locationId}`;
-          (item as any).currentQuantity = quantityMap.get(key) ?? 0;
+          (item as ItemWithQuantity).currentQuantity = quantityMap.get(key) ?? 0;
         });
       }
       
@@ -298,7 +310,7 @@ export class ItemsService {
     ];
 
     const rows = items.map((item) => {
-      const currentQuantity = (item as any).currentQuantity;
+      const currentQuantity = (item as ItemWithQuantity).currentQuantity;
       return [
         item.code,
         item.description,
@@ -346,7 +358,7 @@ export class ItemsService {
           .andWhere('loc.type != :vehicleType', { vehicleType: 'VEHICLE' });
         if (branchId) qb.andWhere('loc.branchId = :branchId', { branchId });
         const row = await qb.getRawOne<{ total: string }>();
-        (item as any).currentQuantity = Number(row?.total ?? 0);
+        (item as ItemWithQuantity).currentQuantity = Number(row?.total ?? 0);
       }
       return item;
     } catch (error) {
@@ -381,10 +393,11 @@ export class ItemsService {
         relations: ['codes', 'storageLocation', 'storageLocation.parent', 'storageLocation.parent.parent', 'supplier']
       });
       const found = direct ?? await (async () => {
-        // Prüfe alternative Codes – direkt nach branchId filtern
+        // Prüfe alternative Codes – direkt nach branchId filtern.
+        // item_codes.branchId ist NOT NULL (Migration 1742000000001), IsNull()
+        // würde hier nie treffen — ohne branchId also niederlassungsübergreifend suchen.
         const altWhere: Record<string, unknown> = { code: normalized };
         if (branchId) altWhere.branchId = branchId;
-        else altWhere.branchId = IsNull();
         const alias = await this.codesRepository.findOne({
           where: altWhere,
           relations: ["item", "item.codes", "item.storageLocation", "item.storageLocation.parent", "item.storageLocation.parent.parent", "item.supplier"]
@@ -395,9 +408,9 @@ export class ItemsService {
       // Lager-Filter: Artikel muss im zugewiesenen Lager liegen (location-Hierarchie)
       if (found && locationIds?.length) {
         const ids = new Set(locationIds);
-        const locId = (found.storageLocation as any)?.id ?? null;
-        const parentId = (found.storageLocation as any)?.parent?.id ?? null;
-        const grandparentId = (found.storageLocation as any)?.parent?.parent?.id ?? null;
+        const locId = found.storageLocation?.id ?? null;
+        const parentId = found.storageLocation?.parent?.id ?? null;
+        const grandparentId = found.storageLocation?.parent?.parent?.id ?? null;
         const inLocation = locId && (ids.has(locId) || (parentId && ids.has(parentId)) || (grandparentId && ids.has(grandparentId)));
         if (!inLocation) return null;
       }
@@ -414,7 +427,7 @@ export class ItemsService {
           qb.andWhere('loc.branchId = :branchId', { branchId });
         }
         const rows = await qb.getRawOne<{ total: string }>();
-        (found as any).currentQuantity = Number(rows?.total ?? 0);
+        (found as ItemWithQuantity).currentQuantity = Number(rows?.total ?? 0);
       }
       return found;
     } catch (error) {
@@ -424,7 +437,9 @@ export class ItemsService {
   }
 
   async create(dto: CreateItemDto & { branchId?: string | null }): Promise<Item> {
-    const { alternateCodes, storageLocationId, supplierId, price, packSize, orderQuantity, currentQuantity: _currentQuantity, branchId, ...rest } = dto;
+    // currentQuantity ist ein reines Eingabefeld (initialer Bestand) und darf nicht in die Item-Entity übernommen werden.
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const { alternateCodes, storageLocationId, supplierId, price, packSize, orderQuantity, currentQuantity, branchId, ...rest } = dto;
     const effectiveBranchId = branchId ?? null;
     const existsWhere: Record<string, unknown> = { code: rest.code };
     if (effectiveBranchId) existsWhere.branchId = effectiveBranchId;
@@ -440,8 +455,8 @@ export class ItemsService {
       ...rest,
       description: rest.description?.trim(),
       descriptionSecondary: rest.descriptionSecondary?.trim() || null,
-      storageLocation: storageLocationId ? ({ id: storageLocationId } as any) : null,
-      supplier: supplierId ? ({ id: supplierId } as any) : null,
+      storageLocation: storageLocationId ? ({ id: storageLocationId } as Location) : null,
+      supplier: supplierId ? ({ id: supplierId } as Supplier) : null,
       price: normalizedPrice,
       packSize: packSize !== undefined ? packSize : null,
       orderQuantity: orderQuantity !== undefined && Number(orderQuantity) > 0 ? orderQuantity : null,
@@ -449,9 +464,10 @@ export class ItemsService {
     });
     const codes = sanitizeCodes(alternateCodes);
     if (codes.length > 0) {
+      // item_codes.branchId ist NOT NULL — ohne effectiveBranchId niederlassungsuebergreifend pruefen.
       const altWhere = effectiveBranchId
         ? { code: In(codes), branchId: effectiveBranchId }
-        : { code: In(codes), branchId: IsNull() };
+        : { code: In(codes) };
       const existingCodes = await this.codesRepository.find({ where: altWhere });
       if (existingCodes.length > 0) {
         throw new Error('Alternativer QR-Code bereits vergeben: ' + existingCodes[0].code);
@@ -503,8 +519,8 @@ export class ItemsService {
         targetStock: normalized.targetStock,
         reorderPoint: normalized.reorderPoint,
         minimumStock: normalized.minimumStock,
-        storageLocation: normalized.storageLocationId ? ({ id: normalized.storageLocationId } as any) : null,
-        supplier: normalized.supplierId ? ({ id: normalized.supplierId } as any) : null,
+        storageLocation: normalized.storageLocationId ? ({ id: normalized.storageLocationId } as Location) : null,
+        supplier: normalized.supplierId ? ({ id: normalized.supplierId } as Supplier) : null,
         price: normalized.price,
         packSize: normalized.packSize,
         orderQuantity: normalized.orderQuantity,
@@ -536,7 +552,7 @@ export class ItemsService {
           // Alt-Codes separat einfügen (nach dem Save, damit itemId bekannt ist)
           const codeEntries = savedBatch.flatMap((saved) => {
             const altCodes = altCodesByCode.get(saved.code) ?? [];
-            return altCodes.map((code) => this.codesRepository.create({ code, branchId: branchId ?? null as any, item: { id: saved.id } as any }));
+            return altCodes.map((code) => this.codesRepository.create({ code, branchId: (branchId ?? null) as string, item: { id: saved.id } as Item }));
           });
           if (codeEntries.length > 0) {
             await manager.save(codeEntries);
@@ -548,8 +564,8 @@ export class ItemsService {
             if (!stock) continue;
             stockEntries.push(
               this.stockLevelsRepository.create({
-                item: { id: saved.id } as any,
-                location: { id: stock.locationId } as any,
+                item: { id: saved.id } as Item,
+                location: { id: stock.locationId } as Location,
                 vehicle: null,
                 quantity: stock.quantity,
                 targetQuantity: stock.targetQuantity,
@@ -589,8 +605,8 @@ export class ItemsService {
           existing.targetStock = normalized.targetStock;
           if (normalized.reorderPoint !== null) existing.reorderPoint = normalized.reorderPoint;
           if (normalized.minimumStock !== null) existing.minimumStock = normalized.minimumStock;
-          existing.storageLocation = normalized.storageLocationId ? ({ id: normalized.storageLocationId } as any) : null;
-          existing.supplier = normalized.supplierId ? ({ id: normalized.supplierId } as any) : null;
+          existing.storageLocation = normalized.storageLocationId ? ({ id: normalized.storageLocationId } as Location) : null;
+          existing.supplier = normalized.supplierId ? ({ id: normalized.supplierId } as Supplier) : null;
           if (normalized.price !== null) existing.price = normalized.price;
           if (normalized.packSize !== null) existing.packSize = normalized.packSize;
           if (normalized.orderQuantity !== null) existing.orderQuantity = normalized.orderQuantity;
@@ -676,11 +692,12 @@ export class ItemsService {
       : [];
     const existingCodes = new Set(existingItems.map((entry) => entry.code));
 
+    // item_codes.branchId ist NOT NULL — ohne branchId niederlassungsuebergreifend pruefen.
     const existingAltCodes = requestedAltCodes.size
       ? await this.codesRepository.find({
           where: branchId
             ? { code: In(Array.from(requestedAltCodes)), branchId }
-            : { code: In(Array.from(requestedAltCodes)), branchId: IsNull() },
+            : { code: In(Array.from(requestedAltCodes)) },
           select: ["code"],
         })
       : [];
@@ -835,19 +852,19 @@ export class ItemsService {
       entity.descriptionSecondary = trimmed && trimmed.length > 0 ? trimmed : null;
     }
     if (storageLocationId !== undefined) {
-      entity.storageLocation = storageLocationId ? ({ id: storageLocationId } as any) : null;
+      entity.storageLocation = storageLocationId ? ({ id: storageLocationId } as Location) : null;
     }
     if (supplierId !== undefined) {
-      entity.supplier = supplierId ? ({ id: supplierId } as any) : null;
+      entity.supplier = supplierId ? ({ id: supplierId } as Supplier) : null;
     }
     if (price !== undefined) {
       entity.price = Number.isFinite(Number(price)) ? Number(price).toFixed(2) : null;
     }
     if (packSize !== undefined) {
-      entity.packSize = packSize as any;
+      entity.packSize = packSize;
     }
     if (orderQuantity !== undefined) {
-      entity.orderQuantity = Number(orderQuantity) > 0 ? (orderQuantity as any) : null;
+      entity.orderQuantity = Number(orderQuantity) > 0 ? orderQuantity : null;
     }
 
     if (alternateCodes !== undefined) {
@@ -859,10 +876,11 @@ export class ItemsService {
       // Füge neue alternative Codes hinzu
       const codes = sanitizeCodes(alternateCodes);
       if (codes.length > 0) {
-        // Prüfe auf Duplikate in der Datenbank – nur innerhalb der Niederlassung
+        // Prüfe auf Duplikate in der Datenbank – nur innerhalb der Niederlassung.
+        // item_codes.branchId ist NOT NULL — ohne entity.branchId niederlassungsuebergreifend pruefen.
         const altWhere = entity.branchId
           ? { code: In(codes), branchId: entity.branchId }
-          : { code: In(codes), branchId: IsNull() };
+          : { code: In(codes) };
         const existingCodes = await this.codesRepository.find({
           where: altWhere,
           relations: ["item"],
@@ -937,7 +955,7 @@ export class ItemsService {
       return;
     }
 
-    source.location = { id: toLocationId } as any;
+    source.location = { id: toLocationId } as Location;
     source.vehicle = null;
     await this.stockLevelsRepository.save(source);
   }
@@ -1039,7 +1057,7 @@ export class ItemsService {
         );
 
         // Artikel löschen (CASCADE löscht StockLevels, StockMovements, RestockRequests, InventoryLines)
-        const itemsResult = await this.dataSource.query(
+        const itemsResult = await this.dataSource.query<MySqlWriteResult>(
           branchId
             ? `DELETE FROM items WHERE branchId = ?`
             : `DELETE FROM items WHERE branchId IS NULL`,
@@ -1053,7 +1071,7 @@ export class ItemsService {
       if (includeLocations) {
         // Kinder zuerst, dann Eltern – bis zu 3 Durchläufe für verschachtelte Hierarchien
         for (let pass = 0; pass < 3; pass++) {
-          const locResult = await this.dataSource.query(
+          const locResult = await this.dataSource.query<MySqlWriteResult>(
             branchId
               ? `DELETE FROM locations WHERE branchId = ? AND type != 'VEHICLE'`
               : `DELETE FROM locations WHERE branchId IS NULL AND type != 'VEHICLE'`,
@@ -1142,7 +1160,7 @@ export class ItemsService {
         const ph = chunk.map(() => "?").join(",");
         await this.dataSource.query(`DELETE FROM item_codes WHERE itemId IN (${ph})`, chunk);
       }
-      const result = await this.dataSource.query(
+      const result = await this.dataSource.query<MySqlWriteResult>(
         `DELETE FROM items WHERE id IN (${itemIds.map(() => "?").join(",")})`,
         itemIds,
       );
@@ -1150,7 +1168,7 @@ export class ItemsService {
     }
 
     // Lieferanten dieses Lagers löschen
-    const suppResult = await this.dataSource.query(
+    const suppResult = await this.dataSource.query<MySqlWriteResult>(
       `DELETE FROM suppliers WHERE locationId = ?`, [warehouseId],
     );
     const deletedSuppliers = suppResult?.affectedRows ?? 0;
@@ -1158,7 +1176,7 @@ export class ItemsService {
     // Lagerorte löschen (Kinder zuerst, max 3 Pässe für Tiefe)
     let deletedLocations = 0;
     for (let pass = 0; pass < 3; pass++) {
-      const r = await this.dataSource.query(
+      const r = await this.dataSource.query<MySqlWriteResult>(
         `DELETE FROM locations WHERE id IN (${allLocationIds.map(() => "?").join(",")})`,
         allLocationIds,
       );

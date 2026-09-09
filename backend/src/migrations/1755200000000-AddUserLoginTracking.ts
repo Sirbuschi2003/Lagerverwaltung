@@ -4,11 +4,11 @@ export class AddUserLoginTracking1755200000000 implements MigrationInterface {
   name = "AddUserLoginTracking1755200000000";
 
   private async columnExists(queryRunner: QueryRunner, table: string, column: string): Promise<boolean> {
-    const rows = await queryRunner.query(
+    const rows = (await queryRunner.query(
       `SELECT COUNT(*) AS cnt FROM INFORMATION_SCHEMA.COLUMNS
        WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND COLUMN_NAME = ?`,
       [table, column],
-    );
+    )) as Array<{ cnt: number }>;
     return Number(rows[0]?.cnt ?? 0) > 0;
   }
 
@@ -18,22 +18,22 @@ export class AddUserLoginTracking1755200000000 implements MigrationInterface {
     tableName: string,
     columns: string,
   ): Promise<void> {
-    const rows = await queryRunner.query(
+    const rows = (await queryRunner.query(
       `SELECT COUNT(*) AS cnt FROM INFORMATION_SCHEMA.STATISTICS
        WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND INDEX_NAME = ?`,
       [tableName, indexName],
-    );
+    )) as Array<{ cnt: number }>;
     if (Number(rows[0]?.cnt ?? 0) === 0) {
       await queryRunner.query(`CREATE INDEX \`${indexName}\` ON \`${tableName}\` (${columns})`);
     }
   }
 
   private async dropIndexIfExists(queryRunner: QueryRunner, indexName: string, tableName: string): Promise<void> {
-    const rows = await queryRunner.query(
+    const rows = (await queryRunner.query(
       `SELECT COUNT(*) AS cnt FROM INFORMATION_SCHEMA.STATISTICS
        WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND INDEX_NAME = ?`,
       [tableName, indexName],
-    );
+    )) as Array<{ cnt: number }>;
     if (Number(rows[0]?.cnt ?? 0) > 0) {
       await queryRunner.query(`DROP INDEX \`${indexName}\` ON \`${tableName}\``);
     }

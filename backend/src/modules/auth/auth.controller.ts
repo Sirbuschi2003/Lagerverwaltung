@@ -14,13 +14,6 @@ interface RequestContext {
   userAgent: string;
 }
 
-interface AuthenticatedRequest extends Request {
-  user?: {
-    id?: string;
-    sub?: string;
-  };
-}
-
 const REFRESH_COOKIE_NAME = "refresh_token";
 const REFRESH_COOKIE_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000; // 30 Tage
 
@@ -54,7 +47,7 @@ export class AuthController {
   @SkipThrottle()
   @UseGuards(JwtAuthGuard)
   @Get("profile")
-  getProfile(@Req() req: AuthenticatedRequest) {
+  getProfile(@Req() req: Request) {
     return this.authService.getProfile(this.extractUserId(req));
   }
 
@@ -69,6 +62,7 @@ export class AuthController {
     if ('refreshToken' in result) {
       // Full login: set secure cookie, strip refreshToken from body
       setRefreshCookie(res, result.refreshToken);
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars -- refreshToken bewusst aus der Response entfernt (nur als HttpOnly-Cookie gesetzt)
       const { refreshToken: _rt, ...safeResult } = result;
       return safeResult;
     }
@@ -92,6 +86,7 @@ export class AuthController {
 
     // Neuen Refresh-Token als Cookie setzen
     setRefreshCookie(res, result.refreshToken);
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars -- refreshToken bewusst aus der Response entfernt (nur als HttpOnly-Cookie gesetzt)
     const { refreshToken: _rt, ...safeResult } = result;
     return safeResult;
   }
@@ -123,7 +118,7 @@ export class AuthController {
 
   @UseGuards(JwtAuthGuard)
   @Post("change-password")
-  async changePassword(@Body() dto: ChangePasswordDto, @Req() req: AuthenticatedRequest) {
+  async changePassword(@Body() dto: ChangePasswordDto, @Req() req: Request) {
     const context = this.buildRequestContext(req);
     const userId = this.extractUserId(req);
 
@@ -141,6 +136,7 @@ export class AuthController {
     const result = await this.authService.completeMfaLogin(body.mfaToken, body.totpCode, context);
     if ('refreshToken' in result) {
       setRefreshCookie(res, result.refreshToken);
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars -- refreshToken bewusst aus der Response entfernt (nur als HttpOnly-Cookie gesetzt)
       const { refreshToken: _rt, ...safe } = result;
       return safe;
     }
@@ -150,14 +146,14 @@ export class AuthController {
   /** Initiates MFA TOTP setup — returns QR code (data URL) and plain secret. */
   @UseGuards(JwtAuthGuard)
   @Post("mfa/setup")
-  async setupMfa(@Req() req: AuthenticatedRequest) {
+  async setupMfa(@Req() req: Request) {
     return this.authService.setupMfa(this.extractUserId(req));
   }
 
   /** Confirms TOTP code after scanning QR code and activates MFA. */
   @UseGuards(JwtAuthGuard)
   @Post("mfa/verify-setup")
-  async verifyMfaSetup(@Body() body: { totpCode: string }, @Req() req: AuthenticatedRequest) {
+  async verifyMfaSetup(@Body() body: { totpCode: string }, @Req() req: Request) {
     return this.authService.verifyMfaSetup(this.extractUserId(req), body.totpCode);
   }
 
@@ -177,7 +173,8 @@ export class AuthController {
     const context = this.buildRequestContext(req);
     const result = await this.authService.verifyMfaSetupViaSetupToken(body.mfaSetupToken, body.totpCode, context);
     if ('refreshToken' in result) {
-      setRefreshCookie(res, result.refreshToken as string);
+      setRefreshCookie(res, result.refreshToken);
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars -- refreshToken bewusst aus der Response entfernt (nur als HttpOnly-Cookie gesetzt)
       const { refreshToken: _rt, ...safe } = result as Record<string, unknown>;
       return safe;
     }
@@ -187,7 +184,7 @@ export class AuthController {
   /** Disables MFA (requires password confirmation). */
   @UseGuards(JwtAuthGuard)
   @Post("mfa/disable")
-  async disableMfa(@Body() body: { password: string }, @Req() req: AuthenticatedRequest) {
+  async disableMfa(@Body() body: { password: string }, @Req() req: Request) {
     return this.authService.disableMfa(this.extractUserId(req), body.password);
   }
 
@@ -195,14 +192,14 @@ export class AuthController {
   @SkipThrottle()
   @UseGuards(JwtAuthGuard)
   @Get("mfa/status")
-  async getMfaStatus(@Req() req: AuthenticatedRequest) {
+  async getMfaStatus(@Req() req: Request) {
     const userId = this.extractUserId(req);
     const user = await this.authService.getProfile(userId);
-    return { mfaEnabled: (user as any).mfaEnabled ?? false };
+    return { mfaEnabled: user.mfaEnabled ?? false };
   }
 
-  private extractUserId(req: AuthenticatedRequest): string {
-    const userId = req.user?.id ?? req.user?.sub;
+  private extractUserId(req: Request): string {
+    const userId = req.user?.id;
     if (!userId) {
       throw new Error("No user ID found in request");
     }

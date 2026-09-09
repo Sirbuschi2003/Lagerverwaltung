@@ -1,22 +1,22 @@
 ﻿import { Injectable, NotImplementedException } from "@nestjs/common";
+import ExcelJS from "exceljs";
 import PDFDocument from "pdfkit";
 import type PDFKit from "pdfkit";
 import puppeteer from 'puppeteer';
 import QRCode from "qrcode";
-import ExcelJS from "exceljs";
 
 import { InventorySession } from "../inventory/entities/inventory-session.entity";
+import { groupInventoryLines } from "../inventory/utils/group-inventory-lines";
+import { Item } from "../items/entities/item.entity";
 import { StockLevel } from "../stock/entities/stock-level.entity";
 import { StockMovement } from "../stock/entities/stock-movement.entity";
 import { SystemConfigService } from "../system-config/system-config.service";
-import { groupInventoryLines } from "../inventory/utils/group-inventory-lines";
-import { Item } from "../items/entities/item.entity";
 
 @Injectable()
 export class ExportService {
   constructor(private readonly systemConfigService: SystemConfigService) {}
 
-  async exportMovementsToCsv(movements: StockMovement[]): Promise<Buffer> {
+  exportMovementsToCsv(movements: StockMovement[]): Buffer {
     const headers = ['Datum/Zeit', 'Bewegungsart', 'Artikel-Code', 'Artikelbeschreibung', 'Fahrzeug', 'Menge', 'Benutzer', 'Bemerkung', 'Quelle'];
     
     const rows = movements.map(movement => [
@@ -38,7 +38,7 @@ export class ExportService {
     return Buffer.from('\ufeff' + csvContent, 'utf8'); // UTF-8 BOM for Excel compatibility
   }
 
-  async exportStockToCsv(stockLevels: StockLevel[]): Promise<Buffer> {
+  exportStockToCsv(stockLevels: StockLevel[]): Buffer {
     const headers = ['Fahrzeug', 'Artikel-Code', 'Artikelbeschreibung', 'Hersteller', 'Warengruppe', 'Ist-Bestand', 'Soll-Bestand', 'Differenz'];
     
     const rows = stockLevels.map(level => [
@@ -59,7 +59,7 @@ export class ExportService {
     return Buffer.from('\ufeff' + csvContent, 'utf8');
   }
 
-  async exportInventoryToCsv(session: InventorySession): Promise<Buffer> {
+  exportInventoryToCsv(session: InventorySession): Buffer {
     const headers = ['Inventur-Session', 'Warenort', 'Fahrzeug', 'Artikel-Code', 'Artikelbeschreibung', 'Erwartete Menge', 'Gezählte Menge', 'Differenz', 'Bemerkung'];
     
     const rows = session.lines?.map(line => [
@@ -81,7 +81,7 @@ export class ExportService {
     return Buffer.from('\ufeff' + csvContent, 'utf8');
   }
 
-  async exportInventoryProtocolCsv(session: InventorySession, movements: StockMovement[]): Promise<Buffer> {
+  exportInventoryProtocolCsv(session: InventorySession, movements: StockMovement[]): Buffer {
     const linesHeaders = ['Inventur', 'Ort', 'Fahrzeug', 'Artikel-Code', 'Beschreibung', 'Erwartet', 'Gezählt', 'Differenz', 'Bemerkung'];
     const lineRows = (session.lines ?? []).map(line => [
       session.name,
@@ -109,7 +109,7 @@ export class ExportService {
     ]);
 
     const parts: string[] = [];
-    const csvEscape = (val: any) => '"' + String(val).replace(/"/g, '""') + '"';
+    const csvEscape = (val: unknown) => '"' + String(val).replace(/"/g, '""') + '"';
 
     // Abschnitt 1: Inventur-Positionen
     parts.push(linesHeaders.map(csvEscape).join(';'));
@@ -214,7 +214,8 @@ export class ExportService {
     return Buffer.from(buffer);
   }
 
-  async exportMovementsToPdf(_movements: StockMovement[]): Promise<Buffer> {
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars -- Parameter beschreibt die künftige Implementierung der Schnittstelle
+  exportMovementsToPdf(movements: StockMovement[]): Buffer {
     throw new NotImplementedException("PDF-Export ist noch nicht implementiert.");
   }
 
@@ -225,7 +226,7 @@ export class ExportService {
       const effectiveTitle = (tpl.title?.trim() || (company.name?.trim() || "Lagerverwaltung") + " - QR-Katalog (Wagenbestand)");
       const items = stockLevels
         .filter(l => !!l.item)
-        .map(l => l.item!)
+        .map(l => l.item)
         .sort((a, b) =>
           (a.productGroup || '').localeCompare(b.productGroup || '', 'de', { sensitivity: 'base' }) ||
           (a.manufacturer || '').localeCompare(b.manufacturer || '', 'de', { sensitivity: 'base' }) ||
@@ -319,7 +320,8 @@ export class ExportService {
         }
       });
     }
-  async exportStockToPdf(stockLevels: StockLevel[]): Promise<Buffer> {
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars -- Parameter beschreibt die künftige Implementierung der Schnittstelle
+  exportStockToPdf(stockLevels: StockLevel[]): Buffer {
     throw new Error('PDF export not yet implemented. Install puppeteer package first.');
   }
 
@@ -480,7 +482,7 @@ export class ExportService {
     builder: (doc: PDFKit.PDFDocument) => void | Promise<void>,
     options?: PDFKit.PDFDocumentOptions,
   ): Promise<Buffer> {
-    return new Promise(async (resolve, reject) => {
+    return new Promise((resolve, reject) => {
       const doc = new PDFDocument({ size: "A4", margin: 50, ...(options || {}) });
       const chunks: Buffer[] = [];
 
@@ -488,12 +490,9 @@ export class ExportService {
       doc.on("end", () => resolve(Buffer.concat(chunks)));
       doc.on("error", (error) => reject(error));
 
-      try {
-        await builder(doc);
-        doc.end();
-      } catch (e) {
-        reject(e);
-      }
+      Promise.resolve(builder(doc))
+        .then(() => doc.end())
+        .catch((e: unknown) => reject(e));
     });
   }
 
@@ -952,7 +951,7 @@ export class ExportService {
     let html = template.html;
     
     // Simple conditionals: {{#key}}...{{/key}} (show if truthy), {{^key}}...{{/key}} (show if falsy)
-    const replaceConditional = (text: string, key: string, value: any, content: string) => {
+    const replaceConditional = (text: string, key: string, value: unknown, content: string) => {
       const showPattern = new RegExp(`\\{\\{#${key}\\}\\}([\\s\\S]*?)\\{\\{\\/${key}\\}\\}`, 'g');
       const hidePattern = new RegExp(`\\{\\{\\^${key}\\}\\}([\\s\\S]*?)\\{\\{\\/${key}\\}\\}`, 'g');
       text = text.replace(showPattern, value ? content : '');

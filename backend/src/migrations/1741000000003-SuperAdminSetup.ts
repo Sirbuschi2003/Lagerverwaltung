@@ -10,24 +10,24 @@ import { MigrationInterface, QueryRunner } from "typeorm";
 export class SuperAdminSetup1741000000003 implements MigrationInterface {
   public async up(queryRunner: QueryRunner): Promise<void> {
     // 1. FK droppen – nur wenn er noch existiert
-    const fkRows: Array<{ CONSTRAINT_NAME: string }> = await queryRunner.query(
+    const fkRows = (await queryRunner.query(
       `SELECT CONSTRAINT_NAME FROM INFORMATION_SCHEMA.TABLE_CONSTRAINTS
        WHERE TABLE_SCHEMA = DATABASE()
          AND TABLE_NAME = 'users'
          AND CONSTRAINT_TYPE = 'FOREIGN KEY'
          AND CONSTRAINT_NAME = 'FK_users_branch'`,
-    );
+    )) as Array<{ CONSTRAINT_NAME: string }>;
     if (fkRows.length > 0) {
       await queryRunner.query(`ALTER TABLE \`users\` DROP FOREIGN KEY \`FK_users_branch\``);
     }
 
     // 2. branchId nullable machen – nur wenn Spalte noch NOT NULL ist
-    const colRows: Array<{ IS_NULLABLE: string }> = await queryRunner.query(
+    const colRows = (await queryRunner.query(
       `SELECT IS_NULLABLE FROM INFORMATION_SCHEMA.COLUMNS
        WHERE TABLE_SCHEMA = DATABASE()
          AND TABLE_NAME = 'users'
          AND COLUMN_NAME = 'branchId'`,
-    );
+    )) as Array<{ IS_NULLABLE: string }>;
     if (colRows.length > 0 && colRows[0].IS_NULLABLE === "NO") {
       await queryRunner.query(
         `ALTER TABLE \`users\` CHANGE COLUMN \`branchId\` \`branchId\` char(36) NULL DEFAULT NULL`,
@@ -35,13 +35,13 @@ export class SuperAdminSetup1741000000003 implements MigrationInterface {
     }
 
     // 3. FK neu anlegen – nur wenn er noch nicht existiert
-    const fkAfterRows: Array<{ CONSTRAINT_NAME: string }> = await queryRunner.query(
+    const fkAfterRows = (await queryRunner.query(
       `SELECT CONSTRAINT_NAME FROM INFORMATION_SCHEMA.TABLE_CONSTRAINTS
        WHERE TABLE_SCHEMA = DATABASE()
          AND TABLE_NAME = 'users'
          AND CONSTRAINT_TYPE = 'FOREIGN KEY'
          AND CONSTRAINT_NAME = 'FK_users_branch'`,
-    );
+    )) as Array<{ CONSTRAINT_NAME: string }>;
     if (fkAfterRows.length === 0) {
       await queryRunner.query(
         `ALTER TABLE \`users\` ADD CONSTRAINT \`FK_users_branch\` FOREIGN KEY (\`branchId\`) REFERENCES \`branches\`(\`id\`) ON DELETE RESTRICT`,

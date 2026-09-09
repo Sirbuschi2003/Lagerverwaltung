@@ -75,15 +75,21 @@ export class NotificationsService {
     return `push.subscription.${userId}`;
   }
 
+  private isStoredSubscription(entry: unknown): entry is StoredSubscription {
+    if (!entry || typeof entry !== "object") return false;
+    const candidate = entry as Partial<StoredSubscription>;
+    return Boolean(candidate.endpoint && candidate.keys?.p256dh && candidate.keys?.auth);
+  }
+
   private parseSubscriptions(raw: string | null): StoredSubscription[] {
     if (!raw) return [];
     try {
-      const parsed = JSON.parse(raw);
+      const parsed: unknown = JSON.parse(raw);
       if (Array.isArray(parsed)) {
-        return parsed.filter((entry) => entry?.endpoint && entry?.keys?.p256dh && entry?.keys?.auth);
+        return parsed.filter((entry: unknown) => this.isStoredSubscription(entry));
       }
     } catch (error) {
-      this.logger.warn("Push-Subscription JSON konnte nicht geparst werden:", error as any);
+      this.logger.warn(`Push-Subscription JSON konnte nicht geparst werden: ${error instanceof Error ? error.message : String(error)}`);
     }
     return [];
   }
@@ -94,7 +100,7 @@ export class NotificationsService {
     return this.parseSubscriptions(raw);
   }
 
-  async saveSubscription(userId: string, subscription: any): Promise<void> {
+  async saveSubscription(userId: string, subscription: webpush.PushSubscription): Promise<void> {
     await this.ensureInitialized();
     const key = this.configKey(userId);
     const current = await this.getSubscriptions(userId);
@@ -152,16 +158,19 @@ export class NotificationsService {
       const stillValid: StoredSubscription[] = [];
       for (const sub of subs) {
         try {
-          await webpush.sendNotification(sub as any, JSON.stringify(notification));
+          await webpush.sendNotification(sub, JSON.stringify(notification));
           stillValid.push(sub);
           totalSent++;
-        } catch (error: any) {
-          const status = error?.statusCode;
+        } catch (error: unknown) {
+          const status = error && typeof error === "object" && "statusCode" in error
+            ? (error as { statusCode?: number }).statusCode
+            : undefined;
           if (status === 404 || status === 410) {
             this.logger.warn(`Push-Subscription ungueltig und wird entfernt (User ${user.id})`);
             continue;
           }
-          this.logger.error(`Push-Senden fehlgeschlagen (User ${user.id}): ${error?.message || error}`);
+          const message = error instanceof Error ? error.message : String(error);
+          this.logger.error(`Push-Senden fehlgeschlagen (User ${user.id}): ${message}`);
           totalFailed++;
           stillValid.push(sub); // nur entfernten, wenn wirklich ungültig
         }

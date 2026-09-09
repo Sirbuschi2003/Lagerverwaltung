@@ -8,10 +8,6 @@ import { RolesGuard } from "../auth/guards/roles.guard";
 import { UpdateCompanyConfigDto } from "./dto/update-company-config.dto";
 import { SystemConfigService } from "./system-config.service";
 
-interface CompanyRequest extends Request {
-  user?: { branchId?: string | null };
-}
-
 @Controller("company")
 export class CompanyController {
   constructor(private readonly systemConfigService: SystemConfigService) {}
@@ -25,14 +21,14 @@ export class CompanyController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles("MANAGER")
   @Get()
-  async getCompanyConfig(@Req() req: CompanyRequest) {
+  async getCompanyConfig(@Req() req: Request) {
     return this.systemConfigService.getCompanyConfig(req.user?.branchId);
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles("MANAGER")
   @Put()
-  async updateCompanyConfig(@Body() dto: UpdateCompanyConfigDto, @Req() req: CompanyRequest) {
+  async updateCompanyConfig(@Body() dto: UpdateCompanyConfigDto, @Req() req: Request) {
     return this.systemConfigService.updateCompanyConfig(dto, req.user?.branchId);
   }
 

@@ -1,7 +1,9 @@
 import { Module } from "@nestjs/common";
+
 import { LoggingModule } from "../logging/logging.module";
-import { NotificationsService } from "./notifications.service";
+
 import { NotificationsController } from "./notifications.controller";
+import { NotificationsService } from "./notifications.service";
 
 @Module({
   imports: [LoggingModule],

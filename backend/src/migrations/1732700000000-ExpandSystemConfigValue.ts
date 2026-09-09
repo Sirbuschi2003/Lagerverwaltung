@@ -4,7 +4,7 @@ export class ExpandSystemConfigValue1732700000000 implements MigrationInterface 
   name = "ExpandSystemConfigValue1732700000000";
 
   public async up(queryRunner: QueryRunner): Promise<void> {
-    const extractRows = (raw: any): any[] => {
+    const extractRows = (raw: unknown): unknown[] => {
       if (Array.isArray(raw)) {
         if (raw.length > 0 && Array.isArray(raw[0])) return raw[0];
         return raw;
@@ -16,7 +16,7 @@ export class ExpandSystemConfigValue1732700000000 implements MigrationInterface 
       await queryRunner.query(
         `SELECT DATA_TYPE FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'system_config' AND COLUMN_NAME = 'value' LIMIT 1`,
       ),
-    );
+    ) as Array<{ DATA_TYPE?: string }>;
     const currentType = rows[0]?.DATA_TYPE?.toString().toLowerCase();
 
     if (currentType !== "longtext") {

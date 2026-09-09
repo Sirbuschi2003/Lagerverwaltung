@@ -4,12 +4,14 @@ import * as bcrypt from "bcrypt";
 import { In, Repository } from "typeorm";
 
 import { addToPasswordHistory, isPasswordInHistory, PASSWORD_HISTORY_LIMIT } from "../../common/utils/password-history.util";
+import { PasswordHistory } from "../auth/entities/password-history.entity";
+import { RefreshToken } from "../auth/entities/refresh-token.entity";
+import { Location } from "../locations/entities/location.entity";
+
 import { CreateUserDto } from "./dto/create-user.dto";
 import { UpdateUserDto } from "./dto/update-user.dto";
 import { User } from "./entities/user.entity";
-import { Location } from "../locations/entities/location.entity";
-import { PasswordHistory } from "../auth/entities/password-history.entity";
-import { RefreshToken } from "../auth/entities/refresh-token.entity";
+
 
 @Injectable()
 export class UsersService {
@@ -31,7 +33,7 @@ export class UsersService {
   }
 
   async findTechnicians(branchId?: string | null): Promise<Array<{ id: string; displayName: string; vehicleId: string | null }>> {
-    const where: any = { role: "TECHNICIAN" };
+    const where: Record<string, unknown> = { role: "TECHNICIAN" };
     if (branchId) where.branchId = branchId;
     const technicians = await this.repository.find({ where, order: { displayName: "ASC" } });
     return technicians.map(t => ({

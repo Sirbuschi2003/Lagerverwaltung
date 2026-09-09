@@ -16,29 +16,26 @@ import {
 } from "@nestjs/common";
 import { FileInterceptor } from "@nestjs/platform-express";
 import { Request } from "express";
-
-interface InventoryRequest extends Request {
-  user?: { id?: string; role?: string; username?: string; vehicleId?: string | null; branchId?: string | null; locationIds?: string[] };
-}
+import type { Response } from "express";
 
 import { Roles } from "../auth/decorators/roles.decorator";
 import { JwtAuthGuard } from "../auth/guards/jwt-auth.guard";
 import { RolesGuard } from "../auth/guards/roles.guard";
 import { ExportService } from "../reports/export.service";
+import { StockService } from "../stock/stock.service";
+import { UsersService } from "../users/users.service";
 
 import { CompleteInventoryDto } from "./dto/complete-inventory.dto";
+import { FinalizeInventoryDto } from "./dto/finalize-inventory.dto";
 import { RecordInventoryLineDto } from "./dto/record-inventory-line.dto";
 import { RemoveVehicleStockDto } from "./dto/remove-vehicle-stock.dto";
 import { StartInventoryDto } from "./dto/start-inventory.dto";
-import { FinalizeInventoryDto } from "./dto/finalize-inventory.dto";
-import { InventoryService } from "./inventory.service";
 import { SubmitInventoryDto } from "./dto/submit-inventory.dto";
-import { InventoryTemplateService, type InventoryTemplateUpload } from "./inventory-template.service";
-import { UsersService } from "../users/users.service";
-import type { InventorySession } from "./entities/inventory-session.entity";
-import { StockService } from "../stock/stock.service";
-import type { Response } from "express";
 import { VehicleStatusDto } from "./dto/vehicle-status.dto";
+import type { InventorySession } from "./entities/inventory-session.entity";
+import type { InventoryVehicleStatusState } from "./entities/inventory-vehicle-status.entity";
+import { InventoryTemplateService, type InventoryTemplateUpload } from "./inventory-template.service";
+import { InventoryService } from "./inventory.service";
 
 @Controller("inventory")
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -53,7 +50,7 @@ export class InventoryController {
 
   @Get()
   @Roles("MANAGER", "WAREHOUSE", "TECHNICIAN")
-  findSessions(@Req() req: InventoryRequest) {
+  findSessions(@Req() req: Request) {
     const isManager = req.user?.role === "MANAGER";
     return this.inventoryService.findSessions(req.user?.branchId, req.user?.id, isManager);
   }
@@ -64,7 +61,7 @@ export class InventoryController {
    */
   @Get("sessions/:sessionId")
   @Roles("MANAGER", "WAREHOUSE", "TECHNICIAN")
-  async getSessionById(@Param("sessionId") sessionId: string, @Req() req: InventoryRequest) {
+  async getSessionById(@Param("sessionId") sessionId: string, @Req() req: Request) {
     const session = await this.inventoryService.findSessionById(sessionId, req.user?.branchId);
     if (!session) {
       throw new BadRequestException("Session nicht gefunden");
@@ -86,13 +83,13 @@ export class InventoryController {
 
   @Post("start")
   @Roles("MANAGER")
-  startSession(@Body() dto: StartInventoryDto, @Req() req: InventoryRequest) {
+  startSession(@Body() dto: StartInventoryDto, @Req() req: Request) {
     return this.inventoryService.startSession({ ...dto, branchId: req.user?.branchId });
   }
 
   @Post("line")
   @Roles("MANAGER", "WAREHOUSE", "TECHNICIAN")
-  recordLine(@Body() dto: RecordInventoryLineDto, @Req() req: InventoryRequest) {
+  recordLine(@Body() dto: RecordInventoryLineDto, @Req() req: Request) {
     return this.inventoryService.recordLine(dto, req.user?.branchId);
   }
 
@@ -115,7 +112,7 @@ export class InventoryController {
     @Body() body: SubmitInventoryDto,
     @Req() req: Request,
   ) {
-    const user = req.user as any;
+    const user = req.user;
     const username = user?.username ?? "Unknown";
     const userRole: string = user?.role ?? "";
 
@@ -131,8 +128,8 @@ export class InventoryController {
 
   @Patch("sessions/:sessionId/reopen")
   @Roles("MANAGER")
-  reopenSession(@Param("sessionId") sessionId: string, @Req() req: InventoryRequest) {
-    const username = (req.user as any)?.username ?? "Unknown";
+  reopenSession(@Param("sessionId") sessionId: string, @Req() req: Request) {
+    const username = req.user?.username ?? "Unknown";
     return this.inventoryService.reopenSession(sessionId, username, req.user?.branchId);
   }
 
@@ -141,9 +138,9 @@ export class InventoryController {
   reopenVehicle(
     @Param("sessionId") sessionId: string,
     @Param("vehicleId") vehicleId: string,
-    @Req() req: InventoryRequest,
+    @Req() req: Request,
   ) {
-    const username = (req.user as any)?.username ?? "Unknown";
+    const username = req.user?.username ?? "Unknown";
     return this.inventoryService.reopenVehicle(sessionId, vehicleId, username, req.user?.branchId);
   }
 
@@ -152,9 +149,9 @@ export class InventoryController {
   finalizeSession(
     @Param("sessionId") sessionId: string,
     @Body() body: FinalizeInventoryDto,
-    @Req() req: InventoryRequest,
+    @Req() req: Request,
   ) {
-    const username = (req.user as any)?.username ?? "Unknown";
+    const username = req.user?.username ?? "Unknown";
     return this.inventoryService.finalizeSession(sessionId, username, body, req.user?.branchId);
   }
 
@@ -162,7 +159,7 @@ export class InventoryController {
   @Roles("MANAGER", "WAREHOUSE", "TECHNICIAN")
   async exportSession(
     @Param("sessionId") sessionId: string,
-    @Req() req: InventoryRequest,
+    @Req() req: Request,
     @Res() res: Response,
     @Query("format") format: 'csv' | 'pdf' | 'xlsx' = 'csv',
     @Query("vehicleId") vehicleId?: string,
@@ -189,7 +186,7 @@ export class InventoryController {
     }
     
     if (format === 'csv') {
-      const csvBuffer = await this.exportService.exportInventoryToCsv(filteredSession);
+      const csvBuffer = this.exportService.exportInventoryToCsv(filteredSession);
       res.setHeader('Content-Type', 'text/csv; charset=utf-8');
       res.setHeader('Content-Disposition', `attachment; filename="inventur_${session.name.replace(/[^a-zA-Z0-9]/g, '_')}_${new Date().toISOString().split('T')[0]}.csv"`);
       res.send(csvBuffer);
@@ -210,7 +207,7 @@ export class InventoryController {
   @Roles("MANAGER", "WAREHOUSE", "TECHNICIAN")
   async exportInventoryProtocol(
     @Param("sessionId") sessionId: string,
-    @Req() req: InventoryRequest,
+    @Req() req: Request,
     @Query("format") format: "csv" | "pdf" | "xlsx" = "csv",
     @Res() res: Response,
   ) {
@@ -231,7 +228,7 @@ export class InventoryController {
       return res.send(xlsx);
     }
 
-    const csv = await this.exportService.exportInventoryProtocolCsv(session, movements);
+    const csv = this.exportService.exportInventoryProtocolCsv(session, movements);
     res.setHeader("Content-Type", "text/csv; charset=utf-8");
     res.setHeader("Content-Disposition", `attachment; filename="inventur_protokoll_${session.name}.csv"`);
     return res.send(csv);
@@ -240,13 +237,13 @@ export class InventoryController {
   @Get("sessions/:sessionId/differences")
   @Roles("MANAGER", "WAREHOUSE", "TECHNICIAN")
   getSessionDifferences(@Param("sessionId") sessionId: string, @Req() req: Request) {
-    const user = (req.user as any) || {};
+    const user = req.user;
     return this.inventoryService.getSessionDifferences(sessionId, user);
   }
 
   @Get("sessions/:sessionId/vehicle-statuses")
   @Roles("MANAGER", "WAREHOUSE", "TECHNICIAN")
-  async getVehicleStatuses(@Param("sessionId") sessionId: string, @Req() req: InventoryRequest): Promise<VehicleStatusDto[]> {
+  async getVehicleStatuses(@Param("sessionId") sessionId: string, @Req() req: Request): Promise<VehicleStatusDto[]> {
     const session = await this.inventoryService.findSessionById(sessionId, req.user?.branchId);
     if (!session) {
       throw new BadRequestException("Session not found");
@@ -270,7 +267,7 @@ export class InventoryController {
         vehicleMap.push({
           vehicleId: vid,
           vehicleLabel: vehicle?.licensePlate || vehicle?.description || "Fahrzeug",
-          status: "DRAFT" as any,
+          status: "DRAFT" as InventoryVehicleStatusState,
           submittedBy: null,
           submittedAt: null,
           adjustmentsApplied: false,
@@ -291,7 +288,7 @@ export class InventoryController {
   @Roles("MANAGER")
   deleteSession(
     @Param("sessionId") sessionId: string,
-    @Req() req: InventoryRequest,
+    @Req() req: Request,
     @Query("force") force?: string,
   ) {
     const isSuperAdmin = req.user?.role === "MANAGER" && req.user?.branchId === null;
@@ -323,7 +320,7 @@ export class InventoryController {
   @Roles("MANAGER")
   @UseInterceptors(FileInterceptor("file", { limits: { fileSize: 10 * 1024 * 1024 } }))
   uploadTemplate(@UploadedFile() file: InventoryTemplateUpload, @Req() req: Request) {
-    const uploadedBy = (req.user as any)?.username ?? "Unbekannt";
+    const uploadedBy = req.user?.username ?? "Unbekannt";
     return this.templateService.saveTemplate(file, uploadedBy);
   }
 

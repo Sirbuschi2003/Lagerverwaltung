@@ -2,13 +2,14 @@ import { BadRequestException, Injectable, Logger, NotFoundException, OnModuleIni
 import { InjectRepository } from "@nestjs/typeorm";
 import { In, Repository } from "typeorm";
 
+import { LogCategory } from "../logging/entities/system-log.entity";
+import { LoggingService } from "../logging/services/logging.service";
 import { USER_ROLES } from "../users/entities/user.entity";
 import { UsersService } from "../users/users.service";
-import { LoggingService } from "../logging/services/logging.service";
-import { LogCategory } from "../logging/entities/system-log.entity";
+
 import { Permission } from "./entities/permission.entity";
-import { Role } from "./entities/role.entity";
 import { RolePermission } from "./entities/role-permission.entity";
+import { Role } from "./entities/role.entity";
 import { UserPermission } from "./entities/user-permission.entity";
 
 const DEFAULT_PERMISSIONS: Array<{ key: string; description: string }> = [
@@ -179,7 +180,8 @@ export class AccessControlService implements OnModuleInit {
       await this.bootstrapRoles();
       this.logger.log("AccessControl bootstrap completed");
     } catch (error) {
-      this.logger.error("AccessControl bootstrap failed", error as any);
+      const stack = error instanceof Error ? error.stack : String(error);
+      this.logger.error("AccessControl bootstrap failed", stack);
     }
   }
 

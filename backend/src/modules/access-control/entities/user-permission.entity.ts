@@ -1,6 +1,8 @@
 import { Column, Entity, PrimaryGeneratedColumn, Unique, ManyToOne, JoinColumn } from "typeorm";
-import { Permission } from "./permission.entity";
+
 import { User } from "../../users/entities/user.entity";
+
+import { Permission } from "./permission.entity";
 
 @Entity({ name: "user_permissions" })
 @Unique(["userId", "permissionId"])

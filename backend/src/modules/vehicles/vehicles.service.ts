@@ -2,8 +2,9 @@ import { Injectable, NotFoundException } from "@nestjs/common";
 import { InjectRepository } from "@nestjs/typeorm";
 import { Repository } from "typeorm";
 
-import { Vehicle } from "./entities/vehicle.entity";
 import { LocationsService } from "../locations/locations.service";
+
+import { Vehicle } from "./entities/vehicle.entity";
 
 @Injectable()
 export class VehiclesService {
@@ -49,7 +50,7 @@ export class VehiclesService {
 
   async remove(id: string, branchId?: string | null): Promise<void> {
     if (branchId) {
-      const entity = await this.repository.findOne({ where: { id, branchId } as any });
+      const entity = await this.repository.findOne({ where: { id, branchId } });
       if (!entity) throw new NotFoundException("Vehicle not found");
     }
     await this.repository.delete(id);

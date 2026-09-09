@@ -22,7 +22,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     });
   }
 
-  async validate(payload: JwtPayload) {
+  async validate(payload: JwtPayload): Promise<Express.User | null> {
     // Load the full user from the database
     const user = await this.usersService.findOneById(payload.sub);
     if (!user) return null;

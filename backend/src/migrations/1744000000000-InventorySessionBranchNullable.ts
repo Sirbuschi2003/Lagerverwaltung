@@ -8,13 +8,13 @@ import { MigrationInterface, QueryRunner } from "typeorm";
 export class InventorySessionBranchNullable1744000000000 implements MigrationInterface {
   public async up(queryRunner: QueryRunner): Promise<void> {
     // FK droppen – nur wenn vorhanden
-    const fkRows: Array<{ CONSTRAINT_NAME: string }> = await queryRunner.query(
+    const fkRows = (await queryRunner.query(
       `SELECT CONSTRAINT_NAME FROM INFORMATION_SCHEMA.TABLE_CONSTRAINTS
        WHERE TABLE_SCHEMA = DATABASE()
          AND TABLE_NAME = 'inventory_sessions'
          AND CONSTRAINT_TYPE = 'FOREIGN KEY'
          AND CONSTRAINT_NAME = 'FK_inventory_sessions_branch'`,
-    );
+    )) as Array<{ CONSTRAINT_NAME: string }>;
     if (fkRows.length > 0) {
       await queryRunner.query(
         `ALTER TABLE \`inventory_sessions\` DROP FOREIGN KEY \`FK_inventory_sessions_branch\``,
@@ -22,12 +22,12 @@ export class InventorySessionBranchNullable1744000000000 implements MigrationInt
     }
 
     // branchId nullable machen – nur wenn noch NOT NULL
-    const colRows: Array<{ IS_NULLABLE: string }> = await queryRunner.query(
+    const colRows = (await queryRunner.query(
       `SELECT IS_NULLABLE FROM INFORMATION_SCHEMA.COLUMNS
        WHERE TABLE_SCHEMA = DATABASE()
          AND TABLE_NAME = 'inventory_sessions'
          AND COLUMN_NAME = 'branchId'`,
-    );
+    )) as Array<{ IS_NULLABLE: string }>;
     if (colRows.length > 0 && colRows[0].IS_NULLABLE === "NO") {
       await queryRunner.query(
         `ALTER TABLE \`inventory_sessions\` CHANGE COLUMN \`branchId\` \`branchId\` char(36) NULL DEFAULT NULL`,
@@ -35,13 +35,13 @@ export class InventorySessionBranchNullable1744000000000 implements MigrationInt
     }
 
     // FK neu anlegen – nur wenn noch nicht vorhanden
-    const fkAfterRows: Array<{ CONSTRAINT_NAME: string }> = await queryRunner.query(
+    const fkAfterRows = (await queryRunner.query(
       `SELECT CONSTRAINT_NAME FROM INFORMATION_SCHEMA.TABLE_CONSTRAINTS
        WHERE TABLE_SCHEMA = DATABASE()
          AND TABLE_NAME = 'inventory_sessions'
          AND CONSTRAINT_TYPE = 'FOREIGN KEY'
          AND CONSTRAINT_NAME = 'FK_inventory_sessions_branch'`,
-    );
+    )) as Array<{ CONSTRAINT_NAME: string }>;
     if (fkAfterRows.length === 0) {
       await queryRunner.query(
         `ALTER TABLE \`inventory_sessions\` ADD CONSTRAINT \`FK_inventory_sessions_branch\`

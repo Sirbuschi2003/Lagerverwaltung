@@ -1,7 +1,9 @@
 import { Body, Controller, Delete, Get, Param, Post, Req, UseGuards } from "@nestjs/common";
 import type { Request } from "express";
-import { JwtAuthGuard } from "../auth/guards/jwt-auth.guard";
+
 import { CurrentUser } from "../auth/decorators/current-user.decorator";
+import { JwtAuthGuard } from "../auth/guards/jwt-auth.guard";
+
 import { ConsentService } from "./consent.service";
 import { GrantConsentDto } from "./dto/consent.dto";
 
@@ -31,7 +33,7 @@ export class ConsentController {
     @Req() req: Request,
   ) {
     const ip = this.anonymizeIp(req.ip ?? req.socket?.remoteAddress ?? null);
-    const ua = (req.headers["user-agent"] ?? null) as string | null;
+    const ua = (req.headers["user-agent"] ?? null);
     return this.consentService.grantConsent(user.id, dto, ip, ua);
   }
 

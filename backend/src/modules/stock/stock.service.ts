@@ -14,8 +14,6 @@ import { User } from "../users/entities/user.entity";
 import { UsersService } from "../users/users.service";
 import { VehiclesService } from "../vehicles/vehicles.service";
 
-import { MovementQueryService } from "./movement-query.service";
-import { StockDiagnosticsService, RepairResult } from "./stock-diagnostics.service";
 import { CloneVehicleStockDto } from "./dto/clone-vehicle-stock.dto";
 import { RecordMovementDto } from "./dto/record-movement.dto";
 import { SyncPayloadDto } from "./dto/sync-payload.dto";
@@ -24,6 +22,8 @@ import { UpdateTargetDto } from "./dto/update-target.dto";
 import { RestockRequest, RestockRequestStatus } from "./entities/restock-request.entity";
 import { StockLevel } from "./entities/stock-level.entity";
 import { StockMovement, StockMovementType } from "./entities/stock-movement.entity";
+import { MovementQueryService } from "./movement-query.service";
+import { StockDiagnosticsService } from "./stock-diagnostics.service";
 
 export interface FleetOverviewStockEntry {
   stockLevelId: string;
@@ -92,8 +92,6 @@ interface RestockActorContext {
   role: string;
   vehicleId: string | null;
 }
-
-type VehicleStockLevel = StockLevel & { vehicle: NonNullable<StockLevel["vehicle"]> };
 
 @Injectable()
 export class StockService {
@@ -515,7 +513,10 @@ export class StockService {
     const syncResults = await Promise.allSettled(saved.map((level) => this.syncRestockRequest(level.id)));
     syncResults.forEach((r) => {
       if (r.status === 'rejected') {
-        this.logger.error(`syncRestockRequest nach cloneVehicleStock fehlgeschlagen: ${r.reason?.message}`, r.reason?.stack);
+        const reason: unknown = r.reason;
+        const message = reason instanceof Error ? reason.message : String(reason);
+        const stack = reason instanceof Error ? reason.stack : undefined;
+        this.logger.error(`syncRestockRequest nach cloneVehicleStock fehlgeschlagen: ${message}`, stack);
       }
     });
 

@@ -19,10 +19,12 @@ import { Request, Response } from 'express';
 import { Roles } from '../../auth/decorators/roles.decorator';
 import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../../auth/guards/roles.guard';
+import { User } from '../../users/entities/user.entity';
 import { LogLevel, LogCategory } from '../entities/system-log.entity';
-import { ArchiveEntry } from '../services/log-archive.service';
-import { LoggingService, LogFilters } from '../services/logging.service';
 import { LogArchiveService } from '../services/log-archive.service';
+import { LoggingService, LogFilters } from '../services/logging.service';
+
+type RequestWithUser = Omit<Request, 'user'> & { user?: User };
 
 @Controller('logs')
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -33,8 +35,8 @@ export class LoggingController {
   ) {}
 
   /** Wirft 403 wenn der eingeloggte Benutzer kein Super-Admin ist (branchId = null) */
-  private requireSuperAdmin(req: Request): void {
-    const user = (req as any).user;
+  private requireSuperAdmin(req: RequestWithUser | undefined): void {
+    const user = req?.user;
     if (user?.branchId !== null && user?.branchId !== undefined) {
       throw new ForbiddenException('Systemprotokolle sind nur für Super-Admins zugänglich');
     }
@@ -51,9 +53,9 @@ export class LoggingController {
       category: string;
       message: string;
       url?: string;
-      details?: any;
+      details?: Record<string, unknown>;
     }>,
-    @Req() req: Request,
+    @Req() req: RequestWithUser,
   ) {
     try {
       // Validierung
@@ -66,7 +68,7 @@ export class LoggingController {
       }
 
       // User aus Request extrahieren
-      const user = (req as any).user;
+      const user = req.user;
       const userId = user?.id;
 
       // Logs in Datenbank schreiben
@@ -111,7 +113,7 @@ export class LoggingController {
       }
 
       return { success: true, count: logs.length };
-    } catch (error: any) {
+    } catch (error: unknown) {
       throw error;
     }
   }
@@ -122,7 +124,7 @@ export class LoggingController {
   @Get()
   @Roles('MANAGER')
   async getLogs(
-    @Req() req: Request,
+    @Req() req: RequestWithUser,
     @Query('startDate') startDate?: string,
     @Query('endDate') endDate?: string,
     @Query('userId') userId?: string,
@@ -155,7 +157,7 @@ export class LoggingController {
     if (action) filters.action = action;
 
     // Niederlassungs-Filter: Branch-Manager sieht nur eigene Logs
-    const reqUser = (req as any).user;
+    const reqUser = req.user;
     if (reqUser?.branchId) filters.branchId = reqUser.branchId;
 
     const limitNum = parseInt(limit, 10);
@@ -178,12 +180,12 @@ export class LoggingController {
       category: log.category,
       action: log.action,
       details: log.details,
-      userId: (log as any).userId || log.user?.id || undefined,
+      userId: log.userId || log.user?.id || undefined,
       username: log.user?.username || undefined,
       ipAddress: log.ipAddress,
       userAgent: log.userAgent,
       metadata: log.metadata,
-      source: (log.metadata && (log.metadata as any).source) ? (log.metadata as any).source : 'BACKEND',
+      source: (log.metadata?.source as string | undefined) ?? 'BACKEND',
     }));
 
     return { logs: mapped, total: result.total };
@@ -201,7 +203,7 @@ export class LoggingController {
     @Query('category') category?: LogCategory,
     @Query('level') level?: LogLevel,
     @Query('action') action?: string,
-    @Req() req?: any,
+    @Req() req?: RequestWithUser,
     @Res() res?: Response,
   ) {
     const filters: LogFilters = {};
@@ -302,7 +304,7 @@ export class LoggingController {
     @Query('category') category?: LogCategory,
     @Query('level') level?: LogLevel,
     @Query('action') action?: string,
-    @Req() req?: any,
+    @Req() req?: RequestWithUser,
     @Res() res?: Response,
   ) {
     const filters: LogFilters = {};
@@ -372,7 +374,7 @@ export class LoggingController {
       res.end(jsonContent, 'utf-8');
     }
 
-    return JSON.parse(jsonContent);
+    return JSON.parse(jsonContent) as unknown;
   }
 
   /**
@@ -380,7 +382,7 @@ export class LoggingController {
    */
   @Get('stats')
   @Roles('MANAGER')
-  async getLogStats(@Req() req?: any) {
+  async getLogStats(@Req() req?: RequestWithUser) {
     const thirtyDaysAgo = new Date();
     thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
 
@@ -431,7 +433,7 @@ export class LoggingController {
    */
   @Put('config/level')
   @Roles('MANAGER')
-  async setLogLevel(@Body() body: { logLevel: LogLevel }, @Req() req?: any) {
+  async setLogLevel(@Body() body: { logLevel: LogLevel }, @Req() req?: RequestWithUser) {
     this.requireSuperAdmin(req);
     if (!Object.values(LogLevel).includes(body.logLevel)) {
       throw new BadRequestException('Ungültiger Log-Level');
@@ -461,7 +463,7 @@ export class LoggingController {
    */
   @Post('cleanup/old')
   @Roles('MANAGER')
-  async cleanupOldLogs(@Body() body: { daysToKeep?: number }, @Req() req?: any) {
+  async cleanupOldLogs(@Body() body: { daysToKeep?: number }, @Req() req?: RequestWithUser) {
     this.requireSuperAdmin(req);
     const daysToKeep = body.daysToKeep || 90;
     
@@ -493,7 +495,7 @@ export class LoggingController {
    */
   @Post('cleanup/archive-all')
   @Roles('MANAGER')
-  async archiveAllAndCleanup(@Req() req?: any) {
+  async archiveAllAndCleanup(@Req() req?: RequestWithUser) {
     this.requireSuperAdmin(req);
 
     const pastDates = await this.archiveService.getPastDatesInDb();
@@ -532,7 +534,7 @@ export class LoggingController {
    */
   @Post('cleanup/invalid')
   @Roles('MANAGER')
-  async cleanupInvalidLogs(@Req() req?: any) {
+  async cleanupInvalidLogs(@Req() req?: RequestWithUser) {
     this.requireSuperAdmin(req);
     const deleted = await this.loggingService.cleanupInvalidLogs();
 
@@ -558,7 +560,7 @@ export class LoggingController {
    */
   @Post('cleanup/all')
   @Roles('MANAGER')
-  async deleteAllLogs(@Req() req?: any) {
+  async deleteAllLogs(@Req() req?: RequestWithUser) {
     this.requireSuperAdmin(req);
     const deleted = await this.loggingService.deleteAllLogs();
 
@@ -594,7 +596,7 @@ export class LoggingController {
    */
   @Put('config/retention')
   @Roles('MANAGER')
-  async setLogRetention(@Body() body: { retentionDays: number }, @Req() req?: any) {
+  async setLogRetention(@Body() body: { retentionDays: number }, @Req() req?: RequestWithUser) {
     this.requireSuperAdmin(req);
     const days = body.retentionDays;
     
@@ -625,21 +627,21 @@ export class LoggingController {
 
   @Get('archives')
   @Roles('MANAGER')
-  async listArchives(@Req() req: Request) {
+  listArchives(@Req() req: RequestWithUser) {
     this.requireSuperAdmin(req);
     return { archives: this.archiveService.listArchives() };
   }
 
   @Get('archives/stats')
   @Roles('MANAGER')
-  async getArchiveStats(@Req() req: Request) {
+  async getArchiveStats(@Req() req: RequestWithUser) {
     this.requireSuperAdmin(req);
     return this.archiveService.getStats();
   }
 
   @Get('archives/config/retention')
   @Roles('MANAGER')
-  async getArchiveRetention(@Req() req: Request) {
+  async getArchiveRetention(@Req() req: RequestWithUser) {
     this.requireSuperAdmin(req);
     const days = await this.loggingService.getArchiveRetentionDays();
     return { retentionDays: days };
@@ -647,7 +649,7 @@ export class LoggingController {
 
   @Put('archives/config/retention')
   @Roles('MANAGER')
-  async setArchiveRetention(@Body() body: { retentionDays: number }, @Req() req: Request) {
+  async setArchiveRetention(@Body() body: { retentionDays: number }, @Req() req: RequestWithUser) {
     this.requireSuperAdmin(req);
     const days = body.retentionDays;
     if (!days || isNaN(days) || days < 1 || days > 36500) {
@@ -659,7 +661,7 @@ export class LoggingController {
 
   @Post('archives/cleanup')
   @Roles('MANAGER')
-  async cleanupArchives(@Body() body: { daysToKeep?: number }, @Req() req: Request) {
+  async cleanupArchives(@Body() body: { daysToKeep?: number }, @Req() req: RequestWithUser) {
     this.requireSuperAdmin(req);
     const days = body.daysToKeep ?? (await this.loggingService.getArchiveRetentionDays());
     if (days < 1 || days > 36500) throw new BadRequestException('daysToKeep muss zwischen 1 und 36500 liegen');
@@ -669,7 +671,7 @@ export class LoggingController {
 
   @Post('archives/force-archive')
   @Roles('MANAGER')
-  async forceArchive(@Body() body: { date?: string }, @Req() req: Request) {
+  async forceArchive(@Body() body: { date?: string }, @Req() req: RequestWithUser) {
     this.requireSuperAdmin(req);
     const date = body.date || new Date().toISOString().slice(0, 10);
     const result = await this.archiveService.archiveLogs(date);
@@ -678,7 +680,7 @@ export class LoggingController {
 
   @Delete('archives/:date')
   @Roles('MANAGER')
-  async deleteArchiveDay(@Param('date') date: string, @Req() req: Request) {
+  deleteArchiveDay(@Param('date') date: string, @Req() req: RequestWithUser) {
     this.requireSuperAdmin(req);
     this.archiveService.deleteArchiveDay(date);
     return { success: true, date };
@@ -686,18 +688,18 @@ export class LoggingController {
 
   @Get('archives/:date/entries')
   @Roles('MANAGER')
-  async getArchiveDayEntries(@Param('date') date: string, @Req() req: Request) {
+  getArchiveDayEntries(@Param('date') date: string, @Req() req: RequestWithUser) {
     this.requireSuperAdmin(req);
     const entries = this.archiveService.readArchiveDay(date);
-    return { date, entries, total: (entries as any[]).length };
+    return { date, entries, total: entries.length };
   }
 
   @Get('archives/:date/:category/download')
   @Roles('MANAGER')
-  async downloadArchiveFile(
+  downloadArchiveFile(
     @Param('date') date: string,
     @Param('category') category: string,
-    @Req() req: Request,
+    @Req() req: RequestWithUser,
     @Res() res: Response,
   ) {
     this.requireSuperAdmin(req);
@@ -710,9 +712,9 @@ export class LoggingController {
 
   @Post('archives/download/zip')
   @Roles('MANAGER')
-  async downloadArchiveBundle(
+  downloadArchiveBundle(
     @Body() body: { dates: string[] },
-    @Req() req: Request,
+    @Req() req: RequestWithUser,
     @Res() res: Response,
   ) {
     this.requireSuperAdmin(req);

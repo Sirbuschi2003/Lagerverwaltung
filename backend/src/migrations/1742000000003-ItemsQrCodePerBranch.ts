@@ -9,7 +9,7 @@ import { MigrationInterface, QueryRunner } from "typeorm";
  */
 export class ItemsQrCodePerBranch1742000000003 implements MigrationInterface {
   private async dropUniqueIndexIfExists(queryRunner: QueryRunner, table: string, column: string): Promise<void> {
-    const rows: Array<{ INDEX_NAME: string }> = await queryRunner.query(
+    const rows = (await queryRunner.query(
       `SELECT DISTINCT INDEX_NAME FROM INFORMATION_SCHEMA.STATISTICS
        WHERE TABLE_SCHEMA = DATABASE()
          AND TABLE_NAME = ?
@@ -18,7 +18,7 @@ export class ItemsQrCodePerBranch1742000000003 implements MigrationInterface {
          AND INDEX_NAME != 'PRIMARY'
          AND INDEX_NAME NOT IN ('IDX_items_branch_code')`,
       [table, column],
-    );
+    )) as Array<{ INDEX_NAME: string }>;
     for (const row of rows) {
       await queryRunner.query(`DROP INDEX \`${row.INDEX_NAME}\` ON \`${table}\``);
     }
@@ -30,6 +30,7 @@ export class ItemsQrCodePerBranch1742000000003 implements MigrationInterface {
     await this.dropUniqueIndexIfExists(queryRunner, "items", "qrCodeValue");
   }
 
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars, @typescript-eslint/require-await -- Migration-Interface erfordert diese Signatur; down() ist absichtlich ein No-Op
   public async down(queryRunner: QueryRunner): Promise<void> {
     // Nicht wiederherstellbar ohne Datenverlust – absichtlich leer
   }

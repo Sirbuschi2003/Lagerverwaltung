@@ -2,10 +2,11 @@ import { Injectable } from "@nestjs/common";
 import { InjectRepository } from "@nestjs/typeorm";
 import { DataSource, Repository } from "typeorm";
 
-import { LocationsService } from "../locations/locations.service";
-import { Location } from "../locations/entities/location.entity";
-import { StockLevel } from "../stock/entities/stock-level.entity";
 import { Item } from "../items/entities/item.entity";
+import { Location } from "../locations/entities/location.entity";
+import { LocationsService } from "../locations/locations.service";
+import { StockLevel } from "../stock/entities/stock-level.entity";
+
 import { PurchaseOrderLine } from "./entities/purchase-order-line.entity";
 
 @Injectable()
@@ -51,7 +52,7 @@ export class PurchaseSuggestionService {
       openLinesQb.andWhere("order.branchId = :branchId", { branchId });
     }
 
-    const openLines = await openLinesQb.groupBy("item.id").getRawMany();
+    const openLines = await openLinesQb.groupBy("item.id").getRawMany<{ itemId: string; openQuantity: string | number }>();
     const incomingByItem = new Map<string, number>();
     openLines.forEach((row) => {
       const qty = Number(row.openQuantity ?? 0);

@@ -4,32 +4,32 @@ export class AddLocationIdToSuppliers1745300000000 implements MigrationInterface
   name = "AddLocationIdToSuppliers1745300000000";
 
   private async columnExists(queryRunner: QueryRunner, table: string, column: string): Promise<boolean> {
-    const result: Array<{ cnt: string }> = await queryRunner.query(
+    const result = (await queryRunner.query(
       `SELECT COUNT(*) AS cnt FROM information_schema.columns WHERE table_schema = DATABASE() AND table_name = ? AND column_name = ?`,
       [table, column],
-    );
+    )) as Array<{ cnt: string }>;
     return Number(result[0]?.cnt ?? 0) > 0;
   }
 
   private async fkExists(queryRunner: QueryRunner, table: string, fkName: string): Promise<boolean> {
-    const result: Array<{ cnt: string }> = await queryRunner.query(
+    const result = (await queryRunner.query(
       `SELECT COUNT(*) AS cnt FROM information_schema.table_constraints WHERE table_schema = DATABASE() AND table_name = ? AND constraint_name = ? AND constraint_type = 'FOREIGN KEY'`,
       [table, fkName],
-    );
+    )) as Array<{ cnt: string }>;
     return Number(result[0]?.cnt ?? 0) > 0;
   }
 
   private async indexExists(queryRunner: QueryRunner, table: string, indexName: string): Promise<boolean> {
-    const result: Array<{ cnt: string }> = await queryRunner.query(
+    const result = (await queryRunner.query(
       `SELECT COUNT(*) AS cnt FROM information_schema.statistics WHERE table_schema = DATABASE() AND table_name = ? AND index_name = ?`,
       [table, indexName],
-    );
+    )) as Array<{ cnt: string }>;
     return Number(result[0]?.cnt ?? 0) > 0;
   }
 
   /** Returns the FK constraint name on suppliers.branchId → branches.id, or null if not found */
   private async getBranchFkName(queryRunner: QueryRunner): Promise<string | null> {
-    const rows: Array<{ CONSTRAINT_NAME: string }> = await queryRunner.query(
+    const rows = (await queryRunner.query(
       `SELECT kcu.CONSTRAINT_NAME FROM information_schema.key_column_usage kcu
        JOIN information_schema.table_constraints tc
          ON tc.constraint_schema = kcu.constraint_schema
@@ -41,7 +41,7 @@ export class AddLocationIdToSuppliers1745300000000 implements MigrationInterface
          AND kcu.referenced_table_name = 'branches'
          AND tc.constraint_type = 'FOREIGN KEY'
        LIMIT 1`,
-    );
+    )) as Array<{ CONSTRAINT_NAME: string }>;
     return rows[0]?.CONSTRAINT_NAME ?? null;
   }
 

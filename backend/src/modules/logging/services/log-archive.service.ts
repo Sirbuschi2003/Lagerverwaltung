@@ -1,11 +1,13 @@
-import { Injectable, Logger, NotFoundException } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, Between } from 'typeorm';
 import * as crypto from 'crypto';
 import * as fs from 'fs';
 import * as path from 'path';
 
+import { Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository, Between } from 'typeorm';
+
 import { SystemLog } from '../entities/system-log.entity';
+
 import { LoggingService } from './logging.service';
 
 export interface ArchiveEntry {
@@ -53,14 +55,14 @@ export class LogArchiveService {
   private tryDecrypt(raw: string): string | null {
     if (!this.encryptionKey) return null;
     try {
-      const envelope = JSON.parse(raw);
+      const envelope = JSON.parse(raw) as { enc?: boolean; iv: string; tag: string; data: string };
       if (!envelope.enc) return null;
       const iv = Buffer.from(envelope.iv, 'hex');
       const tag = Buffer.from(envelope.tag, 'hex');
       const data = Buffer.from(envelope.data, 'hex');
       const decipher = crypto.createDecipheriv('aes-256-gcm', this.encryptionKey, iv);
       decipher.setAuthTag(tag);
-      return decipher.update(data) + decipher.final('utf-8');
+      return decipher.update(data).toString('utf-8') + decipher.final('utf-8');
     } catch {
       return null;
     }
@@ -78,7 +80,7 @@ export class LogArchiveService {
     const decrypted = this.tryDecrypt(raw);
     const json = decrypted ?? raw;
     try {
-      const parsed = JSON.parse(json);
+      const parsed: unknown = JSON.parse(json);
       return Array.isArray(parsed) ? parsed : [];
     } catch {
       return [];
@@ -239,7 +241,7 @@ export class LogArchiveService {
     }
 
     // Sort descending by timestamp
-    (all as any[]).sort((a, b) =>
+    (all as Array<{ timestamp?: string | number }>).sort((a, b) =>
       new Date(b.timestamp ?? 0).getTime() - new Date(a.timestamp ?? 0).getTime(),
     );
     return all;

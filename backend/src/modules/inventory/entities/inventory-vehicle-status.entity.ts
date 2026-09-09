@@ -1,6 +1,8 @@
 import { Column, Entity, ManyToOne, PrimaryGeneratedColumn, Unique } from "typeorm";
-import { InventorySession } from "./inventory-session.entity";
+
 import { Vehicle } from "../../vehicles/entities/vehicle.entity";
+
+import { InventorySession } from "./inventory-session.entity";
 
 export enum InventoryVehicleStatusState {
   DRAFT = "DRAFT",

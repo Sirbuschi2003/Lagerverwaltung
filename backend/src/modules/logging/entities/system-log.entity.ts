@@ -54,7 +54,7 @@ export class SystemLog {
   details?: string;
 
   @Column({ type: 'json', nullable: true })
-  metadata?: any;
+  metadata?: Record<string, unknown>;
 
   @Column({ nullable: true })
   userId?: string;

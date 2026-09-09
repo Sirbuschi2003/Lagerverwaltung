@@ -3,7 +3,8 @@ import { InjectRepository } from "@nestjs/typeorm";
 import { Repository } from "typeorm";
 
 import { Vehicle } from "../vehicles/entities/vehicle.entity";
-import { Location } from "./entities/location.entity";
+
+import { Location, LocationType } from "./entities/location.entity";
 
 const AUTO_CODE_BASE_BY_TYPE: Record<string, string> = {
   WAREHOUSE: "LAGER",
@@ -116,7 +117,7 @@ export class LocationsService {
     }
 
     const entity = this.repository.create({
-      type: data.type as any,
+      type: data.type as LocationType,
       code: resolvedCode,
       name: data.name?.trim() || null,
       parent,
