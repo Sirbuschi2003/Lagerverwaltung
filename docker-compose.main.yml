@@ -97,6 +97,12 @@ services:
       JWT_REFRESH_EXPIRES_IN: ${BACKEND_JWT_REFRESH_EXPIRES_IN:-90d}
       INVENTORY_HMAC_SECRET: ${INVENTORY_HMAC_SECRET}
       ALLOWED_ORIGINS: "http://${APP_HOST:-localhost},https://${APP_HOST:-localhost}"
+      # Nur fuer den allerersten Seed des Admin-Kontos relevant (bestehende
+      # Admin-Konten sind davon unberuehrt) - muss aber gesetzt sein, sonst
+      # verweigert die App in Production den Start (FATAL-Check).
+      DEFAULT_ADMIN_USERNAME: ${DEFAULT_ADMIN_USERNAME:-admin}
+      DEFAULT_ADMIN_PASSWORD: ${DEFAULT_ADMIN_PASSWORD}
+      DEFAULT_ADMIN_DISPLAY_NAME: ${DEFAULT_ADMIN_DISPLAY_NAME:-System Administrator}
       # Update-Funktion: Projekt- und Compose-Datei-Pfad fuer docker compose pull/up
       COMPOSE_PROJECT_NAME: lagerverwaltung
       COMPOSE_FILE_PATH: /workspace/docker-compose.main.yml
