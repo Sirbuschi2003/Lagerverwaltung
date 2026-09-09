@@ -956,6 +956,10 @@ export class PurchasingService {
       const remaining = Math.max(0, quantity - received);
       const packSize = line.packSize ?? null;
 
+      // Preisfelder (§240 HGB Einstandspreise) werden bereitgestellt, aber von der
+      // Standard-Vorlage NICHT angezeigt (auf Wunsch generell nicht im PDF sichtbar).
+      // Wer die Preise auf dem Dokument braucht, kann {{unitPriceNet}}/{{lineTotalNet}}
+      // etc. selbst in seine eigene Vorlage einbauen (Einstellungen -> Bestellvorlage).
       return {
         lineIndex: String(index + 1),
         itemCode: line.item.code ?? "",
@@ -964,12 +968,19 @@ export class PurchasingService {
         receivedQuantity: String(received),
         remainingQuantity: String(remaining),
         packSize: packSize ? String(packSize) : "",
+        unitPriceNet: line.unitPriceNet != null ? Number(line.unitPriceNet).toFixed(2) : "",
+        taxRate: line.taxRate != null ? Number(line.taxRate).toFixed(2) : "",
+        currency: line.currency ?? "EUR",
+        lineTotalNet: line.lineTotalNet != null ? line.lineTotalNet.toFixed(2) : "",
+        lineTotalGross: line.lineTotalGross != null ? line.lineTotalGross.toFixed(2) : "",
       };
     });
 
     const totalQuantity = lines.reduce((sum, line) => sum + Number(line.quantity), 0);
     const totalReceived = lines.reduce((sum, line) => sum + Number(line.receivedQuantity), 0);
     const totalRemaining = lines.reduce((sum, line) => sum + Number(line.remainingQuantity), 0);
+    const orderTotalNet = order.lines.reduce((sum, line) => sum + (line.lineTotalNet ?? 0), 0);
+    const orderTotalGross = order.lines.reduce((sum, line) => sum + (line.lineTotalGross ?? 0), 0);
 
     const supplier = order.supplier;
     const companyCityLine = [company.postalCode, company.city].filter(Boolean).join(" ");
@@ -1048,6 +1059,10 @@ export class PurchasingService {
     html = replaceSimple(html, "totalQuantity", escapeHtml(String(totalQuantity)));
     html = replaceSimple(html, "totalReceived", escapeHtml(String(totalReceived)));
     html = replaceSimple(html, "totalRemaining", escapeHtml(String(totalRemaining)));
+    // Nur wirksam, wenn die eigene Vorlage {{orderTotalNet}}/{{orderTotalGross}} nutzt -
+    // Standard-Vorlage referenziert diese Platzhalter nicht (Preise generell nicht im PDF).
+    html = replaceSimple(html, "orderTotalNet", escapeHtml(orderTotalNet.toFixed(2)));
+    html = replaceSimple(html, "orderTotalGross", escapeHtml(orderTotalGross.toFixed(2)));
 
     const linesMatch = html.match(/\{\{#lines\}\}([\s\S]*?)\{\{\/lines\}\}/);
     if (linesMatch) {
@@ -1065,6 +1080,13 @@ export class PurchasingService {
         rowHtml = replaceSimple(rowHtml, "receivedQuantity", escapeHtml(line.receivedQuantity));
         rowHtml = replaceSimple(rowHtml, "remainingQuantity", escapeHtml(line.remainingQuantity));
         rowHtml = replaceSimple(rowHtml, "packSize", escapeHtml(line.packSize));
+        // Nur wirksam wenn die eigene Vorlage diese Platzhalter referenziert -
+        // Standard-Vorlage tut das nicht (Preise generell nicht im PDF sichtbar).
+        rowHtml = replaceSimple(rowHtml, "unitPriceNet", escapeHtml(line.unitPriceNet));
+        rowHtml = replaceSimple(rowHtml, "taxRate", escapeHtml(line.taxRate));
+        rowHtml = replaceSimple(rowHtml, "currency", escapeHtml(line.currency));
+        rowHtml = replaceSimple(rowHtml, "lineTotalNet", escapeHtml(line.lineTotalNet));
+        rowHtml = replaceSimple(rowHtml, "lineTotalGross", escapeHtml(line.lineTotalGross));
         rowsHtml += rowHtml;
       }
 
