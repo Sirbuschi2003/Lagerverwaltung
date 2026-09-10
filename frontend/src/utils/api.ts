@@ -1290,6 +1290,7 @@ export interface CompanyConfigDto {
   country?: string | null;
   phone?: string | null;
   email?: string | null;
+  defaultTaxRate?: number | null;
 }
 
 export interface UpdateCompanyConfigRequest {
@@ -1303,6 +1304,7 @@ export interface UpdateCompanyConfigRequest {
   country?: string | null;
   phone?: string | null;
   email?: string | null;
+  defaultTaxRate?: number | null;
 }
 
 export const fetchPublicCompanyConfig = async (): Promise<CompanyConfigDto> => {

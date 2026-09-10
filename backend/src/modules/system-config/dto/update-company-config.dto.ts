@@ -1,4 +1,4 @@
-import { IsBoolean, IsEmail, IsOptional, IsString, MaxLength } from "class-validator";
+import { IsBoolean, IsEmail, IsNumber, IsOptional, IsString, Max, MaxLength, Min } from "class-validator";
 
 export class UpdateCompanyConfigDto {
   @IsString()
@@ -47,4 +47,10 @@ export class UpdateCompanyConfigDto {
   @IsEmail()
   @MaxLength(120)
   email?: string | null;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  @Max(100)
+  defaultTaxRate?: number | null;
 }

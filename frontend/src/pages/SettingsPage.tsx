@@ -40,6 +40,7 @@ const SettingsPage = () => {
     companyCountry,
     companyPhone,
     companyEmail,
+    companyDefaultTaxRate,
     hasLoaded: companyLoaded,
     isLoading: companyLoading,
     loadCompanyAuthenticated,
@@ -54,6 +55,7 @@ const SettingsPage = () => {
     companyCountry: state.companyCountry,
     companyPhone: state.companyPhone,
     companyEmail: state.companyEmail,
+    companyDefaultTaxRate: state.companyDefaultTaxRate,
     hasLoaded: state.hasLoaded,
     isLoading: state.isLoading,
     loadCompanyAuthenticated: state.loadCompanyAuthenticated,
@@ -68,6 +70,7 @@ const SettingsPage = () => {
   const [companyCountryInput, setCompanyCountryInput] = useState<string>("");
   const [companyPhoneInput, setCompanyPhoneInput] = useState<string>("");
   const [companyEmailInput, setCompanyEmailInput] = useState<string>("");
+  const [companyDefaultTaxRateInput, setCompanyDefaultTaxRateInput] = useState<string>("");
   const [appLogoPreview, setAppLogoPreview] = useState<string | null>(null);
   const [appLogoRemove, setAppLogoRemove] = useState(false);
   const [companyMessage, setCompanyMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
@@ -147,6 +150,7 @@ const SettingsPage = () => {
     setCompanyCountryInput(companyCountry ?? "");
     setCompanyPhoneInput(companyPhone ?? "");
     setCompanyEmailInput(companyEmail ?? "");
+    setCompanyDefaultTaxRateInput(companyDefaultTaxRate != null ? String(companyDefaultTaxRate) : "");
     setAppLogoRemove(false);
   }, [
     companyName,
@@ -158,6 +162,7 @@ const SettingsPage = () => {
     companyCountry,
     companyPhone,
     companyEmail,
+    companyDefaultTaxRate,
   ]);
 
   const cleanField = (value: string) => {
@@ -193,6 +198,15 @@ const SettingsPage = () => {
       return;
     }
 
+    const trimmedTaxRate = companyDefaultTaxRateInput.trim();
+    if (trimmedTaxRate) {
+      const parsed = Number(trimmedTaxRate.replace(",", "."));
+      if (Number.isNaN(parsed) || parsed < 0 || parsed > 100) {
+        setCompanyMessage({ type: "error", text: "Standard-MwSt. muss zwischen 0 und 100 liegen." });
+        return;
+      }
+    }
+
     setCompanySaving(true);
     setCompanyMessage(null);
     try {
@@ -207,6 +221,7 @@ const SettingsPage = () => {
         country: cleanField(companyCountryInput),
         phone: cleanField(companyPhoneInput),
         email: cleanField(companyEmailInput),
+        defaultTaxRate: trimmedTaxRate ? Number(trimmedTaxRate.replace(",", ".")) : null,
       });
       setCompanyMessage({ type: "success", text: "Firmendaten wurden gespeichert." });
     } catch (error) {
@@ -310,6 +325,18 @@ const SettingsPage = () => {
                 value={companyEmailInput}
                 onChange={(e) => setCompanyEmailInput(e.target.value)}
                 disabled={companyLoading}
+              />
+            </Grid>
+            <Grid item xs={12} sm={6}>
+              <TextField
+                fullWidth
+                label="Standard-MwSt. (%)"
+                type="number"
+                inputProps={{ min: 0, max: 100, step: 0.01 }}
+                value={companyDefaultTaxRateInput}
+                onChange={(e) => setCompanyDefaultTaxRateInput(e.target.value)}
+                disabled={companyLoading}
+                helperText="Wird beim Anlegen neuer Bestellpositionen vorbelegt, bleibt pro Position änderbar (z. B. 7%-Artikel)."
               />
             </Grid>
             <Grid item xs={12}>

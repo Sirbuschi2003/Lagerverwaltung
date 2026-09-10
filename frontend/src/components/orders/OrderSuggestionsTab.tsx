@@ -48,6 +48,7 @@ import DeleteIcon from "@mui/icons-material/Delete";
 import DragIndicatorIcon from "@mui/icons-material/DragIndicator";
 import ArrowForwardIcon from "@mui/icons-material/ArrowForward";
 import useAuthStore from "../../store/useAuthStore";
+import useSystemConfigStore from "../../store/useSystemConfigStore";
 import {
   fetchPurchaseSuggestions,
   createPurchaseOrder,
@@ -166,6 +167,15 @@ const OrderSuggestionsTab: React.FC = () => {
   const theme = useTheme();
   const hasPermission = useAuthStore((state: any) => state.hasPermission);
   const user = useAuthStore((state: any) => state.user);
+  // Zentraler Standard-MwSt.-Satz aus den Firmendaten (Einstellungen) - Fallback 19%
+  // falls dort nichts hinterlegt ist. Pro Bestellposition weiterhin ueberschreibbar.
+  const companyDefaultTaxRate = useSystemConfigStore((state) => state.companyDefaultTaxRate);
+  const loadCompanyConfig = useSystemConfigStore((state) => state.loadCompany);
+  const defaultTaxRate = companyDefaultTaxRate ?? 19;
+
+  useEffect(() => {
+    loadCompanyConfig().catch(() => undefined);
+  }, [loadCompanyConfig]);
   const canCreate = hasPermission("orders.create");
 
   const [locations, setLocations] = useState<LocationDto[]>([]);
@@ -621,7 +631,7 @@ const OrderSuggestionsTab: React.FC = () => {
         descriptionSecondary: item.descriptionSecondary,
         quantity: qty > 0 ? qty : needed,
         unitPriceNet: item.price ?? null,
-        taxRate: 19,
+        taxRate: defaultTaxRate,
       });
     });
 
@@ -667,7 +677,7 @@ const OrderSuggestionsTab: React.FC = () => {
         descriptionSecondary: item.descriptionSecondary,
         quantity: Math.max(1, quantity),
         unitPriceNet: item.price != null ? Number(item.price) : null,
-        taxRate: 19,
+        taxRate: defaultTaxRate,
       });
     });
 
@@ -1576,7 +1586,7 @@ const OrderSuggestionsTab: React.FC = () => {
                                     descriptionSecondary: item.descriptionSecondary,
                                     quantity: qty,
                                     unitPriceNet: item.price != null ? Number(item.price) : null,
-                                    taxRate: 19,
+                                    taxRate: defaultTaxRate,
                                   },
                                 ],
                               };

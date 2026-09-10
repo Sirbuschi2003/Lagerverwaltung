@@ -15,6 +15,10 @@ export interface CompanyConfig {
   country: string | null;
   phone: string | null;
   email: string | null;
+  // Zentraler Standard-Steuersatz (%) fuer neue Bestellpositionen - erspart
+  // die wiederholte manuelle MwSt.-Eingabe je Bestellung. Weiterhin pro
+  // Position ueberschreibbar (z.B. 7% Artikel).
+  defaultTaxRate: number | null;
 }
 
 export interface VehicleQrTemplateConfig {
@@ -78,8 +82,10 @@ export class SystemConfigService {
     const keys = [
       "company.name", "company.logo", "company.addressLine1", "company.addressLine2",
       "company.postalCode", "company.city", "company.country", "company.phone", "company.email",
+      "company.defaultTaxRate",
     ];
     const values = await Promise.all(keys.map((k) => this.getEffectiveValue(k, branchId)));
+    const defaultTaxRateRaw = values[9];
     return {
       name: values[0],
       logoDataUrl: values[1],
@@ -90,6 +96,7 @@ export class SystemConfigService {
       country: values[6],
       phone: values[7],
       email: values[8],
+      defaultTaxRate: defaultTaxRateRaw != null ? Number(defaultTaxRateRaw) : null,
     };
   }
 
@@ -104,6 +111,7 @@ export class SystemConfigService {
     country?: string | null;
     phone?: string | null;
     email?: string | null;
+    defaultTaxRate?: number | null;
   }, branchId?: string | null): Promise<CompanyConfig> {
     await this.ensureValueColumnIsLongText();
 
@@ -132,6 +140,19 @@ export class SystemConfigService {
     await saveOptional("company.country", payload.country, "Firmenadresse Land");
     await saveOptional("company.phone", payload.phone, "Firmen-Telefon");
     await saveOptional("company.email", payload.email, "Firmen-E-Mail");
+
+    if (payload.defaultTaxRate !== undefined) {
+      if (payload.defaultTaxRate == null) {
+        await this.deleteEffectiveValue("company.defaultTaxRate", branchId);
+      } else {
+        await this.saveEffectiveValue(
+          "company.defaultTaxRate",
+          String(payload.defaultTaxRate),
+          branchId,
+          "Standard-MwSt.-Satz (%) fuer neue Bestellpositionen",
+        );
+      }
+    }
 
     return this.getCompanyConfig(branchId);
   }

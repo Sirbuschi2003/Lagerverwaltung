@@ -18,6 +18,7 @@ interface SystemConfigState {
   companyCountry: string | null;
   companyPhone: string | null;
   companyEmail: string | null;
+  companyDefaultTaxRate: number | null;
   isLoading: boolean;
   hasLoaded: boolean;
   loadCompany: () => Promise<void>;
@@ -35,6 +36,7 @@ const useSystemConfigStore = create<SystemConfigState>((set, get) => ({
   companyCountry: null,
   companyPhone: null,
   companyEmail: null,
+  companyDefaultTaxRate: null,
   isLoading: false,
   hasLoaded: false,
 
@@ -55,6 +57,7 @@ const useSystemConfigStore = create<SystemConfigState>((set, get) => ({
         companyCountry: config.country ?? null,
         companyPhone: config.phone ?? null,
         companyEmail: config.email ?? null,
+        companyDefaultTaxRate: config.defaultTaxRate ?? null,
         hasLoaded: true,
       });
     } catch (error) {
@@ -78,6 +81,7 @@ const useSystemConfigStore = create<SystemConfigState>((set, get) => ({
         companyCountry: config.country ?? null,
         companyPhone: config.phone ?? null,
         companyEmail: config.email ?? null,
+        companyDefaultTaxRate: config.defaultTaxRate ?? null,
         hasLoaded: true,
       });
     } catch (error) {
@@ -100,6 +104,7 @@ const useSystemConfigStore = create<SystemConfigState>((set, get) => ({
         companyCountry: config.country ?? null,
         companyPhone: config.phone ?? null,
         companyEmail: config.email ?? null,
+        companyDefaultTaxRate: config.defaultTaxRate ?? null,
         hasLoaded: true,
       });
       return config;
