@@ -80,31 +80,50 @@ export function useLiveData<T>({
   
   // Timer Management
   useEffect(() => {
-    // Clear existing timer
-    if (intervalRef.current) {
-      clearInterval(intervalRef.current);
-      intervalRef.current = null;
-    }
-    
-    // Setup new timer if enabled
-    if (
-      enabled && 
-      settings.enabled && 
-      settings.interval > 0 && 
-      isOnline
-    ) {
-      intervalRef.current = setInterval(() => {
-        refresh();
-      }, settings.interval) as unknown as number;
-      
-      console.log(`[useLiveData] Timer started with ${settings.interval}ms interval`);
-    }
-    
-    return () => {
+    const clearTimer = () => {
       if (intervalRef.current) {
         clearInterval(intervalRef.current);
         intervalRef.current = null;
       }
+    };
+
+    const startTimer = () => {
+      clearTimer();
+      // Nicht pollen wenn der Browser-Tab/die App im Hintergrund ist (Bildschirm
+      // aus, App gewechselt) - spart Akku/CPU, v.a. auf Handys relevant. Beim
+      // Zurueckkehren in den Vordergrund startet der Timer automatisch neu
+      // (visibilitychange-Listener unten) und holt sofort frische Daten.
+      if (typeof document !== 'undefined' && document.visibilityState === 'hidden') {
+        return;
+      }
+      intervalRef.current = setInterval(() => {
+        refresh();
+      }, settings.interval) as unknown as number;
+    };
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        refresh();
+        startTimer();
+      } else {
+        clearTimer();
+      }
+    };
+
+    // Setup new timer if enabled
+    if (
+      enabled &&
+      settings.enabled &&
+      settings.interval > 0 &&
+      isOnline
+    ) {
+      startTimer();
+      document.addEventListener('visibilitychange', handleVisibilityChange);
+    }
+
+    return () => {
+      clearTimer();
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
   }, [enabled, settings.enabled, settings.interval, isOnline]); // refresh ist stabil (keine Deps)
   

@@ -26,7 +26,14 @@ import PaletteIcon from "@mui/icons-material/Palette";
 import CheckIcon from "@mui/icons-material/Check";
 import SystemUpdateAltIcon from "@mui/icons-material/SystemUpdateAlt";
 import PhonelinkLockIcon from "@mui/icons-material/PhonelinkLock";
-import * as MuiIcons from "@mui/icons-material";
+import StarIcon from "@mui/icons-material/Star";
+import QrCodeScannerIcon from "@mui/icons-material/QrCodeScanner";
+import DirectionsCarIcon from "@mui/icons-material/DirectionsCar";
+import ScannerIcon from "@mui/icons-material/Scanner";
+import InventoryIcon from "@mui/icons-material/Inventory";
+import LocalShippingIcon from "@mui/icons-material/LocalShipping";
+import AssignmentIcon from "@mui/icons-material/Assignment";
+import DashboardIcon from "@mui/icons-material/Dashboard";
 import { useNavigate } from "react-router-dom";
 import { fetchUpdateStatus } from "../utils/api";
 
@@ -44,9 +51,25 @@ interface AppHeaderProps {
   menuOpen: boolean;
 }
 
+// Kein Wildcard-Import von @mui/icons-material mehr (zog vorher alle ~2100
+// Icons ins Bundle, ca. 4 MB ungenutzter Code - siehe Performance-Fix).
+// Schnellzugriff-Icons kommen aktuell ausschliesslich aus diesen Werten
+// (kein Icon-Picker in der UI). Wird spaeter eine freie Icon-Auswahl noetig,
+// hier einfach weitere Icons ergaenzen.
+const QUICK_ACTION_ICONS: Record<string, React.ElementType> = {
+  QrCodeScanner: QrCodeScannerIcon,
+  DirectionsCar: DirectionsCarIcon,
+  Scanner: ScannerIcon,
+  Inventory: InventoryIcon,
+  LocalShipping: LocalShippingIcon,
+  Assignment: AssignmentIcon,
+  Dashboard: DashboardIcon,
+  Star: StarIcon,
+};
+
 const getIcon = (iconName: string): React.ReactElement => {
-  const Icon = (MuiIcons as Record<string, React.ComponentType<{ fontSize?: string }>>)[iconName];
-  return Icon ? <Icon fontSize="small" /> : <MuiIcons.Star fontSize="small" />;
+  const Icon = QUICK_ACTION_ICONS[iconName] ?? StarIcon;
+  return <Icon fontSize="small" />;
 };
 
 const AppHeader: React.FC<AppHeaderProps> = ({ onMenuToggle, menuOpen }) => {
