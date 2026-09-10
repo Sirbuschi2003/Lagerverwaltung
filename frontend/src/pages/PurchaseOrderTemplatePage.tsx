@@ -64,6 +64,8 @@ const SAMPLE_DATA = {
       receivedQuantity: "2",
       remainingQuantity: "4",
       packSize: "2",
+      unitPriceNet: "12,50",
+      lineTotalNet: "75,00",
     },
     {
       lineIndex: "2",
@@ -73,11 +75,15 @@ const SAMPLE_DATA = {
       receivedQuantity: "0",
       remainingQuantity: "10",
       packSize: "",
+      unitPriceNet: "4,20",
+      lineTotalNet: "42,00",
     },
   ],
   totalQuantity: "16",
   totalReceived: "2",
   totalRemaining: "14",
+  orderTotalNet: "117,00",
+  orderTotalGross: "139,23",
 };
 
 const ELEMENT_PALETTE: Array<{
@@ -134,21 +140,38 @@ const ELEMENT_FIELDS: Partial<Record<string, FieldDef[]>> = {
     { key: "packSize", label: "VE (Verpackungseinheit)" },
     { key: "received", label: "Geliefert" },
     { key: "remaining", label: "Offen" },
+    { key: "unitPriceNet", label: "Preis/Stk. (netto)" },
+    { key: "lineTotalNet", label: "Gesamt (netto)" },
   ],
   totalsBlock: [
     { key: "totalQuantity", label: "Gesamtmenge" },
     { key: "totalReceived", label: "Geliefert" },
     { key: "totalRemaining", label: "Offen" },
+    { key: "orderTotalNet", label: "Bestellsumme (netto)" },
+    { key: "orderTotalGross", label: "Bestellsumme (brutto)" },
   ],
 };
+
+// Preisfelder sind bewusst opt-in: Preise sollen generell NICHT im PDF
+// erscheinen, ausser ein Admin aktiviert sie hier explizit. Alle anderen
+// Felder bleiben wie bisher standardmaessig sichtbar.
+const OPT_IN_FIELD_KEYS = new Set([
+  "unitPriceNet",
+  "lineTotalNet",
+  "orderTotalNet",
+  "orderTotalGross",
+]);
 
 const getDefaultFields = (type: string): Record<string, boolean> => {
   const defs = ELEMENT_FIELDS[type];
   if (!defs) return {};
-  return Object.fromEntries(defs.map((f) => [f.key, true]));
+  return Object.fromEntries(defs.map((f) => [f.key, !OPT_IN_FIELD_KEYS.has(f.key)]));
 };
 
 const isFieldVisible = (element: PurchaseOrderDesignerElement, key: string): boolean => {
+  if (OPT_IN_FIELD_KEYS.has(key)) {
+    return element.fields?.[key] === true;
+  }
   if (!element.fields) return true;
   return element.fields[key] !== false;
 };
@@ -260,6 +283,8 @@ const renderElementPreview = (element: PurchaseOrderDesignerElement) => {
       const showPack = fv("packSize");
       const showRecv = fv("received");
       const showRem = fv("remaining");
+      const showUnitPrice = fv("unitPriceNet");
+      const showLineTotal = fv("lineTotalNet");
       return (
         <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 9 }}>
           <thead>
@@ -271,6 +296,8 @@ const renderElementPreview = (element: PurchaseOrderDesignerElement) => {
               {showPack && <th style={{ textAlign: "right", borderBottom: "1px solid #ccc" }}>VE</th>}
               {showRecv && <th style={{ textAlign: "right", borderBottom: "1px solid #ccc" }}>Geliefert</th>}
               {showRem && <th style={{ textAlign: "right", borderBottom: "1px solid #ccc" }}>Offen</th>}
+              {showUnitPrice && <th style={{ textAlign: "right", borderBottom: "1px solid #ccc" }}>Preis/Stk.</th>}
+              {showLineTotal && <th style={{ textAlign: "right", borderBottom: "1px solid #ccc" }}>Gesamt</th>}
             </tr>
           </thead>
           <tbody>
@@ -283,6 +310,8 @@ const renderElementPreview = (element: PurchaseOrderDesignerElement) => {
                 {showPack && <td style={{ textAlign: "right", borderBottom: "1px solid #eee" }}>{line.packSize || "-"}</td>}
                 {showRecv && <td style={{ textAlign: "right", borderBottom: "1px solid #eee" }}>{line.receivedQuantity}</td>}
                 {showRem && <td style={{ textAlign: "right", borderBottom: "1px solid #eee" }}>{line.remainingQuantity}</td>}
+                {showUnitPrice && <td style={{ textAlign: "right", borderBottom: "1px solid #eee" }}>{line.unitPriceNet}</td>}
+                {showLineTotal && <td style={{ textAlign: "right", borderBottom: "1px solid #eee" }}>{line.lineTotalNet}</td>}
               </tr>
             ))}
           </tbody>
@@ -295,6 +324,8 @@ const renderElementPreview = (element: PurchaseOrderDesignerElement) => {
           {fv("totalQuantity") && <div>Gesamtmenge: {SAMPLE_DATA.totalQuantity}</div>}
           {fv("totalReceived") && <div>Geliefert: {SAMPLE_DATA.totalReceived}</div>}
           {fv("totalRemaining") && <div>Offen: {SAMPLE_DATA.totalRemaining}</div>}
+          {fv("orderTotalNet") && <div>Summe netto: {SAMPLE_DATA.orderTotalNet} EUR</div>}
+          {fv("orderTotalGross") && <div>Summe brutto: {SAMPLE_DATA.orderTotalGross} EUR</div>}
         </div>
       );
     case "noteBlock":
@@ -420,6 +451,8 @@ body {
             ef("packSize") ? `<th style="text-align:right;">VE</th>` : "",
             ef("received") ? `<th style="text-align:right;">Geliefert</th>` : "",
             ef("remaining") ? `<th style="text-align:right;">Offen</th>` : "",
+            ef("unitPriceNet") ? `<th style="text-align:right;">Preis/Stk.</th>` : "",
+            ef("lineTotalNet") ? `<th style="text-align:right;">Gesamt</th>` : "",
           ].filter(Boolean).join("");
           const cells = [
             ef("pos") ? `<td>{{lineIndex}}</td>` : "",
@@ -429,6 +462,8 @@ body {
             ef("packSize") ? `<td style="text-align:right;">{{#packSize}}{{packSize}}{{/packSize}}{{^packSize}}-{{/packSize}}</td>` : "",
             ef("received") ? `<td style="text-align:right;">{{receivedQuantity}}</td>` : "",
             ef("remaining") ? `<td style="text-align:right;">{{remainingQuantity}}</td>` : "",
+            ef("unitPriceNet") ? `<td style="text-align:right;">{{unitPriceNet}}</td>` : "",
+            ef("lineTotalNet") ? `<td style="text-align:right;">{{lineTotalNet}}</td>` : "",
           ].filter(Boolean).join("");
           return wrap(`<table><thead><tr>${headers}</tr></thead><tbody>{{#lines}}<tr>${cells}</tr>{{/lines}}</tbody></table>`);
         }
@@ -437,6 +472,8 @@ body {
             ef("totalQuantity") ? `<div>Gesamtmenge: {{totalQuantity}}</div>` : "",
             ef("totalReceived") ? `<div>Geliefert: {{totalReceived}}</div>` : "",
             ef("totalRemaining") ? `<div>Offen: {{totalRemaining}}</div>` : "",
+            ef("orderTotalNet") ? `<div>Summe netto: {{orderTotalNet}} EUR</div>` : "",
+            ef("orderTotalGross") ? `<div>Summe brutto: {{orderTotalGross}} EUR</div>` : "",
           ].filter(Boolean).join("\n"));
         case "noteBlock":
           return wrap(`{{#note}}<div style="font-weight:600;">Notiz</div><div>{{note}}</div>{{/note}}`);
