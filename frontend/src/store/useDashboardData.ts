@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import api from "../utils/api";
+import { isEffectivelyOffline } from "./useNetworkStore";
 
 interface DashboardSummary {
   totalItems: number;
@@ -31,7 +32,7 @@ const loadCached = (): DashboardSummary => {
 const useDashboardData = create<DashboardState>(() => ({
   summary: loadCached(),
   loadSummary: async () => {
-    if (!navigator.onLine) {
+    if (isEffectivelyOffline()) {
       return;
     }
     try {

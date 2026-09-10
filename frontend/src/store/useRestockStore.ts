@@ -7,6 +7,7 @@ import {
   fetchVehicleShortages,
   updateRestockStatus as apiUpdateRestockStatus,
 } from "../utils/api";
+import { isEffectivelyOffline } from "./useNetworkStore";
 
 interface RestockState {
   myRequests: RestockRequestDto[];
@@ -24,9 +25,7 @@ const useRestockStore = create<RestockState>((set) => ({
   isLoadingMy: false,
   isLoadingFleet: false,
   loadForVehicle: async (vehicleId) => {
-    // Online-Status prÃ¼fen
-    const isOnline = navigator.onLine;
-    if (!isOnline) {
+    if (isEffectivelyOffline()) {
       set({ myRequests: [], isLoadingMy: false });
       return;
     }
@@ -40,6 +39,10 @@ const useRestockStore = create<RestockState>((set) => ({
     }
   },
   loadFleet: async (status) => {
+    if (isEffectivelyOffline()) {
+      set({ isLoadingFleet: false });
+      return;
+    }
     set({ isLoadingFleet: true });
     try {
       const data = await fetchRestockOverview(status ? { status } : undefined);

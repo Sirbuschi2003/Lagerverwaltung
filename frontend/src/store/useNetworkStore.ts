@@ -92,6 +92,32 @@ export async function checkBackendReachability(): Promise<boolean> {
   return lastCheckPromise;
 }
 
+/**
+ * Zuverlaessige Offline-Erkennung fuer Techniker im Aussendienst.
+ *
+ * navigator.onLine allein reicht NICHT: es zeigt nur, ob das Geraet
+ * ueberhaupt eine Netzwerkschnittstelle hat (WLAN/Mobilfunk) - nicht, ob
+ * der (von aussen grundsaetzlich nicht erreichbare) Server tatsaechlich
+ * antwortet. Ein Techniker mit Mobilfunkdaten gilt fuer den Browser als
+ * "online", obwohl der Server nie erreichbar sein wird. Ohne diesen
+ * zusaetzlichen Check versuchen Seiten trotzdem Live-Daten zu laden und
+ * warten den vollen Netzwerk-Timeout (mehrere Sekunden) ab, bevor sie
+ * aufgeben - das fuehlt sich wie Haengenbleiben/Ruckeln an.
+ *
+ * Kombiniert beide Signale: navigator.onLine (schneller Sofort-Check) UND
+ * das Ergebnis des echten /api/health-Erreichbarkeits-Checks (backendOnline).
+ * Der Backend-Check zaehlt nur, wenn er schon mindestens einmal gelaufen
+ * ist (lastCheck gesetzt) - sonst waere direkt nach dem App-Start faelschlich
+ * "offline" der Default.
+ */
+export function isEffectivelyOffline(): boolean {
+  const browserOffline = typeof navigator !== "undefined" ? !navigator.onLine : false;
+  if (browserOffline) return true;
+  const { isOnline, lastCheck } = useNetworkStore.getState();
+  const backendKnownOffline = Boolean(lastCheck) && !isOnline;
+  return backendKnownOffline;
+}
+
 // Initiale Prüfung beim App-Start (nur EINMAL)
 let initialCheckDone = false;
 

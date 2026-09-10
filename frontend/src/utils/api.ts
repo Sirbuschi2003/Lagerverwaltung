@@ -1,5 +1,6 @@
 import axios from "axios";
 import { logApiCall } from "../hooks/useGlobalLogging";
+import { isEffectivelyOffline } from "../store/useNetworkStore";
 
 const api = axios.create({
   baseURL: "/api",
@@ -781,32 +782,43 @@ export const recordMovementsBulk = async (
   return { ok, failed };
 };
 
+const queueMovementOffline = async (payload: RecordMovementRequest): Promise<void> => {
+  console.log('[API] Offline mode - queueing movement:', payload);
+  // Dynamic import um zirkuläre Imports zu vermeiden
+  const { default: useOfflineQueue } = await import('../store/useOfflineQueue');
+  await useOfflineQueue.getState().enqueueMovement({
+    itemId: payload.itemId,
+    code: payload.itemId, // Fallback, wird vom Store korrigiert
+    type: payload.type,
+    quantity: payload.quantity,
+    timestamp: payload.occurredAt,
+    source: payload.source,
+    vehicleId: payload.vehicleId,
+    locationId: payload.locationId,
+    userId: payload.userId,
+  });
+};
+
 export const recordMovement = async (
   payload: RecordMovementRequest,
 ): Promise<void> => {
+  // Bekanntermassen offline (z.B. Techniker im Aussendienst, Server von dort
+  // grundsaetzlich nicht erreichbar): sofort in die Warteschlange legen statt
+  // erst den vollen Netzwerk-Timeout (6s) abzuwarten. Buchungen sind die
+  // haeufigste Aktion im Feldeinsatz - dieser Weg spart bei jeder einzelnen
+  // Buchung mehrere Sekunden Wartezeit.
+  if (isEffectivelyOffline()) {
+    await queueMovementOffline(payload);
+    return;
+  }
+
   try {
     await api.post("/stock/movement", payload);
   } catch (error) {
-    // Offline-Modus: Bewegung in Queue einreihen
+    // Fallback falls der Online-Status doch nicht mehr aktuell war
+    // (Verbindung ist gerade erst weggebrochen) oder der Server 5xx liefert.
     if (!navigator.onLine || (error as any)?.response?.status >= 500) {
-      console.log('[API] Offline mode - queueing movement:', payload);
-      
-      // Dynamic import um zirkuläre Imports zu vermeiden
-      const { default: useOfflineQueue } = await import('../store/useOfflineQueue');
-      
-      await useOfflineQueue.getState().enqueueMovement({
-        itemId: payload.itemId,
-        code: payload.itemId, // Fallback, wird vom Store korrigiert
-        type: payload.type,
-        quantity: payload.quantity,
-        timestamp: payload.occurredAt,
-        source: payload.source,
-        vehicleId: payload.vehicleId,
-        locationId: payload.locationId,
-        userId: payload.userId,
-      });
-      
-      // Erfolg simulieren für UI
+      await queueMovementOffline(payload);
       return;
     }
     throw error;

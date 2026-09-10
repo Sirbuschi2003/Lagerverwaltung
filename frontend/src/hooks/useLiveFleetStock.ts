@@ -1,6 +1,7 @@
 
 import { useEffect, useRef } from "react";
 import { fetchFleetStock, FleetVehicleStockDto } from "../utils/api";
+import { isEffectivelyOffline } from "../store/useNetworkStore";
 
 export function useLiveFleetStock({
   vehicleId,
@@ -29,6 +30,11 @@ export function useLiveFleetStock({
     let timer: number | null = null;
 
     async function loadData() {
+      // Ohne diesen Check versucht der Hook alle `interval`ms (Default 15s)
+      // Live-Daten zu laden, auch wenn der Server bekanntermassen nicht
+      // erreichbar ist (z.B. Techniker im Aussendienst) - jeder Versuch
+      // haengt dann bis zum Netzwerk-Timeout statt sofort abzubrechen.
+      if (isEffectivelyOffline()) return;
       try {
         const result = await fetchFleetStock({ vehicleId: vehicleIdRef.current, search: searchRef.current });
         if (active) onUpdateRef.current(result);

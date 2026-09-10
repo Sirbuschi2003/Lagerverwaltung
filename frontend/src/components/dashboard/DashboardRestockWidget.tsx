@@ -21,6 +21,7 @@ import { useLiveFleetStock } from "../../hooks/useLiveFleetStock";
 import useAuthStore from "../../store/useAuthStore";
 import useRestockStore from "../../store/useRestockStore";
 import type { RestockRequestDto, RestockRequestStatus, StockLevelDto } from "../../utils/api";
+import { isEffectivelyOffline } from "../../store/useNetworkStore";
 
 const statusLabelMap: Record<RestockRequestStatus, string> = {
   PENDING: "Offen",
@@ -103,7 +104,7 @@ const DashboardRestockWidget: React.FC = () => {
   // Techniker laden
   useEffect(() => {
     if (!canViewFleet && !canSeeFleetRequests) return;
-    if (!navigator.onLine) return;
+    if (isEffectivelyOffline()) return;
 
     const loadTechnicians = async () => {
       try {
@@ -128,7 +129,7 @@ const DashboardRestockWidget: React.FC = () => {
 
     const cacheKey = `lv-dashboard-stock-${vehicleId}`;
 
-    if (!navigator.onLine) {
+    if (isEffectivelyOffline()) {
       try {
         const raw = localStorage.getItem(cacheKey);
         if (raw) setStock(JSON.parse(raw) as StockLevelDto[]);

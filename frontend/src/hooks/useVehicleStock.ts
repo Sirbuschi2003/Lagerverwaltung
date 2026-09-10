@@ -1,6 +1,7 @@
 import { useState, useCallback } from "react";
 import { fetchVehicleStock, type StockLevelDto } from "../utils/api";
 import { offlineStorage } from "../store/useOfflineStorage";
+import { isEffectivelyOffline } from "../store/useNetworkStore";
 
 interface UseVehicleStockOptions {
   vehicleId: string;
@@ -26,7 +27,7 @@ export const useVehicleStock = ({ vehicleId }: UseVehicleStockOptions): UseVehic
     setError(null);
     
     // Offline: Lade aus Cache
-    if (!navigator.onLine) {
+    if (isEffectivelyOffline()) {
       try {
         console.log('[useVehicleStock] Offline: Lade Bestände aus Cache');
         const cachedStock = await offlineStorage.getVehicleStock(vehicleId);
@@ -87,7 +88,7 @@ export const useVehicleStock = ({ vehicleId }: UseVehicleStockOptions): UseVehic
     setLoading(true);
     setError(null);
     
-    if (!navigator.onLine) {
+    if (isEffectivelyOffline()) {
       setError("Offline: Aktualisierung nicht möglich.");
       setLoading(false);
       return;

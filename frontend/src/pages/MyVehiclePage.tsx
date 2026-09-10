@@ -40,6 +40,7 @@ import useItemsStore from "../store/useItemsStore";
 import useRestockStore from "../store/useRestockStore";
 import useNotificationStore from "../store/useNotificationStore";
 import { useNetworkStatus } from "../hooks/useNetworkStatus";
+import { isEffectivelyOffline } from "../store/useNetworkStore";
 import { useOfflineStorage } from "../hooks/useOfflineStorage";
 import useOfflineQueue from "../store/useOfflineQueue";
 // import useOfflineStore from "../store/useOfflineStore";
@@ -498,7 +499,7 @@ const MyVehiclePage = () => {
     
     // Auto-Refresh alle 30 Minuten im Hintergrund
     const refreshInterval = setInterval(() => {
-      if (navigator.onLine) {
+      if (!isEffectivelyOffline()) {
         console.log('[MyVehiclePage] Auto-Refresh: Lade Items im Hintergrund...');
         void forceLoadItems({ limit: 200000 });
       }

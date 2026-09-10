@@ -16,6 +16,7 @@ import type { MovementDto } from "../../utils/api";
 import { fetchMovementHistory } from "../../utils/api";
 import useAuthStore from "../../store/useAuthStore";
 import useOfflineQueue from "../../store/useOfflineQueue";
+import { isEffectivelyOffline } from "../../store/useNetworkStore";
 
 const DashboardRecentMovementsWidget: React.FC = () => {
   const userId = useAuthStore((state) => state.user?.id);
@@ -28,7 +29,7 @@ const DashboardRecentMovementsWidget: React.FC = () => {
 
     const cacheKey = `lv-dashboard-movements-${userId}`;
 
-    if (!navigator.onLine) {
+    if (isEffectivelyOffline()) {
       try {
         const raw = localStorage.getItem(cacheKey);
         if (raw) setMovements(JSON.parse(raw) as MovementDto[]);

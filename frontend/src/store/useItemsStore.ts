@@ -10,7 +10,7 @@ import {
   updateItem as apiUpdateItem,
 } from "../utils/api";
 
-import { useNetworkStore } from "./useNetworkStore";
+import { isEffectivelyOffline } from "./useNetworkStore";
 
 export type Item = ItemDto;
 // Zusätzliche State-Eigenschaften
@@ -39,16 +39,7 @@ function precacheItemImages(items: Item[]): void {
   controller.postMessage({ type: 'PRECACHE_IMAGES', itemIds: ids });
 }
 
-const isOfflineMode = (): boolean => {
-  const browserOffline = typeof navigator !== "undefined" ? !navigator.onLine : false;
-  try {
-    const { isOnline, lastCheck } = useNetworkStore.getState();
-    const backendOffline = Boolean(lastCheck) && !isOnline;
-    return browserOffline || backendOffline;
-  } catch {
-    return browserOffline;
-  }
-};
+const isOfflineMode = (): boolean => isEffectivelyOffline();
 const useItemsStore = create<ItemsStoreState>((set: any, get: any) => ({
   items: [],
   total: 0,

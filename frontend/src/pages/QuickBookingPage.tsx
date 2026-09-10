@@ -48,6 +48,7 @@ import { checkRecentCheckouts, findItemByAnyCode, recordMovement, type CheckoutH
 import useScanSound from "../hooks/useScanSound";
 import { findItemByCode } from "../utils/itemLookup";
 import useBarcodeScanner from "../hooks/useBarcodeScanner";
+import { isEffectivelyOffline } from "../store/useNetworkStore";
 
 type BookingMode = "CHECKOUT" | "CHECKIN";
 
@@ -259,7 +260,7 @@ const QuickBookingPage: React.FC = () => {
   };
 
   const lookupItem = async (code: string): Promise<ItemDto | null> => {
-    if (navigator.onLine) {
+    if (!isEffectivelyOffline()) {
       try {
         return await findItemByAnyCode(code);
       } catch {

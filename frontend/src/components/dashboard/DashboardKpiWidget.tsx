@@ -10,13 +10,14 @@ import {
 import InventoryIcon from "@mui/icons-material/Inventory";
 import AssignmentIcon from "@mui/icons-material/Assignment";
 import useDashboardData from "../../store/useDashboardData";
+import { isEffectivelyOffline } from "../../store/useNetworkStore";
 
 const DashboardKpiWidget: React.FC = () => {
   const { summary, loadSummary } = useDashboardData();
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    if (!navigator.onLine) return;
+    if (isEffectivelyOffline()) return;
     setLoading(true);
     void loadSummary().finally(() => setLoading(false));
   }, [loadSummary]);
