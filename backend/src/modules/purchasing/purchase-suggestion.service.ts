@@ -136,6 +136,7 @@ export class PurchaseSuggestionService {
       currentQuantity: number;
       incomingQuantity: number;
       neededQuantity: number;
+      price: number | null;
       availableInOtherBranches: Array<{ branchId: string; branchName: string; quantity: number }>;
       consumptionRates: { d30: number; d60: number; d90: number; d180: number; d365: number };
     }> = [];
@@ -183,6 +184,7 @@ export class PurchaseSuggestionService {
         currentQuantity,
         incomingQuantity,
         neededQuantity: needed,
+        price: item.price != null ? Number(item.price) : null,
         availableInOtherBranches: [],
         consumptionRates: { d30: 0, d60: 0, d90: 0, d180: 0, d365: 0 },
       });

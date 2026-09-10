@@ -115,7 +115,7 @@ const SortableWizardLineRow: React.FC<{
           onChange={(e) => onQtyChange(supplierId, line.itemId, Math.max(0, parseInt(e.target.value) || 0))}
           onFocus={(e) => e.target.select()}
           inputProps={{ min: 0, style: { textAlign: "right" } }}
-          sx={{ width: 80 }}
+          sx={{ width: 75 }}
           disabled={wizardCreating}
         />
       </TableCell>
@@ -131,7 +131,7 @@ const SortableWizardLineRow: React.FC<{
           }}
           onFocus={(e) => e.target.select()}
           inputProps={{ min: 0, step: 0.01, style: { textAlign: "right" } }}
-          sx={{ width: 100 }}
+          sx={{ width: 140 }}
           disabled={wizardCreating}
           InputProps={{ endAdornment: <Typography variant="caption" sx={{ ml: 0.5, whiteSpace: "nowrap" }}>{line.currency || "EUR"}</Typography> }}
         />
@@ -148,7 +148,7 @@ const SortableWizardLineRow: React.FC<{
           }}
           onFocus={(e) => e.target.select()}
           inputProps={{ min: 0, max: 100, style: { textAlign: "right" } }}
-          sx={{ width: 70 }}
+          sx={{ width: 85 }}
           disabled={wizardCreating}
           InputProps={{ endAdornment: <Typography variant="caption" sx={{ ml: 0.5 }}>%</Typography> }}
         />
@@ -620,6 +620,8 @@ const OrderSuggestionsTab: React.FC = () => {
         description: item.description,
         descriptionSecondary: item.descriptionSecondary,
         quantity: qty > 0 ? qty : needed,
+        unitPriceNet: item.price ?? null,
+        taxRate: 19,
       });
     });
 
@@ -664,6 +666,8 @@ const OrderSuggestionsTab: React.FC = () => {
         description: item.description,
         descriptionSecondary: item.descriptionSecondary,
         quantity: Math.max(1, quantity),
+        unitPriceNet: item.price != null ? Number(item.price) : null,
+        taxRate: 19,
       });
     });
 
@@ -1437,9 +1441,9 @@ const OrderSuggestionsTab: React.FC = () => {
                     <TableCell sx={{ width: 28, px: 0.5 }} />
                     <TableCell>Artikelnummer</TableCell>
                     <TableCell>Bezeichnung</TableCell>
-                    <TableCell align="right" sx={{ width: 100 }}>Menge</TableCell>
-                    <TableCell align="right" sx={{ width: 120 }}>Netto-Preis</TableCell>
-                    <TableCell align="right" sx={{ width: 80 }}>MwSt.</TableCell>
+                    <TableCell align="right" sx={{ width: 90 }}>Menge</TableCell>
+                    <TableCell align="right" sx={{ width: 150 }}>Netto-Preis</TableCell>
+                    <TableCell align="right" sx={{ width: 95 }}>MwSt.</TableCell>
                     <TableCell sx={{ width: 48 }} />
                   </TableRow>
                 </TableHead>
@@ -1571,6 +1575,8 @@ const OrderSuggestionsTab: React.FC = () => {
                                     description: item.description,
                                     descriptionSecondary: item.descriptionSecondary,
                                     quantity: qty,
+                                    unitPriceNet: item.price != null ? Number(item.price) : null,
+                                    taxRate: 19,
                                   },
                                 ],
                               };
