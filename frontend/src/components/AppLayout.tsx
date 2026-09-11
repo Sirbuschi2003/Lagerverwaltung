@@ -9,6 +9,8 @@ import api from "../utils/api";
 import useAuthStore from "../store/useAuthStore";
 import { useUserSettingsStore } from "../store/useUserSettingsStore";
 import { useNetworkStatus } from "../hooks/useNetworkStatus";
+import { isEffectivelyOffline } from "../store/useNetworkStore";
+import { offlineStorage } from "../store/useOfflineStorage";
 import { useThemeMode } from "../hooks/useThemeMode";
 import NavigationDrawer from "./NavigationDrawer";
 import AppHeader from "./AppHeader";
@@ -59,11 +61,22 @@ const AppLayout = () => {
     const loadVehicle = async () => {
       const vehicleId = getVehicleId();
       if (!vehicleId) { setVehicleData(null); return; }
+      // Diese Anfrage lief bisher IMMER live, auch offline (Techniker mit
+      // Mobilfunk melden navigator.onLine=true, obwohl der private Server
+      // unerreichbar ist) - das kostete bei jedem App-Start/Login den vollen
+      // Netzwerk-Timeout, bevor ueberhaupt etwas anderes rendern konnte.
+      if (isEffectivelyOffline()) {
+        const cached = await offlineStorage.getVehicleData(vehicleId).catch(() => null);
+        setVehicleData(cached ?? null);
+        return;
+      }
       try {
         const response = await api.get(`/vehicles/${vehicleId}`);
         setVehicleData(response.data ?? null);
+        void offlineStorage.setVehicleData(vehicleId, response.data ?? null).catch(() => undefined);
       } catch {
-        setVehicleData(null);
+        const cached = await offlineStorage.getVehicleData(vehicleId).catch(() => null);
+        setVehicleData(cached ?? null);
       }
     };
     void loadVehicle();

@@ -158,11 +158,31 @@ export async function checkBackendReachability(): Promise<boolean> {
 export function isEffectivelyOffline(): boolean {
   const browserOffline = typeof navigator !== "undefined" ? !navigator.onLine : false;
   if (browserOffline) return true;
+
   const { isOnline, lastCheck } = useNetworkStore.getState();
-  if (!lastCheck || isOnline) return false;
+
+  // Noch KEIN abgeschlossener Backend-Reachability-Check (z.B. direkt nach
+  // App-Start/Reload, bevor checkBackendReachability() zum ersten Mal
+  // durchgelaufen ist). navigator.onLine ist hier NICHT genug - Techniker
+  // haben fast immer Mobilfunk/WLAN, obwohl der private Server nie
+  // erreichbar sein wird. Bisher wurde dieser Zustand faelschlich als
+  // "online" behandelt, wodurch beim App-Start/Reload ALLE gleichzeitig
+  // gemounteten Seiten (Dashboard, Artikel, Mein Fahrzeug via
+  // KeepAliveOutlet) gleichzeitig live Anfragen feuerten, die dann JEDE
+  // EINZELN auf ihren eigenen Timeout warten mussten - das erzeugte genau
+  // das "haengt beim Start/Tab-Wechsel"-Symptom. Bis das echte
+  // Check-Ergebnis vorliegt (max. 3s, siehe checkBackendReachability),
+  // lieber vom Server-Default ausgehen: offline.
+  if (!lastCheck) return true;
+
+  if (isOnline) return false;
+
+  // isOnline===false: nur eine kuerzlich negative Messung vertrauen, eine
+  // veraltete (>STALE_OFFLINE_READING_MS, z.B. Tab war im Hintergrund und
+  // Timer wurden gedrosselt) nicht mehr - im Zweifel dann doch online
+  // annehmen und die eigentliche Anfrage selbst entscheiden lassen.
   const ageMs = Date.now() - lastCheck.getTime();
-  if (ageMs > STALE_OFFLINE_READING_MS) return false;
-  return true;
+  return ageMs <= STALE_OFFLINE_READING_MS;
 }
 
 // Initiale Prüfung beim App-Start (nur EINMAL)

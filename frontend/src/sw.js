@@ -130,19 +130,33 @@ self.addEventListener('fetch', (event) => {
     const shouldCache = CACHEABLE_APIS.some((apiPath) => url.pathname.startsWith(apiPath));
     if (shouldCache) {
       event.respondWith(
-        fetchWithTimeout(request, { timeout: 3000 })
-          .then((response) => {
-            if (response.ok) {
-              const responseWithUtf8 = ensureUtf8Headers(response);
-              const cacheCopy = responseWithUtf8.clone();
-              caches.open(OFFLINE_DATA_CACHE).then((cache) => cache.put(request, cacheCopy));
-              return responseWithUtf8;
+        caches.open(OFFLINE_DATA_CACHE).then((cache) =>
+          cache.match(request).then((cached) => {
+            const networkFetch = fetchWithTimeout(request, { timeout: 3000 }).then((response) => {
+              if (response.ok) {
+                const responseWithUtf8 = ensureUtf8Headers(response);
+                cache.put(request, responseWithUtf8.clone());
+                return responseWithUtf8;
+              }
+              return ensureUtf8Headers(response);
+            });
+
+            if (cached) {
+              // Stale-while-revalidate: sofort aus dem Cache antworten statt
+              // JEDES Mal zuerst bis zu 3s auf einen Netzwerk-Versuch zu
+              // warten, der bei einem Techniker ohne Route zum Server sowieso
+              // fehlschlaegt. Der Netzwerk-Fetch laeuft im Hintergrund weiter
+              // und aktualisiert den Cache fuer den naechsten Aufruf. Bei
+              // mehreren gleichzeitigen Anfragen pro Seite (Dashboard,
+              // Fahrzeug, Artikel) summierte sich die alte 3s-Wartezeit pro
+              // Request zu spuerbarem "Haengen" bei jeder Navigation.
+              event.waitUntil(networkFetch.catch(() => {}));
+              return ensureUtf8Headers(cached);
             }
-            return ensureUtf8Headers(response);
-          })
-          .catch(() =>
-            caches.match(request).then((cached) => {
-              if (cached) return ensureUtf8Headers(cached);
+
+            // Noch kein Cache-Eintrag vorhanden (allererster Aufruf): auf das
+            // Netzwerk warten, mit Fallback-Fehlerantwort falls das fehlschlaegt.
+            return networkFetch.catch(() => {
               if (url.pathname.includes('/auth/profile')) {
                 return new Response(JSON.stringify({ error: 'OFFLINE_MODE' }), {
                   status: 503,
@@ -153,8 +167,9 @@ self.addEventListener('fetch', (event) => {
                 status: 503,
                 headers: { 'Content-Type': 'application/json; charset=utf-8' },
               });
-            })
-          )
+            });
+          })
+        )
       );
     }
     return;

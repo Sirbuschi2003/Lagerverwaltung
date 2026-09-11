@@ -2,7 +2,7 @@ import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import api, { fetchAuthProfile, type AuthProfileDto } from "../utils/api";
 import { SecureTokenManager, SecurityLogger, validateAuthToken, sanitizeInput } from "../utils/securityUtils";
-import { useNetworkStore } from "./useNetworkStore";
+import { useNetworkStore, isEffectivelyOffline } from "./useNetworkStore";
 import { useUserSettingsStore } from "./useUserSettingsStore";
 import useTabStore from "./useTabStore";
 
@@ -65,8 +65,11 @@ const useAuthStore = create<AuthState>()(
 
         SecurityLogger.logSecurityEvent('login_attempt', { username: sanitizedUsername });
 
-        // OFFLINE-FIRST: Wenn offline, direkt Offline-Login versuchen
-        if (!navigator.onLine) {
+        // OFFLINE-FIRST: Wenn offline (auch wenn navigator.onLine faelschlich
+        // true meldet, weil das Geraet Mobilfunk hat, der private Server
+        // aber unerreichbar ist), direkt Offline-Login versuchen statt erst
+        // den vollen Netzwerk-Timeout abzuwarten.
+        if (isEffectivelyOffline()) {
           try {
             const { verifyOfflineCredentials, generateOfflineToken } = await import('../utils/offlineAuth');
             const credentials = await verifyOfflineCredentials(sanitizedUsername, sanitizedPassword);
@@ -255,7 +258,7 @@ const useAuthStore = create<AuthState>()(
       },
 
       refreshAccessToken: async () => {
-        if (!navigator.onLine) return;
+        if (isEffectivelyOffline()) return;
         try {
           const response = await api.post<{ accessToken: string; user: UserProfile }>("/auth/refresh", {}, { withCredentials: true });
           const { accessToken, user } = response.data;
@@ -280,8 +283,12 @@ const useAuthStore = create<AuthState>()(
           get().logout();
           return;
         }
-        // Offline: gecachte Daten behalten
-        if (!navigator.onLine && get().user) {
+        // Offline: gecachte Daten behalten (isEffectivelyOffline statt
+        // navigator.onLine, das bei Technikern mit Mobilfunk faelschlich
+        // "online" meldet, obwohl der private Server unerreichbar ist -
+        // sonst wartet jeder App-Start/Tab-Wechsel auf den vollen
+        // Netzwerk-Timeout fuer den Profil-Refresh).
+        if (isEffectivelyOffline() && get().user) {
           return;
         }
         try {
