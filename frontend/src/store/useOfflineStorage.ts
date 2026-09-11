@@ -75,15 +75,20 @@ class OfflineStorage {
     await this.init();
     if (!this.db) throw new Error('Database not initialized');
 
+    // Wichtig: Einzelne Requests innerhalb der Transaktion NICHT awaiten
+    // (bei bis zu 200.000 Artikeln erzeugt ein await pro put() 200.000
+    // sequentielle Event-Loop-Umlaeufe - das kann die App fuer mehrere
+    // Minuten spuerbar einfrieren, inkl. Menue/Klicks). Alle put()-Requests
+    // werden stattdessen parallel innerhalb derselben Transaktion abgesetzt
+    // und nur einmal am Ende auf deren Abschluss gewartet.
     const tx = this.db.transaction('items', 'readwrite');
-    await tx.objectStore('items').clear();
-    
+    const store = tx.objectStore('items');
+    store.clear();
     for (const item of items) {
-      await tx.objectStore('items').put(item);
+      store.put(item);
     }
-    
     await tx.done;
-    
+
     // Cache-Eintrag für Items setzen
     await this.setCache('items_timestamp', Date.now());
   }
@@ -128,12 +133,11 @@ class OfflineStorage {
     if (!this.db) throw new Error('Database not initialized');
 
     const tx = this.db.transaction('vehicles', 'readwrite');
-    await tx.objectStore('vehicles').clear();
-    
+    const store = tx.objectStore('vehicles');
+    store.clear();
     for (const vehicle of vehicles) {
-      await tx.objectStore('vehicles').put(vehicle);
+      store.put(vehicle);
     }
-    
     await tx.done;
     await this.setCache('vehicles_timestamp', Date.now());
   }
