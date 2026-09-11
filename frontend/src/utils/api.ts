@@ -816,8 +816,15 @@ export const recordMovement = async (
     await api.post("/stock/movement", payload);
   } catch (error) {
     // Fallback falls der Online-Status doch nicht mehr aktuell war
-    // (Verbindung ist gerade erst weggebrochen) oder der Server 5xx liefert.
-    if (!navigator.onLine || (error as any)?.response?.status >= 500) {
+    // (Verbindung ist gerade erst weggebrochen), der Server 5xx liefert,
+    // oder die Anfrage gar keine Antwort erhalten hat (Netzwerkfehler/Timeout).
+    // Letzteres deckt den Fall ab, dass isEffectivelyOffline() faelschlich
+    // "online" meldet (z.B. veraltete Messung nach Tab-Hintergrund/Drosselung)
+    // - dann soll trotzdem in die Warteschlange gelegt statt ein Fehler
+    // angezeigt werden, sonst haengt/scheitert die haeufigste Aktion im Feld.
+    const axiosError = error as { response?: { status?: number }; request?: unknown };
+    const gotNoResponse = axiosError.response === undefined && axiosError.request !== undefined;
+    if (!navigator.onLine || gotNoResponse || (axiosError.response?.status ?? 0) >= 500) {
       await queueMovementOffline(payload);
       return;
     }

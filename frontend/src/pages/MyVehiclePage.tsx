@@ -529,7 +529,12 @@ const MyVehiclePage = () => {
       void loadStock();
       void loadRestock(vehicleId);
     }
-  }, [vehicleId]); // loadRestock dependency entfernt um Zucken zu vermeiden
+    // isOnline zusaetzlich als Dependency: ohne das laedt diese Seite nur
+    // einmal beim Mount. Wurde die Verbindung zu diesem Zeitpunkt faelschlich
+    // als offline erkannt (siehe useNetworkStore self-healing check), blieb
+    // die Seite sonst dauerhaft leer, auch nachdem sich der Status wieder
+    // selbst korrigiert hat - es gab keinen Trigger fuer einen erneuten Ladeversuch.
+  }, [vehicleId, isOnline]); // loadRestock dependency entfernt um Zucken zu vermeiden
 
   // Live-Updates deaktiviert für bessere Offline-Kompatibilität
   // Das useVehicleStock Hook übernimmt das Stock-Management
