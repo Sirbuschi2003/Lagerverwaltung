@@ -78,7 +78,14 @@ import {
 
 const InventoryPage = () => {
   const user = useAuthStore((state: any) => state.user);
-  const { items, loadItems, forceLoadItems } = useItemsStore();
+  // Selektoren statt vollem Store-Destructure: verhindert Re-Render dieser
+  // Seite bei JEDER Aenderung im Artikel-Store (z.B. isLoading-Flackern
+  // beim Hintergrund-Sync), nicht nur wenn sich die Artikel selbst aendern.
+  // Relevant weil diese Seite ueber KeepAliveOutlet dauerhaft im Hintergrund
+  // gemountet bleibt.
+  const items = useItemsStore((state) => state.items);
+  const loadItems = useItemsStore((state) => state.loadItems);
+  const forceLoadItems = useItemsStore((state) => state.forceLoadItems);
   const { vehicles, loadVehicles } = useVehiclesStore();
   const { users, loadUsers } = useUsersStore();
   

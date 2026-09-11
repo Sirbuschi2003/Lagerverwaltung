@@ -3,6 +3,7 @@ import { Snackbar, Alert } from "@mui/material";
 import { io, Socket } from "socket.io-client";
 import useAuthStore from "../store/useAuthStore";
 import { useNetworkStatus } from "../hooks/useNetworkStatus";
+import { isEffectivelyOffline } from "../store/useNetworkStore";
 import { fetchPushPublicKey, registerPushSubscription } from "../utils/api";
 import useNotificationStore from "../store/useNotificationStore";
 
@@ -91,7 +92,13 @@ const RestockNotifier: React.FC = () => {
   }, [token, user?.vehicleId]);
 
   useEffect(() => {
-    if (!token || !user?.vehicleId || !isOnline) {
+    // Diese Komponente ist app-weit dauerhaft gemountet. Ohne Backoff-
+    // Obergrenze versuchte socket.io hier mit Standardeinstellungen
+    // unbegrenzt oft alle 1-5 Sekunden neu zu verbinden, sobald die
+    // Verbindung fehlschlaegt - bei einem Techniker, der den ganzen Tag
+    // offline ist, lief das die GESAMTE Zeit im Hintergrund und belastete
+    // Hauptthread/Akku spuerbar, unabhaengig von der aktuell besuchten Seite.
+    if (!token || !user?.vehicleId || !isOnline || isEffectivelyOffline()) {
       // Falls Benutzer abgemeldet oder offline ist, offene Verbindungen schließen
       if (socketRef.current) {
         socketRef.current.disconnect();
@@ -112,6 +119,8 @@ const RestockNotifier: React.FC = () => {
       transports: ["websocket"],
       auth: { token },
       extraHeaders: { Authorization: `Bearer ${token}` },
+      reconnectionDelay: 2000,
+      reconnectionDelayMax: 30000,
     });
     socketRef.current = socket;
 

@@ -84,7 +84,12 @@ const extractCustomerNumber = (reference: string): string | null => {
 };
 
 const QuickBookingPage: React.FC = () => {
-  const { items, loadItems } = useItemsStore();
+  // Selektoren statt vollem Store-Destructure: verhindert Re-Render bei
+  // JEDER Aenderung im Artikel-Store, nicht nur wenn sich die Artikel selbst
+  // aendern (relevant da diese Seite via KeepAliveOutlet dauerhaft gemountet
+  // bleibt).
+  const items = useItemsStore((state) => state.items);
+  const loadItems = useItemsStore((state) => state.loadItems);
   const { user } = useAuthStore();
   const { playSuccess, playError } = useScanSound();
 
@@ -153,8 +158,19 @@ const QuickBookingPage: React.FC = () => {
 
   // ── Socket.io Echtzeit-Sync ───────────────────────────────────────────────
   useEffect(() => {
-    if (!user?.id) return;
-    const socket = io("/stock", { path: "/socket.io", transports: ["websocket"] });
+    // Diese Seite bleibt via KeepAliveOutlet dauerhaft im Hintergrund
+    // gemountet. Ohne Offline-Pruefung und ohne Backoff-Obergrenze versuchte
+    // socket.io hier mit Standardeinstellungen unbegrenzt oft alle 1-5
+    // Sekunden neu zu verbinden, sobald die Verbindung fehlschlaegt - bei
+    // einem Techniker, der den ganzen Tag offline ist, lief das dauerhaft im
+    // Hintergrund und belastete Hauptthread/Akku spuerbar.
+    if (!user?.id || isEffectivelyOffline()) return;
+    const socket = io("/stock", {
+      path: "/socket.io",
+      transports: ["websocket"],
+      reconnectionDelay: 2000,
+      reconnectionDelayMax: 30000,
+    });
     socketRef.current = socket;
 
     socket.on("connect", () => {

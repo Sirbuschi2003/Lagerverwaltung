@@ -43,7 +43,12 @@ const extractAuftragsnummer = (source: string | null | undefined): string | null
 };
 
 const MovementHistoryTab: React.FC = () => {
-  const { items, loadItems } = useItemsStore();
+  // Selektoren statt vollem Store-Destructure: verhindert Re-Render bei
+  // JEDER Aenderung im Artikel-Store, nicht nur wenn sich die Artikel selbst
+  // aendern (relevant da diese Seite via KeepAliveOutlet dauerhaft gemountet
+  // bleibt).
+  const items = useItemsStore((state) => state.items);
+  const loadItems = useItemsStore((state) => state.loadItems);
   const { users, loadUsers } = useUsersStore();
   const { user: authUser } = useAuthStore();
   const hasLocationScope = (authUser?.locationIds?.length ?? 0) > 0;

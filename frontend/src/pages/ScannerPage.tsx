@@ -49,7 +49,13 @@ const parseAlternateCodes = (raw: string, primaryCode: string): string[] => {
 };
 
 const ScannerPage = () => {
-  const { items, loadItems, addItem: addItemToStore } = useItemsStore();
+  // Selektoren statt vollem Store-Destructure: verhindert Re-Render bei
+  // JEDER Aenderung im Artikel-Store, nicht nur wenn sich die Artikel selbst
+  // aendern (relevant da diese Seite via KeepAliveOutlet dauerhaft gemountet
+  // bleibt).
+  const items = useItemsStore((state) => state.items);
+  const loadItems = useItemsStore((state) => state.loadItems);
+  const addItemToStore = useItemsStore((state) => state.addItem);
   const { enqueueMovement, syncNow, isSyncing } = useOfflineQueue();
   const { playSuccess, playError } = useScanSound();
   const user = useAuthStore((state: any) => state.user);

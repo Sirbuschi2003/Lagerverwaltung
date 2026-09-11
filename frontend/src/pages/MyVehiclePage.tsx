@@ -243,7 +243,13 @@ const MyVehiclePage = () => {
   const [refreshInterval, setRefreshInterval] = useState<number>(user?.refreshInterval ?? 15000);
   const [intervalSaved, setIntervalSaved] = useState<boolean>(false);
   // vehicleId ist bereits oben deklariert
-  const { items, loadItems, forceLoadItems, addItem } = useItemsStore();
+  // Selektoren statt vollem Store-Destructure: verhindert Re-Render dieser
+  // Seite bei JEDER Aenderung im Artikel-Store (z.B. isLoading-Flackern
+  // beim Hintergrund-Sync), nicht nur wenn sich die Artikel selbst aendern.
+  const items = useItemsStore((state) => state.items);
+  const loadItems = useItemsStore((state) => state.loadItems);
+  const forceLoadItems = useItemsStore((state) => state.forceLoadItems);
+  const addItem = useItemsStore((state) => state.addItem);
   const loadRestock = useRestockStore((state: any) => state.loadForVehicle);
   const markReadByItemId = useNotificationStore((state) => state.markReadByItemId);
   // Kein Live-Update für Techniker-Ansicht! Nur einmalig laden und nach Aktionen neu laden.
