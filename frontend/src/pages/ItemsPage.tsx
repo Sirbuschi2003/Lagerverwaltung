@@ -1769,6 +1769,31 @@ Import erfolgreich! Die Artikel sind jetzt verfügbar.`;
     setPage(1);
   }, [debouncedSearchTerm, selectedManufacturer, selectedProductGroup]);
 
+  // Offline (oder Fallback nach Fehlschlag): Server-Suche/-Filterung/-Pagination
+  // gibt es nicht, also muessen Filterung und Pagination hier clientseitig
+  // nachgebildet werden. Vorher wurde die KOMPLETTE gecachte Artikelliste
+  // (bei grossen Katalogen mehrere tausend Eintraege) ungefiltert und
+  // ungepaginated in die Tabelle gerendert - das erzeugte auf einen Schlag
+  // tausende Tabellenzeilen und blockierte den Browser spuerbar, sobald man
+  // offline einmal die Artikeldaten aufrief.
+  const filterAndPaginateOffline = (allItems: any[]) => {
+    const searchLower = debouncedSearchTerm.trim().toLowerCase();
+    const filtered = allItems.filter((item: any) => {
+      if (selectedManufacturer && item.manufacturer !== selectedManufacturer) return false;
+      if (selectedProductGroup && item.productGroup !== selectedProductGroup) return false;
+      if (!searchLower) return true;
+      return (
+        item.code?.toLowerCase().includes(searchLower) ||
+        item.description?.toLowerCase().includes(searchLower) ||
+        item.descriptionSecondary?.toLowerCase().includes(searchLower) ||
+        (item.alternateCodes ?? []).some((code: string) => code.toLowerCase().includes(searchLower))
+      );
+    });
+    const start = (page - 1) * itemsPerPage;
+    setViewItems(filtered.slice(start, start + itemsPerPage));
+    setViewTotal(filtered.length);
+  };
+
   useEffect(() => {
     const run = async () => {
       setViewLoading(true);
@@ -1784,13 +1809,11 @@ Import erfolgreich! Die Artikel sind jetzt verfügbar.`;
           setViewItems(data.items);
           setViewTotal(data.total);
         } else {
-          setViewItems(items);
-          setViewTotal(items.length);
+          filterAndPaginateOffline(items);
         }
       } catch (err) {
         console.error("[ItemsPage] Laden fehlgeschlagen, nutze Cache", err);
-        setViewItems(items);
-        setViewTotal(items.length);
+        filterAndPaginateOffline(items);
       } finally {
         setViewLoading(false);
       }
@@ -1801,8 +1824,6 @@ Import erfolgreich! Die Artikel sind jetzt verfügbar.`;
   useEffect(() => {
     if (storePage) setPage(storePage);
   }, [storePage]);
-
-  const totalPages = Math.max(1, Math.ceil((viewTotal || 0) / itemsPerPage));
 
   const sortedItems = useMemo(
     () => [...viewItems].sort((a, b) => a.code.localeCompare(b.code, "de", { sensitivity: "base" })),
@@ -2067,12 +2088,22 @@ Import erfolgreich! Die Artikel sind jetzt verfügbar.`;
     }
   };
 
+  // "Ohne Lagerort"-Filter durchsucht den KOMPLETTEN gecachten Katalog (nicht
+  // nur die aktuelle Server-Seite), deshalb hier eigene Pagination noetig -
+  // ohne .slice() wurden hier bei grossen Katalogen alle Treffer auf einmal
+  // gerendert (gleiche Ursache wie der Offline-Freeze auf dieser Seite).
   const filteredItems = filterNoLocation
     ? [...items]
         .filter((item: any) => !item.storageLocation)
         .sort((a: any, b: any) => a.code.localeCompare(b.code, "de", { sensitivity: "base" }))
     : sortedItems;
-  const paginatedItems = filteredItems;
+  const paginatedItems = filterNoLocation
+    ? filteredItems.slice((page - 1) * itemsPerPage, page * itemsPerPage)
+    : filteredItems;
+  const totalPages = Math.max(
+    1,
+    Math.ceil((filterNoLocation ? filteredItems.length : (viewTotal || 0)) / itemsPerPage),
+  );
 
   // Offline-Queue-Indikator
   const [offlineQueueCount, setOfflineQueueCount] = useState(0);
