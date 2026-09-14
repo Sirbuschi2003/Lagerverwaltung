@@ -148,6 +148,21 @@ services:
           - lager-backend
       socket_proxy_net:
 
+  # Nur intern erreichbar (kein "ports:"-Mapping) - Zugriff ausschliesslich
+  # ueber Caddy mit Basic-Auth, siehe deploy/caddy/Caddyfile.main
+  phpmyadmin:
+    image: phpmyadmin:latest
+    restart: unless-stopped
+    depends_on:
+      mysql:
+        condition: service_healthy
+    environment:
+      PMA_HOST: mysql
+      PMA_PORT: 3306
+      UPLOAD_LIMIT: 50M
+    networks:
+      - lagerverwaltung
+
   frontend:
     image: ghcr.io/sirbuschi2003/lagerverwaltung-frontend:latest
     build:
@@ -177,6 +192,8 @@ services:
         condition: service_started
     environment:
       APP_HOST: ${APP_HOST:-localhost}
+      # phpMyAdmin Basic-Auth Passwort-Hash - nur in .env auf der NAS, NICHT in Git.
+      PHPMYADMIN_AUTH_HASH: ${PHPMYADMIN_AUTH_HASH}
     volumes:
       - ./deploy/caddy/Caddyfile.main:/etc/caddy/Caddyfile:ro
       - ./deploy/caddy:/certs:ro

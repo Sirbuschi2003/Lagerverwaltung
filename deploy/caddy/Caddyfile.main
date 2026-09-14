@@ -63,3 +63,19 @@ https://{$APP_HOST} {
 
     import app_proxy
 }
+
+# phpMyAdmin: eigener Port, eigenes TLS, zusaetzlich per Basic-Auth
+# geschuetzt (Verteidigung in der Tiefe, auch wenn nur intern im LAN
+# erreichbar). Hash kommt aus der Umgebungsvariable PHPMYADMIN_AUTH_HASH
+# (in .env auf der NAS, NICHT in Git) - Passwort-Hash einmalig mit
+# `docker exec <caddy-container> caddy hash-password --plaintext 'DEIN_PASSWORT'`
+# erzeugen und als PHPMYADMIN_AUTH_HASH=... in die .env eintragen.
+https://{$APP_HOST}:8443 {
+    tls /certs/server.crt /certs/server.key
+
+    basicauth {
+        admin {$PHPMYADMIN_AUTH_HASH}
+    }
+
+    reverse_proxy phpmyadmin:80
+}
