@@ -953,7 +953,33 @@ export class StockService {
     });
   }
 
-  private async syncRestockRequest(stockLevelId: string) {
+  // externalManager: wenn gesetzt, laeuft die Synchronisation INNERHALB der
+  // bereits vom Aufrufer offenen Transaktion (z.B. applyMovementToStock direkt
+  // nach einer Bestandsaenderung auf demselben StockLevel-Datensatz) statt in
+  // einer eigenen neuen Transaktion. Das ist wichtig: eine neue Transaktion mit
+  // pessimistic_write+skip_locked wuerde die Zeile IMMER als gesperrt vorfinden
+  // (die aeussere, noch offene Transaktion haelt die Sperre durch das
+  // vorangegangene UPDATE) und dadurch sofort "skip_locked" ausloesen - die
+  // Synchronisation wurde dann still uebersprungen, ohne Fehler. Ergebnis:
+  // eine offene Anforderung blieb nach dem Wiederauffuellen des Bestands
+  // faelschlich auf PENDING stehen, obwohl Soll=Ist bereits erreicht war.
+  private async syncRestockRequest(stockLevelId: string, externalManager?: EntityManager) {
+    if (externalManager) {
+      const stockLevel = await externalManager.findOne(StockLevel, {
+        where: { id: stockLevelId },
+        relations: { item: { storageLocation: true }, vehicle: true, location: true },
+      });
+      if (!stockLevel || !stockLevel.vehicle) return;
+      const preferredSourceLocation =
+        stockLevel.item.storageLocation && stockLevel.item.storageLocation.type !== "VEHICLE"
+          ? stockLevel.item.storageLocation
+          : await this.getDefaultWarehouseLocation();
+      // Keine zusaetzliche Sperre noetig: der Datensatz wurde soeben in
+      // DERSELBEN Transaktion exklusiv per UPDATE veraendert.
+      await this.applyRestockSync(externalManager, stockLevel, preferredSourceLocation);
+      return;
+    }
+
     const stockLevel = await this.stockLevelsRepository.findOne({
       where: { id: stockLevelId },
       relations: { item: { storageLocation: true }, vehicle: true, location: true },
@@ -971,96 +997,112 @@ export class StockService {
         : await this.getDefaultWarehouseLocation();
 
     await this.dataSource.transaction(async (manager) => {
-      // Write lock serializes concurrent syncRestockRequest calls for the same
+      // Write lock serializes concurrent syncRestockRequest calls for die selbe
       // StockLevel so that SELECT + INSERT on RestockRequest is atomic.
       // SKIP LOCKED: background sync yields instead of blocking user transactions
       // (APPROVED/FULFILLED PATCHes) for up to innodb_lock_wait_timeout seconds.
+      // Gilt nur fuer diesen Pfad ohne externalManager (Hintergrund-/Bulk-Sync),
+      // NICHT fuer den direkten Aufruf aus applyMovementToStock (siehe oben).
       const lockedStockLevel = await manager.findOne(StockLevel, {
         where: { id: stockLevelId },
         lock: { mode: "pessimistic_write", onLocked: "skip_locked" },
       });
       if (!lockedStockLevel) return;
-
-      const shortage = Math.max(0, lockedStockLevel.targetQuantity - lockedStockLevel.quantity);
-
-      // WICHTIG: Finde ALLE RestockRequests fÃ¼r diesen StockLevel (nicht nur den ersten!)
-      const allRequests = await manager.find(RestockRequest, {
-        where: { stockLevel: { id: stockLevelId } },
-        order: { createdAt: "ASC" },
-        relations: ["location"],
-      });
-
-      // Wenn mehrere Requests existieren, bereinigen wir Duplikate
-      if (allRequests.length > 1) {
-        this.logger.debug(`[RestockRequest] WARNUNG: ${allRequests.length} Duplikate fÃ¼r StockLevel ${stockLevelId} gefunden - bereinige...`);
-
-        const duplicates = allRequests.slice(1);
-        for (const dup of duplicates) {
-          this.logger.debug(`[RestockRequest] LÃ¶sche Duplikat-Request ${dup.id} fÃ¼r StockLevel ${stockLevelId}`);
-          await manager.remove(dup);
-        }
-        allRequests.length = 1;
-      }
-
-      let request = allRequests.length > 0 ? allRequests[0] : null;
-
-      if (shortage <= 0) {
-        if (request && request.status !== "FULFILLED") {
-          request.status = "FULFILLED";
-          request.quantityNeeded = 0;
-          request.quantityProvided = 0;
-          request.readyAt = request.readyAt ?? new Date();
-          request.fulfilledAt = new Date();
-          request.preparedBy = null;
-          request.note = null;
-          await manager.save(request);
-        }
-        return;
-      }
-
-      if (!request) {
-        this.logger.debug(`[RestockRequest] Erstelle neuen Request fÃ¼r StockLevel ${stockLevel.id}, Artikel ${stockLevel.item.code}, Fahrzeug ${stockLevel.vehicle?.licensePlate}, Menge fehlt: ${shortage}`);
-        request = manager.create(RestockRequest, {
-          stockLevel,
-          item: stockLevel.item,
-          vehicle: stockLevel.vehicle ?? undefined,
-          location: preferredSourceLocation ?? null,
-          status: "PENDING",
-          quantityNeeded: shortage,
-          note: null,
-          preparedBy: null,
-          readyAt: null,
-          fulfilledAt: null,
-        });
-      } else {
-        this.logger.debug(`[RestockRequest] Aktualisiere Request fÃ¼r StockLevel ${stockLevel.id}, Artikel ${stockLevel.item.code}, Fahrzeug ${stockLevel.vehicle?.licensePlate}, Menge fehlt: ${shortage}`);
-        request.quantityNeeded = shortage;
-        if ((!request.location || request.location.type === "VEHICLE") && preferredSourceLocation) {
-          request.location = preferredSourceLocation;
-        }
-
-        // Status-Regeln fÃ¼r Synchronisation:
-        if (request.status === "FULFILLED") {
-          // FULFILLED â†’ PENDING: Nur wenn wieder Bedarf besteht
-          request.status = "PENDING";
-          request.readyAt = null;
-          request.fulfilledAt = null;
-          request.preparedBy = null;
-          request.note = null;
-          request.quantityProvided = 0;
-        } else if (request.status === "APPROVED") {
-          // SCHUTZ: APPROVED bleibt APPROVED - Lager hat bereitgestellt
-          // Bereitgestellte Menge bleibt erhalten (NICHT Ã¼berschreiben!)
-          this.logger.debug(`[RestockRequest] SCHUTZ: Status APPROVED beibehalten fÃ¼r ${stockLevel.item.code} - quantityProvided: ${request.quantityProvided} bleibt erhalten`);
-          // NICHT request.quantityProvided = 0; - das wÃ¼rde das Problem verursachen
-        } else if (request.status === "CANCELLED") {
-          this.logger.debug(`[RestockRequest] Status CANCELLED beibehalten fÃ¼r ${stockLevel.item.code}`);
-        }
-        // PENDING bleibt PENDING (Standardfall)
-      }
-
-      await manager.save(request);
+      // lockedStockLevel hat KEINE Relationen (TypeORM erlaubt pessimistic
+      // locking nicht kombiniert mit relations/joins) - nur die frischen,
+      // gesperrten Mengen-Werte uebernehmen, item/vehicle/location bleiben
+      // vom aussen geladenen stockLevel (das die Relationen traegt).
+      stockLevel.quantity = lockedStockLevel.quantity;
+      stockLevel.targetQuantity = lockedStockLevel.targetQuantity;
+      await this.applyRestockSync(manager, stockLevel, preferredSourceLocation);
     });
+  }
+
+  private async applyRestockSync(
+    manager: EntityManager,
+    stockLevel: StockLevel,
+    preferredSourceLocation: Location | null,
+  ) {
+    const stockLevelId = stockLevel.id;
+    const shortage = Math.max(0, stockLevel.targetQuantity - stockLevel.quantity);
+
+    // WICHTIG: Finde ALLE RestockRequests fÃ¼r diesen StockLevel (nicht nur den ersten!)
+    const allRequests = await manager.find(RestockRequest, {
+      where: { stockLevel: { id: stockLevelId } },
+      order: { createdAt: "ASC" },
+      relations: ["location"],
+    });
+
+    // Wenn mehrere Requests existieren, bereinigen wir Duplikate
+    if (allRequests.length > 1) {
+      this.logger.debug(`[RestockRequest] WARNUNG: ${allRequests.length} Duplikate fÃ¼r StockLevel ${stockLevelId} gefunden - bereinige...`);
+
+      const duplicates = allRequests.slice(1);
+      for (const dup of duplicates) {
+        this.logger.debug(`[RestockRequest] LÃ¶sche Duplikat-Request ${dup.id} fÃ¼r StockLevel ${stockLevelId}`);
+        await manager.remove(dup);
+      }
+      allRequests.length = 1;
+    }
+
+    let request = allRequests.length > 0 ? allRequests[0] : null;
+
+    if (shortage <= 0) {
+      if (request && request.status !== "FULFILLED") {
+        request.status = "FULFILLED";
+        request.quantityNeeded = 0;
+        request.quantityProvided = 0;
+        request.readyAt = request.readyAt ?? new Date();
+        request.fulfilledAt = new Date();
+        request.preparedBy = null;
+        request.note = null;
+        await manager.save(request);
+      }
+      return;
+    }
+
+    if (!request) {
+      this.logger.debug(`[RestockRequest] Erstelle neuen Request fÃ¼r StockLevel ${stockLevel.id}, Artikel ${stockLevel.item.code}, Fahrzeug ${stockLevel.vehicle?.licensePlate}, Menge fehlt: ${shortage}`);
+      request = manager.create(RestockRequest, {
+        stockLevel,
+        item: stockLevel.item,
+        vehicle: stockLevel.vehicle ?? undefined,
+        location: preferredSourceLocation ?? null,
+        status: "PENDING",
+        quantityNeeded: shortage,
+        note: null,
+        preparedBy: null,
+        readyAt: null,
+        fulfilledAt: null,
+      });
+    } else {
+      this.logger.debug(`[RestockRequest] Aktualisiere Request fÃ¼r StockLevel ${stockLevel.id}, Artikel ${stockLevel.item.code}, Fahrzeug ${stockLevel.vehicle?.licensePlate}, Menge fehlt: ${shortage}`);
+      request.quantityNeeded = shortage;
+      if ((!request.location || request.location.type === "VEHICLE") && preferredSourceLocation) {
+        request.location = preferredSourceLocation;
+      }
+
+      // Status-Regeln fÃ¼r Synchronisation:
+      if (request.status === "FULFILLED") {
+        // FULFILLED â†’ PENDING: Nur wenn wieder Bedarf besteht
+        request.status = "PENDING";
+        request.readyAt = null;
+        request.fulfilledAt = null;
+        request.preparedBy = null;
+        request.note = null;
+        request.quantityProvided = 0;
+      } else if (request.status === "APPROVED") {
+        // SCHUTZ: APPROVED bleibt APPROVED - Lager hat bereitgestellt
+        // Bereitgestellte Menge bleibt erhalten (NICHT Ã¼berschreiben!)
+        this.logger.debug(`[RestockRequest] SCHUTZ: Status APPROVED beibehalten fÃ¼r ${stockLevel.item.code} - quantityProvided: ${request.quantityProvided} bleibt erhalten`);
+        // NICHT request.quantityProvided = 0; - das wÃ¼rde das Problem verursachen
+      } else if (request.status === "CANCELLED") {
+        this.logger.debug(`[RestockRequest] Status CANCELLED beibehalten fÃ¼r ${stockLevel.item.code}`);
+      }
+      // PENDING bleibt PENDING (Standardfall)
+    }
+
+    await manager.save(request);
   }
 
   private mapRestockRequest(
@@ -1349,7 +1391,12 @@ export class StockService {
       await repo.save(stockLevel);
     }
 
-    await this.syncRestockRequest(stockLevel.id);
+    // manager mitgeben: der StockLevel-Datensatz wurde soeben in DERSELBEN
+    // Transaktion aktualisiert (siehe applyRestockSync-Kommentar oben) - eine
+    // neue Transaktion mit pessimistic_write+skip_locked wuerde die eigene,
+    // noch offene Sperre sonst als "belegt" werten und die Synchronisation
+    // stillschweigend uebersprungen (Regression aus Commit 682913a).
+    await this.syncRestockRequest(stockLevel.id, manager);
   }
 
   private async normalizeVehicleStockLevels(
