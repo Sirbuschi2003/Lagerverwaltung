@@ -118,7 +118,7 @@ const SECTIONS: HelpSection[] = [
               <Typography variant="subtitle2" fontWeight={700}>Lager-Mitarbeiter (WAREHOUSE)</Typography>
             </Stack>
             <Typography variant="body2" color="text.secondary">
-              Zugriff auf Lageroperationen: Artikel, Schnellbuchung, Lagerorte, Lieferanten, Bestellungen, Fahrzeugbestände. Keine Einstellungen oder Benutzerverwaltung.
+              Zugriff auf Lageroperationen: Artikel, Schnellbuchung, Lagerorte, Lieferanten, Bestellungen, Fahrzeugbestände. Kann die Benutzerliste einsehen (nicht bearbeiten), aber keine Systemeinstellungen ändern.
             </Typography>
           </Paper>
           <Paper variant="outlined" sx={{ p: 1.5 }}>
@@ -131,7 +131,7 @@ const SECTIONS: HelpSection[] = [
             </Typography>
           </Paper>
         </Stack>
-        <Tip>Berechtigungen können im Bereich „Benutzer & Fahrzeuge" → „Rollen" feingranular angepasst werden.</Tip>
+        <Tip>Feingranulare Berechtigungen: im Bereich „Benutzer & Fahrzeuge" im Tab „Rollenrechte-Matrix" pro Rolle einzelne Rechte an-/abschalten. Im Tab „Benutzer-Overrides" lassen sich zusätzlich einzelne Benutzer abweichend von ihrer Rolle freischalten oder einschränken.</Tip>
       </Box>
     ),
   },
@@ -148,12 +148,11 @@ const SECTIONS: HelpSection[] = [
         </Typography>
         <SectionTitle>Anzeigebereiche</SectionTitle>
         <List dense disablePadding>
-          <Step><strong>Bestandsübersicht:</strong> Zeigt Artikel mit kritischem oder niedrigem Bestand (unter Mindestmenge).</Step>
-          <Step><strong>Nachbestellungsanfragen:</strong> Artikel, für die eine Nachbestellung ausgelöst wurde.</Step>
+          <Step><strong>Kennzahlen-Karten:</strong> „Artikel gesamt" und „Offene Inventuren".</Step>
+          <Step><strong>Offene Anforderungen (Lager):</strong> Zeigt, welche Techniker welche Artikel im Fahrzeug benötigen (Fehlmenge). Nach Techniker filterbar. Menge eintragen und „Bereitstellen" (einzeln oder „Alles") markiert die Anforderung als vom Lager erledigt – der Techniker sieht das dann in „Mein Fahrzeug" und kann es einbuchen.</Step>
           <Step><strong>Letzte Buchungen:</strong> Die jüngsten Ein- und Ausbuchungen auf einen Blick.</Step>
-          <Step><strong>Kennzahlen-Karten:</strong> Gesamtartikel, Gesamtbestand, offene Bestellungen.</Step>
         </List>
-        <Tip>Klicke auf einen Artikel im Dashboard direkt, um zur Detailansicht zu gelangen.</Tip>
+        <Tip>Über „Dashboard anpassen" lassen sich die Anzeigebereiche ein-/ausblenden und in der Reihenfolge anpassen.</Tip>
       </Box>
     ),
   },
@@ -187,7 +186,14 @@ const SECTIONS: HelpSection[] = [
         <List dense disablePadding>
           <Step>Schalte „Sofort buchen" ein, damit jeder Scan sofort gebucht wird – ohne Bestätigungsschritt.</Step>
         </List>
+        <SectionTitle>Vorgangsnummer (z.B. Auftrags-/Kundenbezug)</SectionTitle>
+        <List dense disablePadding>
+          <Step>Ist der Workflow „Vorgangsnummer → Artikel" aktiv, zuerst die Vorgangsnummer scannen oder eingeben.</Step>
+          <Step>Alle danach gescannten Artikel werden dieser Vorgangsnummer zugeordnet – praktisch, wenn mehrere Techniker am selben Auftrag/Gerät arbeiten (die Liste ist geräteübergreifend sichtbar).</Step>
+          <Step>Über „QR-Aktionscodes" lassen sich physische QR-Karten drucken, mit denen sich z.B. „Übernehmen" oder „Neue Vorgangsnummer" direkt scannen lässt, ohne den Bildschirm zu berühren.</Step>
+        </List>
         <Tip>Nach jedem Scan wird die Menge automatisch auf 1 zurückgesetzt – so entstehen keine Fehlbuchungen.</Tip>
+        <Tip>Die Duplikat-Warnung meldet sich, wenn derselbe Artikel innerhalb eines einstellbaren Zeitraums (Standard: einige Monate) bereits für denselben Kunden/Vorgang gebucht wurde – als Hinweis, nicht als Blockade.</Tip>
         <Warn>Stelle sicher, dass der richtige Modus (Einbuchen/Ausbuchen) aktiv ist, bevor du scannst.</Warn>
       </Box>
     ),
@@ -205,25 +211,26 @@ const SECTIONS: HelpSection[] = [
         </Typography>
         <SectionTitle>Artikel anlegen</SectionTitle>
         <List dense disablePadding>
-          <Step>„+ Artikel" Button oben rechts klicken.</Step>
-          <Step>Name, Kategorie/Warengruppe und ggf. Lieferant eintragen.</Step>
-          <Step>Mindestmenge und Sollbestand festlegen (löst Nachbestellvorschlag aus).</Step>
-          <Step>Artikelcodes (Barcode/QR) im Tab „Codes" hinterlegen – mehrere pro Artikel möglich.</Step>
+          <Step>„Artikel anlegen" Button oben klicken.</Step>
+          <Step>Code, Bezeichnung, Hersteller/Warengruppe und ggf. Lieferant eintragen.</Step>
+          <Step>Mindestmenge und Sollbestand festlegen (löst Nachbestellvorschlag aus). Preis (EUR) ist optional und wird standardmäßig NICHT auf Bestellungs-PDFs angezeigt (siehe „Bestellungen").</Step>
+          <Step>Alternative Codes (z.B. weitere Barcodes/EAN) als kommagetrennte Liste im Formularfeld hinterlegen – kein eigener Tab.</Step>
           <Step>Bild hochladen (optional).</Step>
           <Step>Speichern.</Step>
         </List>
-        <SectionTitle>Bestand anpassen</SectionTitle>
+        <SectionTitle>Ist-Bestand anpassen</SectionTitle>
         <List dense disablePadding>
-          <Step>Artikel anklicken → „Bestand anpassen" Button.</Step>
-          <Step>Menge und Typ (Eingang/Ausgang/Korrektur) wählen und bestätigen.</Step>
+          <Step>Artikel anklicken → im Formular das Feld „Ist-Bestand" auf den korrekten Wert ändern.</Step>
+          <Step>Beim Speichern bucht das System automatisch die Differenz (Ein- oder Ausbuchung) – eine manuelle Typ-Auswahl gibt es nicht.</Step>
         </List>
-        <SectionTitle>Artikel importieren (Hyreka)</SectionTitle>
+        <SectionTitle>Import &amp; Export</SectionTitle>
         <List dense disablePadding>
-          <Step>„Import" Button → CSV oder Hyreka-Format auswählen.</Step>
-          <Step>Datei hochladen, Feldmapping prüfen und Import bestätigen.</Step>
+          <Step>„Artikel importieren" → CSV-Datei hochladen, Feldmapping prüfen und Import bestätigen.</Step>
+          <Step>„Hyreka Einmalimport" → separater, einmaliger Abgleich der Artikelstammdaten im Hyreka-Format (nicht zu verwechseln mit der laufenden Synchronisierung).</Step>
+          <Step>„Artikel exportieren (CSV)" und „QR-Katalog (PDF)" exportieren die aktuelle (gefilterte) Artikelliste.</Step>
         </List>
-        <Tip>Verwende die Suchfunktion oben, um Artikel nach Name, Code oder Kategorie zu filtern.</Tip>
-        <Warn>Beim Löschen eines Artikels werden alle zugehörigen Buchungen und Bestellzeilen mitgelöscht. Diese Aktion ist nicht rückgängig zu machen.</Warn>
+        <Tip>Suchfunktion oben filtert nach Code, Bezeichnung oder alternativem Code. Zusätzlich nach Hersteller/Warengruppe filterbar, und über die Checkbox „Ohne Lagerort" lassen sich Artikel ohne zugewiesenen Lagerort anzeigen.</Tip>
+        <Warn>Beim Löschen eines Artikels werden alle zugehörigen Buchungen, Bestellzeilen und Codes mitgelöscht. Diese Aktion ist nicht rückgängig zu machen.</Warn>
       </Box>
     ),
   },
@@ -241,6 +248,7 @@ const SECTIONS: HelpSection[] = [
         <SectionTitle>Lagerort anlegen</SectionTitle>
         <List dense disablePadding>
           <Step>„+ Lagerort" klicken.</Step>
+          <Step>Typ wählen: Lager, Regal, Schrank oder Fahrzeug – Regale/Schränke können einem übergeordneten Lager zugeordnet werden (z.B. „Regal 6 / Fach 2", „Schrank 8 / Schublade 5").</Step>
           <Step>Name und Beschreibung eingeben.</Step>
           <Step>Niederlassung zuweisen (bei mehreren Standorten).</Step>
           <Step>Speichern.</Step>
@@ -268,7 +276,7 @@ const SECTIONS: HelpSection[] = [
         <SectionTitle>Lieferant anlegen</SectionTitle>
         <List dense disablePadding>
           <Step>„+ Lieferant" klicken.</Step>
-          <Step>Name, E-Mail-Adresse und optionale Adresse/Notiz eintragen.</Step>
+          <Step>Name, E-Mail-Adresse, optionale Kundennummer und Adresse/Notiz eintragen.</Step>
           <Step>Speichern.</Step>
         </List>
         <SectionTitle>Lieferant mit Artikel verknüpfen</SectionTitle>
@@ -295,7 +303,7 @@ const SECTIONS: HelpSection[] = [
         <List dense disablePadding>
           <Step>„+ Neue Bestellung" klicken oder einen Bestellvorschlag übernehmen.</Step>
           <Step>Lieferant auswählen.</Step>
-          <Step>Artikel und Mengen zur Bestellliste hinzufügen.</Step>
+          <Step>Artikel und Mengen zur Bestellliste hinzufügen. Netto-Preis und MwSt.-Satz pro Position sind optional eintragbar.</Step>
           <Step>Bestellnummer (optional) und Notiz eintragen.</Step>
           <Step>Speichern → Status: ENTWURF.</Step>
         </List>
@@ -307,16 +315,23 @@ const SECTIONS: HelpSection[] = [
         </List>
         <SectionTitle>Wareneingang buchen</SectionTitle>
         <List dense disablePadding>
-          <Step>Bestellung öffnen → „Wareneingang erfassen".</Step>
+          <Step>Bestellung öffnen → „Wareneingang erfassen", Lieferschein-Nummer eintragen.</Step>
           <Step>Erhaltene Mengen eintragen (können von bestellten abweichen).</Step>
-          <Step>„Einbuchen" → Bestand wird automatisch erhöht. Status: ERHALTEN.</Step>
+          <Step>„Einbuchen" → Bestand wird automatisch erhöht.</Step>
+          <Step>Ist noch nicht alles vollständig erhalten, bleibt die Bestellung auf BESTELLT und „Wareneingang erfassen" kann später erneut für die restliche Menge genutzt werden (mehrere Teil-Lieferungen möglich, jede mit eigener Lieferschein-Nummer). Erst wenn alle Positionen vollständig sind, wechselt der Status auf ERHALTEN.</Step>
+        </List>
+        <SectionTitle>Bestellung archivieren</SectionTitle>
+        <List dense disablePadding>
+          <Step>Eine Bestellung mit Status ERHALTEN kann per „Archivieren"-Button manuell in den Status ARCHIVIERT verschoben werden.</Step>
+          <Step>Das passiert nicht automatisch – ohne diesen Klick bleibt die Bestellung als ERHALTEN in der aktiven Liste stehen.</Step>
         </List>
         <SectionTitle>Bestellvorschläge</SectionTitle>
         <List dense disablePadding>
           <Step>Das System erkennt automatisch Artikel, die unter den Mindestbestand gefallen sind.</Step>
           <Step>Unter „Bestellvorschläge" werden diese gelistet – mit einem Klick als Bestellung übernehmen.</Step>
         </List>
-        <Tip>Im Archiv findest du alle abgeschlossenen Bestellungen als PDF-Kopie.</Tip>
+        <Tip>Im Archiv findest du alle archivierten Bestellungen als PDF-Kopie.</Tip>
+        <Tip>Unter Einstellungen → „Bestellungs-PDF-Vorlage" lässt sich mit einem visuellen Designer festlegen, welche Felder auf dem PDF erscheinen – inklusive Tabellenspalten, Kopf-/Fußzeile und Logo. Preis-Spalten sind dort bewusst standardmäßig ausgeblendet und müssen aktiv eingeblendet werden.</Tip>
       </Box>
     ),
   },
@@ -346,6 +361,8 @@ const SECTIONS: HelpSection[] = [
           <Step>In den Bestellvorschlägen wird angezeigt, für wie viele Tage der aktuelle Bestand noch ausreicht (basierend auf dem Durchschnittsverbrauch).</Step>
         </List>
         <Tip>Fahrzeugbuchungen lassen sich separat filtern, um den Verbrauch pro Fahrzeug auszuwerten.</Tip>
+        <Tip>Jede Buchung zeigt Herkunft und Notiz (z.B. „Wareneingang [Bestellnummer] · LS: [Lieferschein]" oder „Bereitgestellt für [Kennzeichen]") – hilfreich, um nachzuvollziehen, woher eine Buchung stammt.</Tip>
+        <Tip>Für steuerliche Prüfungen (GoBD/GDPdU) steht ein „GDPdU-Export" zur Verfügung, der alle Bewegungsdaten in einem prüfungskonformen Format bereitstellt.</Tip>
       </Box>
     ),
   },
@@ -362,19 +379,30 @@ const SECTIONS: HelpSection[] = [
         </Typography>
         <SectionTitle>Fahrzeugbestand anzeigen</SectionTitle>
         <List dense disablePadding>
-          <Step>Fahrzeug in der Liste anklicken.</Step>
-          <Step>Alle Artikel mit aktuellem Ist-Bestand und Sollbestand werden angezeigt.</Step>
-          <Step>Rot = unter Sollbestand, Grün = Sollbestand erreicht oder überschritten.</Step>
+          <Step>Fahrzeug oder Techniker über das Auswahlfeld filtern.</Step>
+          <Step>Alle Artikel mit aktuellem Ist-Bestand und Sollbestand werden angezeigt, gruppiert nach Techniker.</Step>
+          <Step>Status pro Artikel: „Fehlbestand" (Ist = 0, rot), „Unterbestand" (unter Soll, orange), „OK" (Soll erreicht, grün), „Überbestand" (mehr als Soll, blau).</Step>
         </List>
-        <SectionTitle>Sollbestand festlegen</SectionTitle>
+        <Warn>Die Sollmenge lässt sich auf dieser Übersichtsseite nicht ändern – das geschieht in „Mein Fahrzeug" durch den Techniker selbst (siehe dort).</Warn>
+        <SectionTitle>Anforderungen bearbeiten (zentraler Nachschub-Workflow)</SectionTitle>
         <List dense disablePadding>
-          <Step>Artikel im Fahrzeug anklicken → Sollmenge eintragen.</Step>
-          <Step>Der Techniker sieht auf seinem Fahrzeug-Tab, welche Artikel aufgefüllt werden müssen.</Step>
+          <Step>Fehlt einem Techniker ein Artikel (Ist unter Soll), erscheint automatisch eine Anforderung im Dashboard-Bereich „Offene Anforderungen (Lager)".</Step>
+          <Step>Lager trägt die bereitgestellte Menge ein und klickt „Bereitstellen" (oder „Alles" für die volle Fehlmenge) → Status wechselt auf „Bereitgestellt".</Step>
+          <Step>Der Techniker sieht das in „Mein Fahrzeug" als Hinweis und bucht die bereitgestellte Menge mit einem Klick ein („+X vom Lager") → Status wechselt auf „Erledigt", der Bestand wird aktualisiert.</Step>
         </List>
         <SectionTitle>Fahrzeugbestand klonen</SectionTitle>
         <List dense disablePadding>
           <Step>„Bestand klonen" kopiert den kompletten Bestand (Soll-Mengen) eines Fahrzeugs auf ein anderes.</Step>
         </List>
+        <SectionTitle>Techniker bekommt ein neues Fahrzeug</SectionTitle>
+        <List dense disablePadding>
+          <Step>Neues Fahrzeug anlegen (Benutzer &amp; Fahrzeuge → Tab „Fahrzeuge" → „+ Fahrzeug").</Step>
+          <Step>„Bestand klonen" nutzen, um die Soll-Mengen vom alten auf das neue Fahrzeug zu übertragen.</Step>
+          <Step>Teile physisch umräumen und die Buchungen entsprechend erfassen (aus dem alten Fahrzeug aus-, ins neue einbuchen).</Step>
+          <Step>Den Techniker in Benutzer &amp; Fahrzeuge auf das neue Fahrzeug umstellen.</Step>
+          <Step>Altes Fahrzeug archivieren oder löschen, sobald es nicht mehr gebraucht wird.</Step>
+        </List>
+        <Warn>Beim reinen Umbenennen des Kennzeichens am bestehenden Fahrzeug bleibt die komplette Bewegungshistorie unter diesem Datensatz erhalten und würde dann fälschlich so aussehen, als hätte sie im neuen Fahrzeug stattgefunden. Das nur tun, wenn es sich um eine reine Korrektur handelt (z.B. Tippfehler) und physisch dasselbe Fahrzeug gemeint ist – nicht bei einem echten Fahrzeugwechsel.</Warn>
         <Tip>Ein Scanner-Abgleich (Modus „Fahrzeugbestand scannen") ermöglicht es dem Techniker, seinen Bestand selbst zu erfassen.</Tip>
       </Box>
     ),
@@ -410,6 +438,7 @@ const SECTIONS: HelpSection[] = [
         </List>
         <Warn>Die Bestandskorrektur kann nicht rückgängig gemacht werden. Vor dem Abschließen prüfen!</Warn>
         <Tip>Mit einer Inventurvorlage (Lagereinstellungen) kannst du festlegen, welche Artikel standardmäßig gezählt werden.</Tip>
+        <Tip>Eine Inventur kann auch gezielt pro Fahrzeug durchgeführt werden (nicht nur pro Lagerort) – die Sitzung lässt sich für ein einzelnes Fahrzeug erneut öffnen, ohne die restliche Inventur zu beeinflussen.</Tip>
       </Box>
     ),
   },
@@ -426,14 +455,21 @@ const SECTIONS: HelpSection[] = [
         </Typography>
         <SectionTitle>Bestand anzeigen</SectionTitle>
         <List dense disablePadding>
-          <Step>Der aktuelle Ist-Bestand und der Sollbestand aller Fahrzeugartikel werden angezeigt.</Step>
+          <Step>Der aktuelle Ist-Bestand und der Sollbestand aller Fahrzeugartikel werden angezeigt, Artikel mit Fehlmenge stehen oben.</Step>
           <Step>Artikel unter Sollmenge sind rot hervorgehoben → Auffüllung erforderlich.</Step>
+          <Step>Bei mehr als 25 Artikeln wird die Liste seitenweise angezeigt (Blättern unten). Suche und Scannen wirken immer auf den kompletten Bestand, unabhängig von der aktuellen Seite.</Step>
+          <Step>Sollmenge pro Artikel kann direkt in der Liste selbst eingetragen und gespeichert werden.</Step>
         </List>
-        <SectionTitle>Bestand per Scanner abgleichen</SectionTitle>
+        <SectionTitle>Ein-/Ausbuchen per Scanner</SectionTitle>
         <List dense disablePadding>
-          <Step>„Scanner-Abgleich starten" aktivieren.</Step>
-          <Step>Jeden Artikel im Fahrzeug scannen und die gezählte Menge eingeben.</Step>
-          <Step>Am Ende „Abgleich abschließen" → Differenzen werden angezeigt.</Step>
+          <Step>Modus „Ausbuchen", „Einbuchen" oder „Bestand prüfen" (nur Anzeige, keine Buchung) oben auswählen.</Step>
+          <Step>„Scanner starten" aktivieren, Artikel scannen – jeder Scan bucht sofort die angegebene Menge (kein separater Abgleich-Abschluss-Schritt).</Step>
+          <Step>„Scanner stoppen", wenn fertig.</Step>
+        </List>
+        <SectionTitle>Vom Lager bereitgestellte Artikel einbuchen</SectionTitle>
+        <List dense disablePadding>
+          <Step>Hat das Lager eine Anforderung bereitgestellt, erscheint ein Hinweis mit der bereitgestellten Menge.</Step>
+          <Step>Mit „+X vom Lager" wird die Menge direkt eingebucht, ohne den Artikel erneut scannen zu müssen.</Step>
         </List>
         <SectionTitle>Offline-Modus</SectionTitle>
         <List dense disablePadding>
@@ -461,12 +497,8 @@ const SECTIONS: HelpSection[] = [
           <Step>„Jetzt synchronisieren" überträgt alle ausstehenden Buchungen zum Server.</Step>
           <Step>Konflikte (z.B. zu wenig Bestand) werden als Fehler angezeigt und können überprüft werden.</Step>
         </List>
-        <SectionTitle>Hyreka-Abgleich</SectionTitle>
-        <List dense disablePadding>
-          <Step>Artikelstammdaten können mit dem Hyreka-System synchronisiert werden.</Step>
-          <Step>Neue Artikel werden importiert, bestehende aktualisiert.</Step>
-        </List>
         <Warn>Nach max. 5 Fehlversuchen wird eine Buchung automatisch verworfen und aus der Warteschlange entfernt.</Warn>
+        <Tip>Der Hyreka-Abgleich für Artikelstammdaten läuft NICHT hier, sondern über den Button „Hyreka Einmalimport" im Bereich „Artikel".</Tip>
       </Box>
     ),
   },
@@ -484,6 +516,7 @@ const SECTIONS: HelpSection[] = [
         <SectionTitle>Firmendaten</SectionTitle>
         <List dense disablePadding>
           <Step>Firmenname, Adresse, Logo und Kontaktdaten hinterlegen.</Step>
+          <Step>Standard-MwSt. (%) zentral festlegen – wird als Vorschlag für neue Bestellpositionen verwendet.</Step>
           <Step>Diese Daten erscheinen auf Bestellungs-PDFs und E-Mails.</Step>
         </List>
         <SectionTitle>E-Mail Einstellungen</SectionTitle>
@@ -502,7 +535,8 @@ const SECTIONS: HelpSection[] = [
         <SectionTitle>Wartung & Update</SectionTitle>
         <List dense disablePadding>
           <Step>Systemversion und Datenbankstatus anzeigen.</Step>
-          <Step>Online-Update starten (nur Super-Admin / ohne Niederlassungszuweisung).</Step>
+          <Step>Online-Update starten (jeder Administrator/Manager kann das auslösen).</Step>
+          <Step>Ein Zurücksetzen einzelner Niederlassungsdaten ist zusätzlich abgesichert und nur für den Super-Admin (Konto ohne eigene Niederlassung) verfügbar.</Step>
         </List>
         <Tip>Änderungen an der E-Mail-Konfiguration gelten sofort – kein Neustart erforderlich.</Tip>
       </Box>
@@ -527,7 +561,8 @@ const SECTIONS: HelpSection[] = [
         <SectionTitle>Backup wiederherstellen</SectionTitle>
         <List dense disablePadding>
           <Step>„ZIP-Archiv wiederherstellen" → zuvor erstelltes Backup hochladen.</Step>
-          <Step>Das System extrahiert alle Daten und stellt den Zustand zum Backup-Zeitpunkt wieder her.</Step>
+          <Step>Vollständige Wiederherstellung: Das System extrahiert alle Daten und stellt den Zustand zum Backup-Zeitpunkt wieder her.</Step>
+          <Step>Alternativ „Selektive Wiederherstellung": nur einzelne Bereiche zurückspielen (z.B. nur bestimmte Fahrzeuge oder Lagerorte), statt alles zu überschreiben.</Step>
         </List>
         <SectionTitle>Konfiguration exportieren</SectionTitle>
         <List dense disablePadding>
@@ -554,9 +589,10 @@ const SECTIONS: HelpSection[] = [
         <List dense disablePadding>
           <Step><strong>AUTH:</strong> Login-Versuche, Passwortänderungen, Sperren.</Step>
           <Step><strong>STOCK:</strong> Alle Lagerein- und -ausgänge mit Benutzer und Zeitstempel.</Step>
+          <Step><strong>VEHICLE, RESTOCK, USER, INVENTORY, PURCHASE, EMAIL:</strong> weitere Kategorien für Fahrzeug-, Anforderungs-, Benutzer-, Inventur-, Bestell- und E-Mail-Ereignisse.</Step>
           <Step><strong>SYSTEM:</strong> Migrationen, Backup-Ereignisse, Konfigurationsänderungen.</Step>
-          <Step><strong>ERROR:</strong> Anwendungsfehler und Ausnahmen.</Step>
         </List>
+        <Tip>Zusätzlich zur Kategorie hat jeder Eintrag eine Stufe (INFO, WARNING, ERROR, SECURITY) – SECURITY-Einträge (z.B. „alle Logs gelöscht") können nicht gelöscht werden.</Tip>
         <SectionTitle>Live-Protokoll</SectionTitle>
         <List dense disablePadding>
           <Step>Unter „Live-Protokolle" werden Ereignisse in Echtzeit angezeigt (WebSocket-basiert).</Step>
@@ -591,8 +627,14 @@ const SECTIONS: HelpSection[] = [
         </List>
         <SectionTitle>Passwort ändern</SectionTitle>
         <List dense disablePadding>
-          <Step>Benutzer anklicken → „Passwort ändern".</Step>
-          <Step>Neues Passwort eingeben (min. 8 Zeichen). Die letzten 5 Passwörter können nicht wiederverwendet werden.</Step>
+          <Step>Als Administrator für einen Benutzer: Benutzer anklicken → „Passwort ändern" (min. 8 Zeichen).</Step>
+          <Step>Ändert ein Benutzer sein eigenes Passwort selbst (z.B. nach „Passwort vergessen"), gilt eine höhere Mindestlänge von 12 Zeichen.</Step>
+          <Step>Die letzten 5 Passwörter können nicht wiederverwendet werden.</Step>
+        </List>
+        <SectionTitle>Zwei-Faktor-Authentifizierung (MFA)</SectionTitle>
+        <List dense disablePadding>
+          <Step>Jeder Benutzer kann MFA für sein eigenes Konto in den Benutzereinstellungen (Symbol oben rechts) aktivieren.</Step>
+          <Step>Nach Aktivierung wird beim Login zusätzlich ein Code aus einer Authenticator-App abgefragt.</Step>
         </List>
         <SectionTitle>Fahrzeug anlegen</SectionTitle>
         <List dense disablePadding>
@@ -600,12 +642,13 @@ const SECTIONS: HelpSection[] = [
           <Step>Kennzeichen und Beschreibung eingeben.</Step>
           <Step>Fahrzeug einem Techniker zuweisen.</Step>
         </List>
+        <Tip>Bekommt ein Techniker ein komplett neues Fahrzeug (nicht nur eine Kennzeichen-Korrektur), siehe „Techniker bekommt ein neues Fahrzeug" im Bereich Fahrzeugbestände – dort steht der komplette Ablauf inkl. Bestand umziehen.</Tip>
         <SectionTitle>Rollen & Berechtigungen</SectionTitle>
         <List dense disablePadding>
-          <Step>Tab „Rollen" → Rolle auswählen → Berechtigungen aktivieren/deaktivieren.</Step>
-          <Step>Feingranulare Steuerung, welche Aktionen jede Rolle durchführen darf.</Step>
+          <Step>Tab „Rollenrechte-Matrix" → Rolle auswählen → Berechtigungen aktivieren/deaktivieren.</Step>
+          <Step>Tab „Benutzer-Overrides" → einzelne Benutzer abweichend von ihrer Rolle freischalten oder einschränken.</Step>
         </List>
-        <Warn>Ein Benutzer kann sich nach 5 fehlgeschlagenen Anmeldeversuchen nicht mehr einloggen (Kontosperrung). Administrator kann die Sperre aufheben.</Warn>
+        <Warn>Ein Benutzer kann sich nach 10 fehlgeschlagenen Anmeldeversuchen vorübergehend nicht mehr einloggen. Die Sperre läuft nach 15 Minuten automatisch ab.</Warn>
       </Box>
     ),
   },
@@ -623,8 +666,9 @@ const SECTIONS: HelpSection[] = [
         <SectionTitle>Niederlassung anlegen</SectionTitle>
         <List dense disablePadding>
           <Step>Nur Super-Admin (kein Niederlassungskennzeichen) kann neue Niederlassungen erstellen.</Step>
-          <Step>„+ Niederlassung" → Name und SMTP-Einstellungen für diesen Standort eingeben.</Step>
-          <Step>Benutzer der Niederlassung zuweisen.</Step>
+          <Step>„+ Niederlassung" → Name, Niederlassungsnummer und Adresse eingeben, aktiv schalten.</Step>
+          <Step>Benutzer werden anschließend einzeln (unter „Benutzer & Fahrzeuge") der Niederlassung zugewiesen, nicht bereits beim Anlegen.</Step>
+          <Step>Eigene SMTP-Einstellungen pro Niederlassung werden separat unter „E-Mail Einstellungen" konfiguriert.</Step>
         </List>
         <SectionTitle>Datentrennung</SectionTitle>
         <List dense disablePadding>
