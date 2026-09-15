@@ -1716,6 +1716,15 @@ Import erfolgreich! Die Artikel sind jetzt verfügbar.`;
   const [imageUploading, setImageUploading] = useState(false);
   const [imageKey, setImageKey] = useState(0);
   const [lastOrder, setLastOrder] = useState<LastOrderForItemDto | null | undefined>(undefined);
+  // Basis fuer die Differenz-Buchung beim Speichern - MUSS exakt der Wert
+  // sein, mit dem das Ist-Bestand-Feld befuellt wurde (nicht der ggf.
+  // veraltete Tabellenwert aus dem items-Store). Sonst bucht "Speichern"
+  // ohne jede Aenderung erneut die Differenz zwischen dem frisch geladenen
+  // (korrekten) und dem inzwischen ueberholten Tabellenwert - z.B. wenn
+  // zwischen Oeffnen der Artikeltabelle und dem Bearbeiten-Dialog ein
+  // Wareneingang gebucht wurde und die Tabelle den neuen Bestand noch
+  // nicht nachgezogen hat.
+  const baselineQuantityRef = useRef<number | undefined>(undefined);
 
   const {
     items,
@@ -1994,6 +2003,7 @@ Import erfolgreich! Die Artikel sind jetzt verfügbar.`;
 
   const handleOpenCreate = () => {
     setForm(initialFormState);
+    baselineQuantityRef.current = undefined;
     setError(null);
     setEditingId(null);
     setOpen(true);
@@ -2025,6 +2035,7 @@ Import erfolgreich! Die Artikel sind jetzt verfügbar.`;
       alternateCodes: item.alternateCodes ?? [],
       alternateCodesText: item.alternateCodes?.join(", ") ?? "",
     });
+    baselineQuantityRef.current = item.storageLocation ? (item.currentQuantity ?? 0) : undefined;
     setError(null);
     setEditingId(id);
     setLastOrder(undefined);
@@ -2032,9 +2043,11 @@ Import erfolgreich! Die Artikel sind jetzt verfügbar.`;
     fetchLastOrderForItem(id).then(setLastOrder).catch(() => setLastOrder(null));
     fetchItemById(id)
       .then((fresh) => {
+        const freshQuantity = fresh.storageLocation ? (fresh.currentQuantity ?? 0) : undefined;
+        baselineQuantityRef.current = freshQuantity;
         setForm((prev) => ({
           ...prev,
-          currentQuantity: fresh.storageLocation ? (fresh.currentQuantity ?? 0) : undefined,
+          currentQuantity: freshQuantity,
         }));
       })
       .catch(() => {});
@@ -2971,9 +2984,7 @@ TB-FC330,Toner Schwarz,Toshiba,Toner,5,89.90,Regal 3 / Fach 1`}
             const locationId = form.storageLocationId?.trim()
               ? form.storageLocationId.trim()
               : editingItem?.storageLocation?.id;
-            const currentQuantity = editingItem?.storageLocation
-              ? (editingItem.currentQuantity ?? 0)
-              : 0;
+            const currentQuantity = baselineQuantityRef.current ?? 0;
             try {
               const payload = createPayload();
               const savedItem = editingId
