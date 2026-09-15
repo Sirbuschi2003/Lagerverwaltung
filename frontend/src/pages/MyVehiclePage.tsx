@@ -8,6 +8,7 @@ import Box from "@mui/material/Box";
 import Chip from "@mui/material/Chip";
 import CircularProgress from "@mui/material/CircularProgress";
 import IconButton from "@mui/material/IconButton";
+import Pagination from "@mui/material/Pagination";
 import InputAdornment from "@mui/material/InputAdornment";
 import Paper from "@mui/material/Paper";
 import Stack from "@mui/material/Stack";
@@ -992,6 +993,12 @@ const MyVehiclePage = () => {
 
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState<string>("");
+  // Pagination fuer den Fahrzeugbestand: ohne diese wurden bei Fahrzeugen mit
+  // mehr als ~100 Artikeln ALLE Zeilen auf einmal gerendert (Karten mobil,
+  // Tabellenzeilen am Desktop, jeweils mit Buttons/Eingabefeldern pro Zeile) -
+  // das blockierte den Browser spuerbar, besonders auf Handys.
+  const STOCK_PAGE_SIZE = 25;
+  const [stockPage, setStockPage] = useState(1);
   
   const filteredStock = useMemo(() => {
     if (!searchQuery.trim()) {
@@ -1036,6 +1043,20 @@ const MyVehiclePage = () => {
     // Verwende sortedStock für korrekte Sortierung (gescannt, dann Fehlartikel, dann alphabetisch)
     return sortedStock;
   }, [sortedStock]);
+
+  const stockTotalPages = Math.max(1, Math.ceil(displayStock.length / STOCK_PAGE_SIZE));
+
+  useEffect(() => {
+    // Bei neuer Suche oder frisch gescanntem Artikel zurueck auf Seite 1 -
+    // ein gescannter Artikel rueckt in der Sortierung nach oben und waere
+    // sonst auf einer anderen Seite unsichtbar.
+    setStockPage(1);
+  }, [searchQuery, lastScannedItemId]);
+
+  const paginatedDisplayStock = useMemo(
+    () => displayStock.slice((stockPage - 1) * STOCK_PAGE_SIZE, stockPage * STOCK_PAGE_SIZE),
+    [displayStock, stockPage],
+  );
 
   const restockMap = useMemo(
     () => new Map((activeRestockRequests || []).map((request) => [request.stockLevelId, request])),
@@ -1696,7 +1717,7 @@ const MyVehiclePage = () => {
           </Box>
         )}
         <Stack spacing={2}>
-          {displayStock.map((entry: any) => {
+          {paginatedDisplayStock.map((entry: any) => {
             const shortage = Math.max(0, entry.targetQuantity - entry.quantity);
             const restockRequest = restockMap.get(entry.id) ?? null;
             const draftValue = targetDrafts[entry.item.id] ?? entry.targetQuantity.toString();
@@ -1878,6 +1899,17 @@ const MyVehiclePage = () => {
             </Typography>
           </Paper>
         )}
+        {stockTotalPages > 1 && (
+          <Box display="flex" justifyContent="center" mt={2}>
+            <Pagination
+              count={stockTotalPages}
+              page={stockPage}
+              onChange={(_, value) => setStockPage(value)}
+              size="small"
+              color="primary"
+            />
+          </Box>
+        )}
       </Box>
 
       {/* Desktop Tabellen-Ansicht für große Bildschirme */}
@@ -1888,7 +1920,7 @@ const MyVehiclePage = () => {
         '@media (min-width: 1025px)': { display: 'block' }
       }}>
         <TableContainer sx={{ maxHeight: { md: 600 } }}>
-          <Table size="small" stickyHeader={displayStock.length > 10}>
+          <Table size="small" stickyHeader={paginatedDisplayStock.length > 10}>
             <TableHead>
               <TableRow>
                 <TableCell>Code</TableCell>
@@ -1908,7 +1940,7 @@ const MyVehiclePage = () => {
                   </TableCell>
                 </TableRow>
               )}
-              {displayStock.map((entry) => {
+              {paginatedDisplayStock.map((entry) => {
                 const shortage = Math.max(0, entry.targetQuantity - entry.quantity);
                 const restockRequest = restockMap.get(entry.id) ?? null;
                 const draftValue = targetDrafts[entry.item.id] ?? entry.targetQuantity.toString();
@@ -2038,6 +2070,17 @@ const MyVehiclePage = () => {
             </TableBody>
           </Table>
         </TableContainer>
+        {stockTotalPages > 1 && (
+          <Box display="flex" justifyContent="center" py={2}>
+            <Pagination
+              count={stockTotalPages}
+              page={stockPage}
+              onChange={(_, value) => setStockPage(value)}
+              size="small"
+              color="primary"
+            />
+          </Box>
+        )}
       </Paper>
 
       {/* Dezente Mengenanzeige am Ende */}
