@@ -125,7 +125,15 @@ export class StockController {
   @SkipThrottle()
   @Permissions("stock.write")
   async recordMovement(@Body() dto: RecordMovementDto, @Req() req: Request) {
-    if (!dto.userId && req.user?.id) {
+    // Immer die authentifizierte Session-Identitaet verwenden (nicht nur als
+    // Fallback wenn der Client keine mitschickt) - eine Live-Buchung ist per
+    // Definition der gerade angemeldete Benutzer, und ein clientseitig
+    // gesetztes userId-Feld ist weder vertrauenswuerdig noch zuverlaessig
+    // (z.B. wenn der Auth-Store im Frontend im Moment des Speicherns kurz
+    // leer war). Das schliesst die Luecke, dass manuelle "Bestand anpassen"-
+    // Buchungen bislang teils mit userId=NULL landeten und sich der
+    // ausfuehrende Benutzer im Nachhinein nicht mehr nachvollziehen liess.
+    if (req.user?.id) {
       dto.userId = req.user.id;
     }
     this.logger.log(`recordMovement vehicleId=${dto.vehicleId} itemId=${dto.itemId} type=${dto.type} qty=${dto.quantity} userId=${dto.userId}`);
