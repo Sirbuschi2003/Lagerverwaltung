@@ -349,16 +349,21 @@ export class ItemsService {
       });
       if (!item) return null;
       if (item.storageLocation) {
-        const qb = this.stockLevelsRepository
+        // Muss exakt dieselbe Definition von "Ist-Bestand" wie findAll()
+        // verwenden (Menge NUR am zugewiesenen Lagerort, nicht ueber alle
+        // Lagerorte summiert) - sonst zeigt der Bearbeiten-Dialog einen
+        // anderen Wert als die Artikel-Tabelle, und die anschliessende
+        // Differenz-Buchung beim Speichern rechnet gegen die falsche
+        // Basis (siehe Vorfall: wiederholtes Speichern addierte den
+        // eingegebenen Wert bei jedem Aufruf erneut drauf).
+        const row = await this.stockLevelsRepository
           .createQueryBuilder('sl')
-          .innerJoin('sl.location', 'loc')
-          .select('COALESCE(SUM(sl.quantity), 0)', 'total')
+          .select('sl.quantity', 'quantity')
           .where('sl.itemId = :itemId', { itemId: item.id })
+          .andWhere('sl.locationId = :locationId', { locationId: item.storageLocation.id })
           .andWhere('sl.vehicleId IS NULL')
-          .andWhere('loc.type != :vehicleType', { vehicleType: 'VEHICLE' });
-        if (branchId) qb.andWhere('loc.branchId = :branchId', { branchId });
-        const row = await qb.getRawOne<{ total: string }>();
-        (item as ItemWithQuantity).currentQuantity = Number(row?.total ?? 0);
+          .getRawOne<{ quantity: string }>();
+        (item as ItemWithQuantity).currentQuantity = Number(row?.quantity ?? 0);
       }
       return item;
     } catch (error) {
