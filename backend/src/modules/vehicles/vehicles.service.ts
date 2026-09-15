@@ -3,6 +3,7 @@ import { InjectRepository } from "@nestjs/typeorm";
 import { Repository } from "typeorm";
 
 import { LocationsService } from "../locations/locations.service";
+import { User } from "../users/entities/user.entity";
 
 import { Vehicle } from "./entities/vehicle.entity";
 
@@ -11,6 +12,8 @@ export class VehiclesService {
   constructor(
     @InjectRepository(Vehicle)
     private readonly repository: Repository<Vehicle>,
+    @InjectRepository(User)
+    private readonly usersRepository: Repository<User>,
     private readonly locationsService: LocationsService,
   ) {}
 
@@ -53,6 +56,13 @@ export class VehiclesService {
       const entity = await this.repository.findOne({ where: { id, branchId } });
       if (!entity) throw new NotFoundException("Vehicle not found");
     }
-    await this.repository.delete(id);
+    // users.vehicleId hat KEIN DB-Constraint auf vehicles.id (nur eine lose
+    // UUID-Spalte) - ohne diese Bereinigung bliebe ein zuvor zugewiesener
+    // Techniker nach dem Loeschen des Fahrzeugs mit einer verwaisten
+    // vehicleId stehen, die ins Leere zeigt.
+    await this.repository.manager.transaction(async (manager) => {
+      await manager.update(User, { vehicleId: id }, { vehicleId: null });
+      await manager.delete(Vehicle, id);
+    });
   }
 }
