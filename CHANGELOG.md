@@ -5,6 +5,27 @@ Format orientiert sich an [Keep a Changelog](https://keepachangelog.com/de/1.0.0
 
 ---
 
+## [4.5.0] – 2026-09-15 · Mobile Performance & Offline-Stabilität
+
+> **Hintergrund:** Techniker im Feld arbeiten praktisch durchgehend offline (der Server ist von außen grundsätzlich nicht erreichbar). Nach ersten Performance-Fixes (v4.4.0) blieb die App auf Handys weiterhin träge bzw. hing sich teils komplett auf. Dieses Release behebt die tatsächlichen Ursachen, jeweils live gegen einen echten (gestoppten) Backend-Container bzw. mit realistischen Datenmengen nachgewiesen — nicht nur per Code-Analyse.
+
+### Bugfixes – Offline-Hänger
+- **Kaltstart-Race in der Offline-Erkennung (`useNetworkStore.ts`):** `isEffectivelyOffline()` meldete bei jedem App-Start/Reload für bis zu 3 Sekunden fälschlich „online", solange der erste Backend-Erreichbarkeits-Check noch nicht durchgelaufen war. In diesem Fenster feuerten alle gleichzeitig geöffneten Tabs (Dashboard, Artikeldaten, Mein Fahrzeug) gleichzeitig Live-Anfragen ab, die einzeln scheitern/timeouten mussten — Hauptursache für „App hängt nach dem Start". Betroffene Stellen in `useAuthStore.ts` (Login/Token-Refresh) und `AppLayout.tsx` (Fahrzeug-Kennzeichen-Anzeige) ebenfalls auf die korrekte Erkennung umgestellt.
+- **Service Worker (`sw.js`):** Cacheable API-Endpunkte (Artikel, Fahrzeuge, Bestand, Profil) nutzen jetzt Stale-while-Revalidate statt bei jedem Aufruf zuerst bis zu 3 Sekunden auf das Netzwerk zu warten, bevor der Cache greift.
+- **Artikeldaten ohne Pagination im Offline-Modus:** Online lädt die Artikelseite immer nur 50 Artikel pro Seite vom Server; offline wurde stattdessen der komplette gecachte Katalog (bei großen Beständen mehrere tausend Artikel) ungefiltert und ungepaginiert gerendert — Hauptursache für „einmal Artikeldaten offline geöffnet, dann hängt die ganze App". Filterung (Suche/Hersteller/Warengruppe) und Pagination laufen jetzt auch offline clientseitig korrekt; als Nebeneffekt funktioniert die Artikelsuche dadurch jetzt auch offline.
+- **Mein Fahrzeug ohne Pagination:** Gleiches Muster wie bei den Artikeldaten — bei mehr als ~100 Artikeln auf dem Fahrzeug wurden alle Zeilen (mobile Kartenansicht wie Desktop-Tabelle) auf einmal gerendert. Jetzt paginiert (25 pro Seite); Suche und Scan-Erkennung arbeiten weiterhin auf dem kompletten Fahrzeugbestand.
+- **IndexedDB-Bulk-Writes blockierten die App:** Der Artikel-Cache schrieb beim Synchronisieren jeden Datensatz einzeln mit eigenem `await` (bei großen Katalogen tausende sequentielle Event-Loop-Durchläufe). Läuft jetzt als Batch innerhalb einer Transaktion.
+
+### Bugfixes – Dauerhafte Hintergrundlast
+- **WebSocket-Reconnect-Sturm:** Zwei Stellen (Restock-Benachrichtigungen, Schnellbuchung-Live-Sync) versuchten bei fehlgeschlagener Verbindung mit Standardeinstellungen unbegrenzt oft alle 1–5 Sekunden erneut zu verbinden — dauerhaft im Hintergrund, unabhängig von der gerade geöffneten Seite. Gemessen: ca. 1 Fehlversuch pro Sekunde im Leerlauf. Jetzt sanfterer Backoff (bis max. 30s) plus zuverlässige Offline-Prüfung vor dem ersten Verbindungsversuch.
+- **Unnötige Re-Renders:** Fünf Seiten abonnierten den kompletten Artikel-Store statt einzelner Felder und rendern dadurch bei jeder Store-Änderung neu, obwohl sie über das Tab-System dauerhaft im Hintergrund gemountet bleiben. Auf gezielte Selektoren umgestellt.
+
+### Bugfixes – Bestand & Anforderungen
+- **Offene Anforderungen blieben nach Bestandsauffüllung fälschlich „PENDING":** Ein Fix vom 05.09.2026 gegen blockierende Hintergrund-Abgleiche hatte einen Nebeneffekt: Wurde der Anforderungs-Abgleich direkt nach einer Bestandsbuchung aufgerufen, sah er die eigene, noch offene Transaktionssperre als „belegt" an und übersprang die Synchronisation stillschweigend. Techniker buchten Artikel korrekt ein, die zugehörige Anforderung verschwand aber nicht aus der Übersicht.
+- **Buchungen konnten ohne Benutzerzuordnung landen:** Manuelle „Ist-Bestand anpassen"-Buchungen konnten mit `userId = NULL` gespeichert werden, wodurch sich im Nachhinein nicht mehr nachvollziehen ließ, wer eine Korrektur vorgenommen hat. Die Buchung wird jetzt immer der authentifizierten Session zugeordnet.
+
+---
+
 ## [4.4.0] – 2026-09-09 · Deployment-Infrastruktur & Code-Qualität
 
 ### Deployment / CI
