@@ -33,9 +33,11 @@ import QrCodeScannerIcon from "@mui/icons-material/QrCodeScanner";
 import AddPhotoAlternateIcon from "@mui/icons-material/AddPhotoAlternate";
 import ShoppingCartIcon from "@mui/icons-material/ShoppingCart";
 import Divider from "@mui/material/Divider";
+import { io, type Socket } from "socket.io-client";
 import useItemsStore from "../store/useItemsStore";
 import useAuthStore from "../store/useAuthStore";
 import { useNetworkStatus } from "../hooks/useNetworkStatus";
+import { isEffectivelyOffline } from "../store/useNetworkStore";
 import type {
   CreateItemRequest,
   UpdateItemRequest,
@@ -1727,6 +1729,45 @@ Import erfolgreich! Die Artikel sind jetzt verfügbar.`;
     page: storePage,
   } = useItemsStore() as any;
   const { isOnline } = useNetworkStatus();
+  const token = useAuthStore((state: any) => state.token);
+
+  // Live-Update: laeuft die Seite bereits (z.B. ein anderer Kollege bucht
+  // Wareneingang oder passt den Ist-Bestand an), zeigte sie den alten Stand
+  // bis zum naechsten manuellen Neuladen. Der Server meldet per WebSocket
+  // "items:updated" nach jeder Bestandsbuchung - hier debounced abonniert,
+  // damit ein groesserer Wareneingang mit vielen Positionen nicht einen
+  // Reload pro Position ausloest.
+  useEffect(() => {
+    // isEffectivelyOffline() liefert direkt nach Mount/Reload fuer bis zu
+    // ~3s "true" (Server-Default bis der erste Health-Check durchgelaufen
+    // ist, siehe useNetworkStore.ts). Ohne isOnline als Dependency wuerde
+    // dieser Effekt in genau diesem Fenster einmalig abbrechen und danach
+    // NIE wieder laufen, selbst wenn die App kurz danach online ist - der
+    // Socket wuerde dann fuer die gesamte Lebensdauer der Seite fehlen.
+    if (!token || !isOnline || isEffectivelyOffline()) return;
+
+    const socket: Socket = io("/stock", {
+      path: "/socket.io",
+      transports: ["websocket"],
+      auth: { token },
+      extraHeaders: { Authorization: `Bearer ${token}` },
+      reconnectionDelay: 2000,
+      reconnectionDelayMax: 30000,
+    });
+
+    let debounceTimer: ReturnType<typeof setTimeout> | null = null;
+    socket.on("items:updated", () => {
+      if (debounceTimer) clearTimeout(debounceTimer);
+      debounceTimer = setTimeout(() => {
+        void loadItems({ force: true });
+      }, 1500);
+    });
+
+    return () => {
+      if (debounceTimer) clearTimeout(debounceTimer);
+      socket.disconnect();
+    };
+  }, [token, isOnline, loadItems]);
   const editingItem = useMemo(
     () => (editingId ? items.find((entry: any) => entry.id === editingId) : null),
     [editingId, items],

@@ -118,6 +118,7 @@ export class StockController {
       : undefined;
     const result = await this.stockService.updateRestockStatus(id, dto, actor);
     this.stockGateway.broadcastRestockUpdate();
+    this.stockGateway.broadcastItemsUpdated();
     return result;
   }
 
@@ -139,6 +140,7 @@ export class StockController {
     this.logger.log(`recordMovement vehicleId=${dto.vehicleId} itemId=${dto.itemId} type=${dto.type} qty=${dto.quantity} userId=${dto.userId}`);
     const result = await this.stockService.recordMovement(dto);
     this.stockGateway.broadcastRestockUpdate();
+    this.stockGateway.broadcastItemsUpdated();
     return result;
   }
 
@@ -244,13 +246,16 @@ export class StockController {
 
   @Post("sync")
   @Permissions("stock.write")
-  syncMovements(@Body() dto: SyncPayloadDto, @Req() req: Request) {
+  async syncMovements(@Body() dto: SyncPayloadDto, @Req() req: Request) {
     const fallbackUserId = req.user?.id;
     if (fallbackUserId && dto.movements) {
       dto.movements = dto.movements.map((m) => (!m.userId ? { ...m, userId: fallbackUserId } : m));
     }
     this.logger.log(`syncMovements count=${dto.movements?.length ?? 0}`);
-    return this.stockService.syncMovements(dto);
+    const result = await this.stockService.syncMovements(dto);
+    this.stockGateway.broadcastRestockUpdate();
+    this.stockGateway.broadcastItemsUpdated();
+    return result;
   }
 
   /**

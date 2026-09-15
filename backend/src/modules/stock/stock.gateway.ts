@@ -73,6 +73,17 @@ export class StockGateway implements OnGatewayConnection, OnGatewayDisconnect {
     }
   }
 
+  // Signalisiert, dass sich Lagerbestand (Ist-Bestand) geaendert hat, damit
+  // z.B. eine bereits geoeffnete Artikeldaten-Seite live nachziehen kann,
+  // statt nur beim naechsten manuellen Neuladen aktuell zu sein.
+  broadcastItemsUpdated() {
+    if (this.server) {
+      this.server.emit('items:updated', { refresh: true });
+    } else {
+      this.logger.warn('Kein Socket-Server verfuegbar, items:updated nicht gesendet');
+    }
+  }
+
   // ── Schnellbuchung Echtzeit-Sync ──────────────────────────────────────────
 
   /** Gerät tritt dem Room des Users bei und erhält sofort den aktuellen Stand. */
