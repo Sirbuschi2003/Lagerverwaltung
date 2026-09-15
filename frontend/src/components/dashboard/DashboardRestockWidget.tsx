@@ -19,6 +19,7 @@ import {
 } from "@mui/material";
 import { useLiveFleetStock } from "../../hooks/useLiveFleetStock";
 import useAuthStore from "../../store/useAuthStore";
+import useNotificationStore from "../../store/useNotificationStore";
 import useRestockStore from "../../store/useRestockStore";
 import type { RestockRequestDto, RestockRequestStatus, StockLevelDto } from "../../utils/api";
 import { isEffectivelyOffline } from "../../store/useNetworkStore";
@@ -76,6 +77,7 @@ const DashboardRestockWidget: React.FC = () => {
   const updateStatus = useRestockStore((state) => state.updateStatus);
   const myRequests = useRestockStore((state) => state.myRequests);
   const loadFleet = useRestockStore((state) => state.loadFleet);
+  const markReadByItemId = useNotificationStore((state) => state.markReadByItemId);
 
   const [selectedTechnician, setSelectedTechnician] = useState<string | null>(null);
   const [technicians, setTechnicians] = useState<Technician[]>([]);
@@ -632,6 +634,7 @@ const DashboardRestockWidget: React.FC = () => {
                                 void (async () => {
                                   try {
                                     await updateStatus(req.id, { status: "FULFILLED" });
+                                    markReadByItemId(entry.item.id);
                                     if (vehicleId) {
                                       const loadForVehicle =
                                         useRestockStore.getState().loadForVehicle;
@@ -677,6 +680,7 @@ const DashboardRestockWidget: React.FC = () => {
                                 void (async () => {
                                   try {
                                     await updateStatus(req.id, { status: "FULFILLED" });
+                                    markReadByItemId(entry.item.id);
                                     if (vehicleId) {
                                       const loadForVehicle =
                                         useRestockStore.getState().loadForVehicle;

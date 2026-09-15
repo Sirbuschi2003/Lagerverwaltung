@@ -141,7 +141,15 @@ self.addEventListener('fetch', (event) => {
               return ensureUtf8Headers(response);
             });
 
-            if (cached) {
+            // Aufrufer kann mit "Cache-Control: no-cache" verlangen, dass NICHT
+            // die (moeglicherweise veraltete) Cache-Antwort sofort zurueckgegeben
+            // wird - wichtig direkt nach einer eigenen Buchung/Statusaenderung,
+            // wenn die Seite garantiert den frischen Stand sehen soll (z.B.
+            // Anforderung nach "Erhalten"-Klick verschwindet sonst nicht sofort,
+            // weil stale-while-revalidate erstmal den alten Bestand zurueckgibt).
+            const forceFresh = request.headers.get('Cache-Control') === 'no-cache';
+
+            if (cached && !forceFresh) {
               // Stale-while-revalidate: sofort aus dem Cache antworten statt
               // JEDES Mal zuerst bis zu 3s auf einen Netzwerk-Versuch zu
               // warten, der bei einem Techniker ohne Route zum Server sowieso
@@ -154,9 +162,14 @@ self.addEventListener('fetch', (event) => {
               return ensureUtf8Headers(cached);
             }
 
-            // Noch kein Cache-Eintrag vorhanden (allererster Aufruf): auf das
-            // Netzwerk warten, mit Fallback-Fehlerantwort falls das fehlschlaegt.
+            // Kein Cache-Eintrag ODER erzwungene Frische: auf das Netzwerk
+            // warten. Schlaegt das fehl (z.B. tatsaechlich offline), lieber
+            // auf einen vorhandenen (dann eben doch veralteten) Cache-Eintrag
+            // zurueckfallen statt einer Fehlerantwort - "no-cache" soll nur
+            // eine veraltete ERFOLGREICHE Antwort verhindern, nicht die
+            // Offline-Faehigkeit aufheben.
             return networkFetch.catch(() => {
+              if (cached) return ensureUtf8Headers(cached);
               if (url.pathname.includes('/auth/profile')) {
                 return new Response(JSON.stringify({ error: 'OFFLINE_MODE' }), {
                   status: 503,
