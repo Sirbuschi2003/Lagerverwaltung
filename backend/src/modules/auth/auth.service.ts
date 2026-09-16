@@ -5,6 +5,7 @@ import { ConfigService } from "@nestjs/config";
 import { JwtService } from "@nestjs/jwt";
 import { InjectRepository } from "@nestjs/typeorm";
 import * as bcrypt from "bcrypt";
+import type { StringValue } from "ms";
 import { generateSecret as otpGenerateSecret, generateURI as otpGenerateURI, verifySync as otpVerifySync } from "otplib";
 import * as QRCode from "qrcode";
 import { Repository } from "typeorm";
@@ -303,7 +304,9 @@ export class AuthService {
 
     await this.loggingService.logUserLogin(user, context);
 
-    const refreshToken = await this.jwtService.signAsync(refreshPayload, { expiresIn: refreshExpiresIn });
+    // @nestjs/jwt v12 narrows expiresIn to a branded "ms" string type - a plain
+    // string from ConfigService is runtime-correct but no longer type-compatible.
+    const refreshToken = await this.jwtService.signAsync(refreshPayload, { expiresIn: refreshExpiresIn as StringValue });
 
     // Refresh-Token in Datenbank persistieren (SEC-002)
     try {

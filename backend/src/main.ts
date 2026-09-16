@@ -149,7 +149,7 @@ async function bootstrap() {
     ? process.env.ALLOWED_ORIGINS.split(",").map((o) => o.trim())
     : defaultOrigins;
   app.enableCors({
-    origin: (origin, callback) => {
+    origin: (origin: string | undefined, callback: (err: Error | null, allow?: boolean) => void) => {
       // Same-origin Requests (kein Origin-Header) und erlaubte Origins durchlassen
       if (!origin || allowedOrigins.includes(origin)) {
         callback(null, true);

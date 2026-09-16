@@ -3,6 +3,7 @@ import { ConfigModule, ConfigService } from "@nestjs/config";
 import { JwtModule } from "@nestjs/jwt";
 import { PassportModule } from "@nestjs/passport";
 import { TypeOrmModule } from "@nestjs/typeorm";
+import type { StringValue } from "ms";
 
 import { AccessControlModule } from "../access-control/access-control.module";
 import { EmailModule } from "../email/email.module";
@@ -35,7 +36,9 @@ import { JwtStrategy } from "./strategies/jwt.strategy";
       inject: [ConfigService],
       useFactory: (configService: ConfigService) => ({
         secret: configService.get<string>("auth.jwtSecret"),
-        signOptions: { expiresIn: configService.get<string>("auth.jwtExpiresIn") },
+        // @nestjs/jwt v12 narrows expiresIn to a branded "ms" string type (e.g. "8h") -
+        // a plain string from ConfigService is runtime-correct but no longer type-compatible.
+        signOptions: { expiresIn: configService.get<string>("auth.jwtExpiresIn") as StringValue },
       }),
     }),
   ],

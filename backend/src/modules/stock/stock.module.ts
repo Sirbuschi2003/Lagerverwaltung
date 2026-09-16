@@ -2,6 +2,7 @@ import { Module } from "@nestjs/common";
 import { ConfigModule, ConfigService } from "@nestjs/config";
 import { JwtModule } from "@nestjs/jwt";
 import { TypeOrmModule } from "@nestjs/typeorm";
+import type { StringValue } from "ms";
 
 import { WsJwtGuard } from "../../common/guards/ws-jwt.guard";
 import { AccessControlModule } from "../access-control/access-control.module";
@@ -31,7 +32,9 @@ import { StockService } from "./stock.service";
       inject: [ConfigService],
       useFactory: (configService: ConfigService) => ({
         secret: configService.get<string>("auth.jwtSecret"),
-        signOptions: { expiresIn: configService.get<string>("auth.jwtExpiresIn") },
+        // @nestjs/jwt v12 narrows expiresIn to a branded "ms" string type (e.g. "8h") -
+        // a plain string from ConfigService is runtime-correct but no longer type-compatible.
+        signOptions: { expiresIn: configService.get<string>("auth.jwtExpiresIn") as StringValue },
       }),
     }),
     TypeOrmModule.forFeature([StockLevel, StockMovement, RestockRequest, InventorySession]),

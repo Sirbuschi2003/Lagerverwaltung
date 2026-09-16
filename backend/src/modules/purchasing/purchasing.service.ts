@@ -1181,7 +1181,9 @@ export class PurchasingService {
 
     try {
       const page = await browser.newPage();
-      await page.setContent(fullHtml, { waitUntil: "networkidle0" });
+      // Newer Puppeteer only supports "load"/"domcontentloaded" for setContent();
+      // "load" ensures embedded images/fonts are ready before PDF rendering.
+      await page.setContent(fullHtml, { waitUntil: "load" });
       const pdfBuffer = await page.pdf({
         format: "A4",
         printBackground: true,

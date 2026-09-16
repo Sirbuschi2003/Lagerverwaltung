@@ -5,6 +5,34 @@ Format orientiert sich an [Keep a Changelog](https://keepachangelog.com/de/1.0.0
 
 ---
 
+## [4.6.0] – 2026-09-16 · Monatlicher Dependency-Checkup
+
+> **Hintergrund:** Erster turnusmäßiger Sicherheits-Checkup: veraltete Abhängigkeiten geprüft und auf aktuelle, sichere Versionen angehoben, jeweils mit Build/Typecheck/E2E-Test bzw. Live-Test in Docker verifiziert.
+
+### Backend
+- **NestJS-Kern auf v11** angehoben (`@nestjs/common`, `@nestjs/core`, `@nestjs/platform-express`, `@nestjs/platform-socket.io`, `@nestjs/websockets`, `@nestjs/testing`, `@nestjs/cli`, `@nestjs/schematics`) sowie `@nestjs/config`, `@nestjs/jwt`, `@nestjs/mapped-types`, `@nestjs/passport`, `@nestjs/schedule`, `@nestjs/typeorm` auf die jeweils neuesten kompatiblen Versionen. v12 bewusst noch nicht verwendet: `@nestjs/throttler` unterstützt es upstream noch nicht offiziell (Peer-Dependency-Konflikt).
+- `sharp`, `nodemailer`, `adm-zip`, `pdfkit`, `puppeteer`, `class-validator`, `reflect-metadata` auf aktuelle Hauptversionen angehoben. Puppeteers `setContent()` unterstützt `waitUntil: "networkidle0"` nicht mehr (entfernt) – auf `"load"` umgestellt (betrifft Bestell- und Berichts-PDF-Erzeugung).
+- `@nestjs/jwt` v12 verlangt einen gebrandeten `ms.StringValue`-Typ für `expiresIn` statt eines einfachen `string` – an den drei betroffenen Stellen (`auth.module.ts`, `stock.module.ts`, `auth.service.ts`) entsprechend typisiert.
+- Dev-Tooling: `jest`/`ts-jest`/`@types/jest` auf v30 (CLI-Flag `--testPathPattern` → `--testPathPatterns` in `test:e2e`-Script angepasst), `rimraf` sowie diverse `@types/*`-Pakete aktualisiert.
+- **Ergebnis:** 54 → 13 offene npm-audit-Findings (verbleibend: `multer`-DoS über den v12-Sprung blockiert durch `@nestjs/throttler`, sowie `exceljs`/`uuid` über eine sehr frisch veröffentlichte TypeORM-v1-Major-Version, siehe unten).
+
+### Frontend
+- **React 19**, **React Router v7** sowie `date-fns`, `idb`, `@zxing/browser`/`@zxing/library`, `papaparse`, `react-rnd` auf aktuelle Hauptversionen angehoben.
+- **Ergebnis:** 32 → 3 offene npm-audit-Findings (verbleibend: `esbuild`/`vite`-Dev-Server-Schwachstelle, betrifft nicht den produktiven Build).
+
+### Bewusst zurückgestellt (zu frisch/riskant für einen automatisierten Checkup)
+- **TypeORM v1.x** – erst zwei Wochen alt (nach Jahren auf 0.3.x), kein Track Record für eine produktiv genutzte Datenschicht.
+- **MUI v9** (bzw. v6–v9 in Summe) – Update auf `@mui/material@latest` erzeugte 439 TypeScript-Fehler durch mehrere API-Brüche (u. a. `InputProps`, `Stack`/`Grid`-Props). Eigene, dedizierte Migration nötig.
+- **Vite v8** – nutzt intern den neuen "rolldown"-Bundler mit ungelösten Peer-Konflikten in dessen eigenem Babel-8-Zweig; zu unausgereift.
+- **Zustand v5** – geänderte Default-Vergleichslogik für Selektoren verursachte einen React-Endlos-Render-Fehler (#185) direkt beim App-Start; ohne Audit aller Store-Aufrufstellen (`useShallow`) nicht sicher migrierbar.
+- **TypeScript 7** – kompletter Compiler-Neubau, erst ganz frisch als "latest" markiert.
+- **ESLint 9/10** (Backend + Frontend) – erfordert Migration auf das neue Flat-Config-Format (`eslint.config.*`), eigener Aufwand unabhängig vom Versions-Update selbst.
+
+### Nebenbei gefunden (nicht Teil dieses Updates, separat vorgemerkt)
+- Super-Admin-Benutzer (`branchId = null`) können keine Lagerorte anlegen (`POST /api/locations` wirft HTTP 500) – vorbestehender Bug, unabhängig vom Dependency-Update.
+
+---
+
 ## [4.5.0] – 2026-09-15 · Mobile Performance & Offline-Stabilität
 
 > **Hintergrund:** Techniker im Feld arbeiten praktisch durchgehend offline (der Server ist von außen grundsätzlich nicht erreichbar). Nach ersten Performance-Fixes (v4.4.0) blieb die App auf Handys weiterhin träge bzw. hing sich teils komplett auf. Dieses Release behebt die tatsächlichen Ursachen, jeweils live gegen einen echten (gestoppten) Backend-Container bzw. mit realistischen Datenmengen nachgewiesen — nicht nur per Code-Analyse.
