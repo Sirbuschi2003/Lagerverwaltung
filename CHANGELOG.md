@@ -5,6 +5,20 @@ Format orientiert sich an [Keep a Changelog](https://keepachangelog.com/de/1.0.0
 
 ---
 
+## [4.6.1] – 2026-09-16 · Bestellungs-Archivierung & Log-Wachstum
+
+> **Hintergrund:** Zwei Vorfälle am selben Tag: manuelles Archivieren von Bestellungen wurde als unnötiger Zusatzschritt empfunden, und eine produktive `system_logs`-Tabelle war auf 130.000 Zeilen (~75MB) angewachsen, weil die vorhandene Archivierungsfunktion nie automatisch lief.
+
+### Bugfixes
+- **Bestellungen archivieren sich jetzt automatisch:** Ein vollständiger Wareneingang setzte den Status bisher auf ERHALTEN (RECEIVED), Archivieren war ein separater, manueller Klick. Springt jetzt bei vollständigem Wareneingang direkt auf ARCHIVIERT.
+- **Log-Archivierung lief nie automatisch:** Es gab bereits eine Funktion, die alte Protokolle (Standard: älter als 90 Tage) aus `system_logs` in verschlüsselte Archivdateien auslagert – aber ohne Cron-Job, nur per manuellem Super-Admin-Klick, der in der Praxis nie betätigt wurde. Neuer täglicher Job (04:00 Uhr) übernimmt das jetzt automatisch.
+- **`getPastDatesInDb()` lieferte MySQL-`DATE`-Werte als JS-`Date`-Objekte statt als `"YYYY-MM-DD"`-Strings** (mysql2-Verhalten) – dadurch scheiterte die Regex-Validierung in `archiveLogs()` für jedes Datum, wodurch auch der bereits vorhandene manuelle „Alle archivieren"-Button faktisch nie funktioniert hätte. Behoben mit `DATE_FORMAT()` statt `DATE()`.
+
+### Dokumentation
+- Handbuch (Bestellungen, Systemprotokolle) an die neue automatische Archivierung angepasst.
+
+---
+
 ## [4.6.0] – 2026-09-16 · Monatlicher Dependency-Checkup
 
 > **Hintergrund:** Erster turnusmäßiger Sicherheits-Checkup: veraltete Abhängigkeiten geprüft und auf aktuelle, sichere Versionen angehoben, jeweils mit Build/Typecheck/E2E-Test bzw. Live-Test in Docker verifiziert.

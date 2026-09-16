@@ -318,12 +318,12 @@ const SECTIONS: HelpSection[] = [
           <Step>Bestellung öffnen → „Wareneingang erfassen", Lieferschein-Nummer eintragen.</Step>
           <Step>Erhaltene Mengen eintragen (können von bestellten abweichen).</Step>
           <Step>„Einbuchen" → Bestand wird automatisch erhöht.</Step>
-          <Step>Ist noch nicht alles vollständig erhalten, bleibt die Bestellung auf BESTELLT und „Wareneingang erfassen" kann später erneut für die restliche Menge genutzt werden (mehrere Teil-Lieferungen möglich, jede mit eigener Lieferschein-Nummer). Erst wenn alle Positionen vollständig sind, wechselt der Status auf ERHALTEN.</Step>
+          <Step>Ist noch nicht alles vollständig erhalten, bleibt die Bestellung auf BESTELLT und „Wareneingang erfassen" kann später erneut für die restliche Menge genutzt werden (mehrere Teil-Lieferungen möglich, jede mit eigener Lieferschein-Nummer). Erst wenn alle Positionen vollständig sind, wechselt der Status direkt auf ARCHIVIERT und verschwindet automatisch aus der aktiven Liste (seit 16.09.2026) – kein manueller Archivieren-Klick mehr nötig.</Step>
         </List>
         <SectionTitle>Bestellung archivieren</SectionTitle>
         <List dense disablePadding>
-          <Step>Eine Bestellung mit Status ERHALTEN kann per „Archivieren"-Button manuell in den Status ARCHIVIERT verschoben werden.</Step>
-          <Step>Das passiert nicht automatisch – ohne diesen Klick bleibt die Bestellung als ERHALTEN in der aktiven Liste stehen.</Step>
+          <Step>Ein vollständiger Wareneingang archiviert die Bestellung automatisch (siehe oben).</Step>
+          <Step>Der „Archivieren"-Button bleibt trotzdem verfügbar, z. B. um eine Bestellung manuell zu archivieren, die nie vollständig geliefert wurde.</Step>
         </List>
         <SectionTitle>Bestellvorschläge</SectionTitle>
         <List dense disablePadding>
@@ -602,7 +602,13 @@ const SECTIONS: HelpSection[] = [
           <Step>Nach Kategorie, Zeitraum oder Benutzer filtern.</Step>
           <Step>Protokolle als CSV exportieren.</Step>
         </List>
-        <Tip>Die Protokolle werden für eine konfigurierbare Zeitspanne aufbewahrt (Retention Policy in den Lagereinstellungen).</Tip>
+        <SectionTitle>Archivierung (nur Super-Admin)</SectionTitle>
+        <List dense disablePadding>
+          <Step>Ganz unten im Bereich „Log-Verwaltung" lässt sich die Aktiv-Aufbewahrung einstellen (Standard: 90 Tage) – so lange bleiben Protokolle in der durchsuchbaren Liste, bevor sie ins Archiv wandern.</Step>
+          <Step>Seit 16.09.2026 verschiebt ein automatischer nächtlicher Vorgang (04:00 Uhr) Protokolle, die älter als die eingestellte Frist sind, selbstständig in verschlüsselte Archivdateien und entfernt sie aus der aktiven Tabelle – ohne das wächst die Datenbank sonst unbegrenzt.</Step>
+          <Step>Über den Button „Alle archivieren" kann das auch jederzeit manuell sofort angestoßen werden, z.B. um einen bestehenden Rückstand aufzuholen.</Step>
+          <Step>Archivierte Protokolle bleiben mindestens 10 Jahre erhalten (§147 AO/GoBD) und sind über die separate Seite „Archiv-Verwaltung" einsehbar, herunterladbar (auch als ZIP) und – nach Ablauf der Aufbewahrungsfrist – löschbar.</Step>
+        </List>
       </Box>
     ),
   },
