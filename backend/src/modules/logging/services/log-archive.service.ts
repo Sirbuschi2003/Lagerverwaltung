@@ -3,6 +3,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 
 import { Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { Cron, CronExpression } from '@nestjs/schedule';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, Between } from 'typeorm';
 
@@ -257,10 +258,45 @@ export class LogArchiveService {
 
   /** Returns all distinct past dates (before today) that still have logs in the DB */
   async getPastDatesInDb(): Promise<string[]> {
+    // DATE_FORMAT statt DATE(): mysql2 liefert fuer DATE-Spalten/Ausdruecke
+    // JS-Date-Objekte zurueck (nicht Strings), wodurch archiveLogs()'s
+    // Regex-Validierung (erwartet "YYYY-MM-DD") fuer jedes Datum fehlschlug.
     const rows: { date: string }[] = await this.logRepo.query(
-      `SELECT DISTINCT DATE(createdAt) AS \`date\` FROM system_logs WHERE DATE(createdAt) < CURDATE() ORDER BY \`date\``,
+      `SELECT DISTINCT DATE_FORMAT(createdAt, '%Y-%m-%d') AS \`date\` FROM system_logs WHERE DATE(createdAt) < CURDATE() ORDER BY \`date\``,
     );
     return rows.map(r => r.date);
+  }
+
+  /**
+   * Verschiebt taeglich automatisch Logs, die aelter als die konfigurierte
+   * Aufbewahrungsfrist (log.retentionDays) sind, ins Archiv und raeumt
+   * abgelaufene Archive auf. Ohne diesen Job blieb archiveLogs() ein rein
+   * manueller Admin-Button, der in der Praxis nie geklickt wurde -
+   * system_logs wuchs dadurch ungebremst (Vorfall 16.09.2026: 130k Zeilen,
+   * ~75MB bei einer produktiv genutzten Installation).
+   */
+  @Cron(CronExpression.EVERY_DAY_AT_4AM)
+  async archiveOldLogs(): Promise<void> {
+    const retentionDays = await this.loggingService.getLogRetentionDays();
+    const cutoff = new Date();
+    cutoff.setDate(cutoff.getDate() - retentionDays);
+    const cutoffStr = cutoff.toISOString().slice(0, 10);
+
+    const pastDates = (await this.getPastDatesInDb()).filter((date) => date < cutoffStr);
+    if (pastDates.length === 0) return;
+
+    let totalArchived = 0;
+    for (const date of pastDates) {
+      const result = await this.archiveLogs(date);
+      totalArchived += Object.values(result.byCategory).reduce((sum, n) => sum + n, 0);
+    }
+
+    const archiveRetentionDays = await this.loggingService.getArchiveRetentionDays();
+    const removedOldArchiveDirs = this.cleanupOldArchives(archiveRetentionDays);
+
+    this.logger.log(
+      `Automatische Log-Archivierung: ${totalArchived} Logs aus ${pastDates.length} Tagen archiviert, ${removedOldArchiveDirs} alte Archive entfernt`,
+    );
   }
 
   /** Delete archive directories older than retentionDays. Returns count of removed dirs. */

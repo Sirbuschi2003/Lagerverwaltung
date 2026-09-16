@@ -240,7 +240,9 @@ describeIf("Core workflows E2E", () => {
       },
       token,
     );
-    expect(fullReceipt.status).toBe("RECEIVED");
+    // Vollstaendiger Wareneingang archiviert die Bestellung jetzt direkt,
+    // statt sie manuell im separaten Archivieren-Schritt zu belassen.
+    expect(fullReceipt.status).toBe("ARCHIVED");
     expect(fullReceipt.lines[0]?.receivedQuantity).toBe(5);
 
     await requestJson(

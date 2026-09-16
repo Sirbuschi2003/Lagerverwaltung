@@ -499,7 +499,10 @@ export class PurchasingService {
 
       const allReceived = order.lines.every((line) => line.receivedQuantity >= line.quantity);
       if (allReceived) {
-        order.status = "RECEIVED";
+        // Direkt archivieren statt nur "Eingegangen" zu setzen - der manuelle
+        // Zwischenschritt wurde als reine Zusatzarbeit empfunden (User-Feedback
+        // 16.09.2026), ohne dass ein fachlicher Grund dagegen sprach.
+        order.status = "ARCHIVED";
         order.receivedAt = new Date();
         if (!order.orderedAt) order.orderedAt = new Date();
       } else {
