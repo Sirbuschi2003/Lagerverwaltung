@@ -1,4 +1,4 @@
-import { CanActivate, ExecutionContext, Injectable } from "@nestjs/common";
+import { CanActivate, ExecutionContext, ForbiddenException, Injectable } from "@nestjs/common";
 import { Reflector } from "@nestjs/core";
 import type { Request } from "express";
 
@@ -30,6 +30,13 @@ export class PermissionsGuard implements CanActivate {
 
     const effective = await this.accessControlService.getEffectivePermissionsForUser(user.id, user.role);
     const set = new Set(effective);
-    return required.every((perm) => set.has(perm));
+    const missing = required.filter((perm) => !set.has(perm));
+    if (missing.length === 0) return true;
+
+    // Klare, konkrete Meldung statt der generischen NestJS-Standardmeldung
+    // "Forbidden resource" - damit im Frontend sichtbar wird, WARUM eine
+    // Aktion fehlschlug, statt dass sie scheinbar wirkungslos verpufft.
+    const missingLabels = await this.accessControlService.describePermissions(missing);
+    throw new ForbiddenException(`Fehlende Berechtigung: ${missingLabels.join(", ")}`);
   }
 }

@@ -111,6 +111,7 @@ const ROLE_DEFAULTS: Record<string, string[]> = {
     "items.view",
     "items.create",
     "items.edit",
+    "items.delete",
     "scanner.use",
     "quick-booking.use",
     "vehicles.view",
@@ -252,6 +253,16 @@ export class AccessControlService implements OnModuleInit {
 
   async listPermissions(): Promise<Permission[]> {
     return this.permissionRepo.find({ order: { key: "ASC" } });
+  }
+
+  /**
+   * Liefert lesbare deutsche Beschreibungen zu Berechtigungs-Keys, damit ein
+   * Guard bei fehlender Berechtigung eine konkrete Fehlermeldung zeigen kann
+   * statt der generischen NestJS-Standardmeldung "Forbidden resource".
+   */
+  async describePermissions(keys: string[]): Promise<string[]> {
+    const descriptionByKey = new Map(DEFAULT_PERMISSIONS.map((p) => [p.key, p.description]));
+    return keys.map((key) => descriptionByKey.get(key) ?? key);
   }
 
   /**

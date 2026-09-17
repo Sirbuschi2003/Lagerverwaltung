@@ -2114,8 +2114,9 @@ Import erfolgreich! Die Artikel sind jetzt verfügbar.`;
     if (!deleteTarget) return;
     try {
       await deleteItem(deleteTarget);
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
+      alert(`Fehler beim Löschen: ${err?.response?.data?.message || err?.message || "Unbekannt"}`);
     } finally {
       setDeleteTarget(null);
     }
