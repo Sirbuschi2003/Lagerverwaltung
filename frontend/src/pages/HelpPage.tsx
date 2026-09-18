@@ -599,7 +599,9 @@ const SECTIONS: HelpSection[] = [
         </List>
         <SectionTitle>Filtern und Exportieren</SectionTitle>
         <List dense disablePadding>
-          <Step>Nach Kategorie, Zeitraum oder Benutzer filtern.</Step>
+          <Step>Nach Kategorie, Freitext (Aktion) und Zeitraum ("Von"/"Bis" mit Datum und Uhrzeit) filtern.</Step>
+          <Step>Für Super-Admins bezieht die Suche ab dem Feld „Von" automatisch auch bereits archivierte Protokolle mit ein, sofern der Zeitraum in die Vergangenheit reicht – man muss also nicht separat im Archiv suchen. Archivierte Treffer sind mit einem „Archiv"-Chip gekennzeichnet und enthalten aus Datenschutzgründen keinen gespeicherten Benutzernamen, nur die Benutzer-ID.</Step>
+          <Step>Bei sehr weit zurückliegenden/breiten Zeiträumen wird die Archiv-Suche auf ca. 400 Tage pro Anfrage begrenzt – ein Hinweis in der Filterleiste zeigt das an; den Zeitraum bei Bedarf enger fassen.</Step>
           <Step>Protokolle als CSV exportieren.</Step>
         </List>
         <SectionTitle>Archivierung (nur Super-Admin)</SectionTitle>

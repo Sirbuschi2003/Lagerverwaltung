@@ -71,7 +71,7 @@ const ArchiveManagementPage: React.FC<{ isEmbedded?: boolean }> = ({ isEmbedded 
   const [retentionDays, setRetentionDays] = useState(30);
   const [selectedArchives, setSelectedArchives] = useState<string[]>([]);
   const [openRetentionDialog, setOpenRetentionDialog] = useState(false);
-  const [newRetentionDays, setNewRetentionDays] = useState(30);
+  const [newRetentionDays, setNewRetentionDays] = useState(3650);
   const [downloading, setDownloading] = useState(false);
 
   const [confirmOpen, setConfirmOpen] = useState(false);
@@ -158,8 +158,8 @@ const ArchiveManagementPage: React.FC<{ isEmbedded?: boolean }> = ({ isEmbedded 
       setArchives(groupedArray);
       if (statsResponse) {
         setStats(statsResponse);
-        setRetentionDays(statsResponse.retentionDays || 30);
-        setNewRetentionDays(statsResponse.retentionDays || 30);
+        setRetentionDays(statsResponse.retentionDays || 3650);
+        setNewRetentionDays(statsResponse.retentionDays || 3650);
       }
     } catch (error) {
       console.error("Fehler beim Laden der Archive:", error);
@@ -220,9 +220,9 @@ const ArchiveManagementPage: React.FC<{ isEmbedded?: boolean }> = ({ isEmbedded 
       setOpenRetentionDialog(false);
       alert("Aufbewahrungsdauer aktualisiert");
       loadArchives();
-    } catch (error) {
+    } catch (error: any) {
       console.error("Fehler beim Aktualisieren der Aufbewahrungsdauer:", error);
-      alert("Fehler beim Aktualisieren");
+      alert(`Fehler beim Aktualisieren: ${error?.response?.data?.message || error?.message || "Unbekannt"}`);
     }
   };
 
@@ -603,16 +603,16 @@ const ArchiveManagementPage: React.FC<{ isEmbedded?: boolean }> = ({ isEmbedded 
 
       {/* Dialog: Aufbewahrungsdauer ändern */}
       <Dialog open={openRetentionDialog} onClose={() => setOpenRetentionDialog(false)}>
-        <DialogTitle>Aufbewahrungsdauer ändern</DialogTitle>
+        <DialogTitle>Archiv-Aufbewahrung ändern (Tage bis Löschung)</DialogTitle>
         <DialogContent sx={{ pt: 2 }}>
           <TextField
             type="number"
-            label="Tage"
+            label="Tage bis Löschung"
             value={newRetentionDays}
-            onChange={(e) => setNewRetentionDays(parseInt(e.target.value) || 30)}
+            onChange={(e) => setNewRetentionDays(parseInt(e.target.value) || 3650)}
             fullWidth
-            inputProps={{ min: 1, max: 3650 }}
-            helperText="Archive älter als diese Anzahl von Tagen werden automatisch gelöscht"
+            inputProps={{ min: 3650, max: 36500 }}
+            helperText="Archive älter als diese Anzahl von Tagen werden automatisch gelöscht. Mindestens 3650 Tage (10 Jahre) – gesetzliche Aufbewahrungspflicht nach §147 AO/GoBD, ein kleinerer Wert wird abgelehnt."
           />
         </DialogContent>
         <DialogActions>

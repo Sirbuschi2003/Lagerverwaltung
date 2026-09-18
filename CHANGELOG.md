@@ -5,6 +5,21 @@ Format orientiert sich an [Keep a Changelog](https://keepachangelog.com/de/1.0.0
 
 ---
 
+## [4.7.0] – 2026-09-18 · Log-Suche über Archiv hinweg
+
+> **Hintergrund:** Nach der automatischen Log-Archivierung (4.6.1) landen ältere Protokolle nicht mehr in der Live-Tabelle. Damit eine Suche danach nicht "leer" wirkt, sucht die bestehende Systemprotokolle-Suche jetzt transparent auch im Archiv mit.
+
+### Neue Funktion
+- **Zeitraum-Filter ("Von"/"Bis" mit Datum und Uhrzeit)** in den Systemprotokollen ergänzt (bisher nur Kategorie und Freitext).
+- Sobald ein Super-Admin ein "Von"-Datum setzt, das in die Vergangenheit reicht, durchsucht die Suche automatisch auch bereits archivierte Tage – kombiniert mit Kategorie-, Level- und Freitext-Filtern. Treffer aus dem Archiv sind mit einem "Archiv"-Chip gekennzeichnet und enthalten (DSGVO-Datensparsamkeit) keinen gespeicherten Benutzernamen, nur die Benutzer-ID.
+- Aus Performance-Gründen pro Anfrage auf max. ca. 400 gescannte Archiv-Tage begrenzt; ein Hinweis in der Filterleiste zeigt an, wenn eingegrenzt werden sollte.
+- Handbuch (Systemprotokolle) entsprechend ergänzt.
+
+### Bugfix
+- **Archiv-Aufbewahrung auf der Seite "Protokoll-Archiv" hatte keine Wirkung:** Das Eingabefeld erlaubte 1–3650 Tage und bestätigte jede Eingabe als gespeichert, aber `cleanupOldArchives()` erzwingt ohnehin ein hartes 10-Jahre-Minimum (GoBD §147 AO) – ein eingegebener kleinerer Wert (z. B. 30 Tage) wurde also nie tatsächlich angewendet, obwohl die Seite "Aktualisiert" meldete. Backend lehnt Werte unter 3650 Tagen jetzt mit klarer Fehlermeldung ab, Eingabefeld und Vorschlagswert entsprechend korrigiert. Getrennt davon bleibt die "Aktiv-Aufbewahrung (Tage bis Archiv)" auf der Systemprotokolle-Seite unverändert frei einstellbar (1–3650 Tage) – das betrifft nur, wie lange Logs in der schnellen Live-Tabelle bleiben, nicht deren endgültige Löschung.
+
+---
+
 ## [4.6.1] – 2026-09-16 · Bestellungs-Archivierung & Log-Wachstum
 
 > **Hintergrund:** Zwei Vorfälle am selben Tag: manuelles Archivieren von Bestellungen wurde als unnötiger Zusatzschritt empfunden, und eine produktive `system_logs`-Tabelle war auf 130.000 Zeilen (~75MB) angewachsen, weil die vorhandene Archivierungsfunktion nie automatisch lief.

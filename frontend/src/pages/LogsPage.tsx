@@ -485,6 +485,12 @@ const LogsPage: React.FC<{ isEmbedded?: boolean }> = ({ isEmbedded = false }) =>
   const [totalLogs, setTotalLogs] = useState(0);
   const [selectedCategory, setSelectedCategory] = useState('');
   const [searchText, setSearchText] = useState('');
+  // datetime-local liefert "YYYY-MM-DDTHH:mm" ohne Zeitzone (lokale Zeit) -
+  // new Date(...) interpretiert das als lokale Zeit, .toISOString() wandelt
+  // korrekt in UTC fuer die Backend-Abfrage um.
+  const [searchStartDateTime, setSearchStartDateTime] = useState('');
+  const [searchEndDateTime, setSearchEndDateTime] = useState('');
+  const [archiveSearchInfo, setArchiveSearchInfo] = useState<{ scannedDays: number; truncated: boolean } | null>(null);
   const [liveMode, setLiveMode] = useState(false);
   const liveIntervalRef = React.useRef<ReturnType<typeof setInterval> | null>(null);
   const [showDetails, setShowDetails] = useState<LogEntry | null>(null);
@@ -509,6 +515,11 @@ const LogsPage: React.FC<{ isEmbedded?: boolean }> = ({ isEmbedded = false }) =>
       setLogs(prev => append ? [...prev, ...response.logs] : response.logs);
       setTotalLogs(response.total);
       setHasMore((filters.offset || 0) + response.logs.length < response.total);
+      setArchiveSearchInfo(
+        response.archiveScannedDays !== undefined
+          ? { scannedDays: response.archiveScannedDays, truncated: !!response.archiveTruncated }
+          : null,
+      );
     } catch (e) {
       console.error('Fehler beim Laden der Logs:', e);
     }
@@ -577,15 +588,35 @@ const LogsPage: React.FC<{ isEmbedded?: boolean }> = ({ isEmbedded = false }) =>
     return () => { if (liveIntervalRef.current) clearInterval(liveIntervalRef.current); };
   }, []);
 
+  const buildDateRangeFilters = (): Pick<LogFilters, 'startDate' | 'endDate'> => ({
+    // new Date("YYYY-MM-DDTHH:mm") interpretiert den datetime-local-Wert als
+    // lokale Zeit; toISOString() liefert die korrekte UTC-Zeit fuers Backend.
+    startDate: searchStartDateTime ? new Date(searchStartDateTime).toISOString() : undefined,
+    endDate: searchEndDateTime ? new Date(searchEndDateTime).toISOString() : undefined,
+  });
+
   const handleCategoryChange = (cat: string) => {
     setSelectedCategory(cat);
     setSearchText('');
-    setLogFilters({ limit: 50, offset: 0, category: cat || undefined });
+    setLogFilters({ limit: 50, offset: 0, category: cat || undefined, ...buildDateRangeFilters() });
   };
 
   const handleSearch = (text: string) => {
     setSearchText(text);
-    setLogFilters({ limit: 50, offset: 0, category: selectedCategory || undefined, action: text || undefined });
+    setLogFilters({ limit: 50, offset: 0, category: selectedCategory || undefined, action: text || undefined, ...buildDateRangeFilters() });
+  };
+
+  const handleDateRangeChange = (startDateTime: string, endDateTime: string) => {
+    setSearchStartDateTime(startDateTime);
+    setSearchEndDateTime(endDateTime);
+    setLogFilters({
+      limit: 50,
+      offset: 0,
+      category: selectedCategory || undefined,
+      action: searchText || undefined,
+      startDate: startDateTime ? new Date(startDateTime).toISOString() : undefined,
+      endDate: endDateTime ? new Date(endDateTime).toISOString() : undefined,
+    });
   };
 
   const handleLoadMore = () => {
@@ -686,6 +717,36 @@ const LogsPage: React.FC<{ isEmbedded?: boolean }> = ({ isEmbedded = false }) =>
             </Tooltip>
             <Button size="small" startIcon={<DownloadIcon />} onClick={() => handleDownload('csv')}>CSV</Button>
             <Button size="small" startIcon={<DownloadIcon />} onClick={() => handleDownload('json')}>JSON</Button>
+          </Box>
+          <Box sx={{ display: 'flex', gap: 1.5, flexWrap: 'wrap', alignItems: 'center' }}>
+            <TextField
+              size="small"
+              type="datetime-local"
+              label="Von"
+              value={searchStartDateTime}
+              onChange={(e) => handleDateRangeChange(e.target.value, searchEndDateTime)}
+              InputLabelProps={{ shrink: true }}
+              sx={{ minWidth: 200 }}
+            />
+            <TextField
+              size="small"
+              type="datetime-local"
+              label="Bis"
+              value={searchEndDateTime}
+              onChange={(e) => handleDateRangeChange(searchStartDateTime, e.target.value)}
+              InputLabelProps={{ shrink: true }}
+              sx={{ minWidth: 200 }}
+            />
+            {(searchStartDateTime || searchEndDateTime) && (
+              <Button size="small" onClick={() => handleDateRangeChange('', '')}>Zeitraum zurücksetzen</Button>
+            )}
+            {isSuperAdmin && searchStartDateTime && (
+              <Typography variant="caption" color="text.secondary">
+                {archiveSearchInfo
+                  ? `Archiv durchsucht (${archiveSearchInfo.scannedDays} Tage${archiveSearchInfo.truncated ? ', Zeitraum für vollständige Suche eingrenzen' : ''})`
+                  : 'Durchsucht auch das Archiv'}
+              </Typography>
+            )}
           </Box>
           <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
             {CATEGORY_FILTERS.map((f) => (
@@ -789,6 +850,11 @@ const LogsPage: React.FC<{ isEmbedded?: boolean }> = ({ isEmbedded = false }) =>
                                 {isError && <Chip label="Fehler" size="small" color="error" sx={{ height: 18, fontSize: 10 }} />}
                                 {isWarning && <Chip label="Warnung" size="small" color="warning" sx={{ height: 18, fontSize: 10 }} />}
                                 {isSecurity && <Chip label="Sicherheit" size="small" color="secondary" sx={{ height: 18, fontSize: 10 }} />}
+                                {log.archived && (
+                                  <Tooltip title="Aus dem Archiv geladen - kein gespeicherter Benutzername (Datensparsamkeit)">
+                                    <Chip label="Archiv" size="small" variant="outlined" sx={{ height: 18, fontSize: 10 }} />
+                                  </Tooltip>
+                                )}
                               </Box>
                             }
                             secondary={

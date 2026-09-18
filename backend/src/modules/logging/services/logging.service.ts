@@ -253,22 +253,35 @@ export class LoggingService {
    * Holt die Archiv-Aufbewahrungsdauer (wie lange archivierte Logs vorgehalten werden, bevor sie gelöscht werden)
    */
   async getArchiveRetentionDays(): Promise<number> {
+    // Default und Fallback muessen dem GoBD-Minimum entsprechen (siehe
+    // setArchiveRetentionDays) - sonst zeigt die UI z.B. "365 Tage" an,
+    // obwohl LogArchiveService.cleanupOldArchives() ohnehin nie vor 3650
+    // Tagen loescht (Vorfall 18.09.2026: angezeigter Wert stimmte nicht
+    // mit dem tatsaechlichen Verhalten ueberein).
+    const GOBD_MIN_RETENTION_DAYS = 3650;
     try {
       const config = await this.configRepository.findOne({ where: { key: 'log.archiveRetentionDays' } });
       if (config && config.value) {
         const days = parseInt(config.value, 10);
-        return isNaN(days) ? 365 : days;
+        return isNaN(days) ? GOBD_MIN_RETENTION_DAYS : days;
       }
     } catch {}
-    return 365; // Default: 1 Jahr
+    return GOBD_MIN_RETENTION_DAYS;
   }
 
   /**
    * Setzt die Archiv-Aufbewahrungsdauer
    */
   async setArchiveRetentionDays(days: number): Promise<void> {
-    if (days < 1 || days > 36500) { // Max 100 Jahre
-      throw new Error('Archiv-Aufbewahrungsdauer muss zwischen 1 und 36500 Tagen liegen');
+    // GoBD §147 AO: Mindest-Aufbewahrungsfrist 10 Jahre. LogArchiveService.
+    // cleanupOldArchives() erzwingt dieses Minimum ohnehin serverseitig -
+    // ein hier akzeptierter, kleinerer Wert wuerde also nie wirken, obwohl
+    // er als "gespeichert" bestaetigt wird (siehe Vorfall 18.09.2026:
+    // Aenderung auf der Archiv-Verwaltung-Seite hatte sichtbar keine
+    // Wirkung). Deshalb hier schon ablehnen statt still zu ignorieren.
+    const MIN_RETENTION_DAYS = 3650;
+    if (days < MIN_RETENTION_DAYS || days > 36500) {
+      throw new Error(`Archiv-Aufbewahrungsdauer muss zwischen ${MIN_RETENTION_DAYS} (10 Jahre, GoBD-Minimum) und 36500 Tagen liegen`);
     }
     await this.setConfig('log.archiveRetentionDays', days.toString(), 'Anzahl der Tage, die archivierte Logs vorgehalten werden');
   }

@@ -248,6 +248,73 @@ export class LogArchiveService {
     return all;
   }
 
+  /**
+   * Durchsucht archivierte Tage innerhalb eines Datumsbereichs nach den
+   * gleichen Kriterien wie die Live-Log-Suche (LoggingService.getLogs).
+   * Liest/entschluesselt gezielt nur die passenden Kategorie-Dateien statt
+   * ganzer Tage, damit eine eingegrenzte Suche (z.B. nur STOCK) nicht
+   * unnoetig andere Kategorien mitliest.
+   *
+   * Begrenzt auf max. 400 Tage pro Aufruf (~13 Monate), um eine einzelne
+   * Anfrage nicht über Jahre hinweg alle Archivdateien einlesen zu lassen -
+   * bei Bedarf muss der Zeitraum eingegrenzt werden.
+   */
+  searchArchive(filters: {
+    startDate: Date;
+    endDate?: Date;
+    category?: string;
+    level?: string;
+    action?: string;
+    userId?: string;
+  }): { entries: Array<Record<string, unknown>>; scannedDays: number; truncated: boolean } {
+    const MAX_DAYS = 400;
+    const start = new Date(filters.startDate);
+    start.setHours(0, 0, 0, 0);
+    const end = filters.endDate ? new Date(filters.endDate) : new Date();
+    end.setHours(0, 0, 0, 0);
+
+    if (!fs.existsSync(this.archiveDir)) return { entries: [], scannedDays: 0, truncated: false };
+
+    const allDateDirs = fs
+      .readdirSync(this.archiveDir)
+      .filter((d) => /^\d{4}-\d{2}-\d{2}$/.test(d))
+      .filter((d) => {
+        const t = new Date(`${d}T00:00:00.000Z`).getTime();
+        return t >= start.getTime() && t <= end.getTime();
+      })
+      .sort();
+
+    const truncated = allDateDirs.length > MAX_DAYS;
+    const dateDirs = truncated ? allDateDirs.slice(-MAX_DAYS) : allDateDirs;
+
+    const results: Array<Record<string, unknown>> = [];
+    for (const dateDir of dateDirs) {
+      const datePath = path.join(this.archiveDir, dateDir);
+      const files = fs.readdirSync(datePath).filter((f) => f.endsWith('.json'));
+      for (const file of files) {
+        const category = file.replace('.json', '');
+        if (filters.category && category !== filters.category) continue;
+
+        let entries: Array<Record<string, unknown>>;
+        try {
+          entries = this.readAndParse(path.join(datePath, file)) as Array<Record<string, unknown>>;
+        } catch {
+          continue;
+        }
+
+        for (const entry of entries) {
+          if (filters.level && entry.level !== filters.level) continue;
+          if (filters.userId && entry.userId !== filters.userId) continue;
+          if (filters.action && !String(entry.action ?? '').toLowerCase().includes(filters.action.toLowerCase())) continue;
+          results.push(entry);
+        }
+      }
+    }
+
+    results.sort((a, b) => new Date(String(b.timestamp ?? 0)).getTime() - new Date(String(a.timestamp ?? 0)).getTime());
+    return { entries: results, scannedDays: dateDirs.length, truncated };
+  }
+
   /** Delete the archive directory for a given date */
   deleteArchiveDay(date: string): void {
     this.safe(date, /^\d{4}-\d{2}-\d{2}$/);

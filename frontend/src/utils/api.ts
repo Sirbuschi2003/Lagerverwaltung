@@ -1484,6 +1484,8 @@ export interface LogEntry {
   ipAddress?: string;
   userAgent?: string;
   metadata?: any;
+  /** true = Eintrag stammt aus dem Archiv (aeltere, bereits ausgelagerte Logs), nicht aus der aktiven Tabelle */
+  archived?: boolean;
 }
 
 export interface LogFilters {
@@ -1501,6 +1503,9 @@ export interface LogFilters {
 export interface LogsResponse {
   logs: LogEntry[];
   total: number;
+  /** Nur gesetzt, wenn die Suche zusaetzlich das Log-Archiv durchsucht hat (siehe LogEntry.archived) */
+  archiveScannedDays?: number;
+  archiveTruncated?: boolean;
 }
 
 export const getLogs = async (filters: LogFilters = {}): Promise<LogsResponse> => {

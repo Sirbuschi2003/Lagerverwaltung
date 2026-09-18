@@ -1,6 +1,6 @@
 {
   "name": "lagerverwaltung-backend",
-  "version": "4.6.1",
+  "version": "4.7.0",
   "description": "Fleet spare parts inventory backend (NestJS)",
   "license": "MIT",
   "scripts": {

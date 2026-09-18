@@ -172,8 +172,24 @@ export class LoggingController {
 
   const result = await this.loggingService.getLogs(filters, limitNum, offsetNum);
 
-    // Mappe auf API-DTO mit timestamp, username und source
-    const mapped = result.logs.map((log) => ({
+    // Fuer Super-Admin mit gesetztem startDate zusaetzlich das Archiv
+    // durchsuchen, damit eine Suche ueber Zeitraeume, die schon archiviert
+    // wurden, nicht einfach "leer" wirkt - siehe Nutzer-Wunsch 18.09.2026.
+    const isSuperAdmin = reqUser?.branchId === null || reqUser?.branchId === undefined;
+    let archiveResult: { entries: Array<Record<string, unknown>>; scannedDays: number; truncated: boolean } | null = null;
+    if (isSuperAdmin && filters.startDate) {
+      archiveResult = this.archiveService.searchArchive({
+        startDate: filters.startDate,
+        endDate: filters.endDate,
+        category: filters.category,
+        level: filters.level,
+        action: filters.action,
+        userId: filters.userId,
+      });
+    }
+
+    // Mappe DB-Logs auf API-DTO mit timestamp, username und source
+    const dbMapped = result.logs.map((log) => ({
       id: log.id,
       timestamp: log.createdAt ? log.createdAt.toISOString() : null,
       level: log.level,
@@ -186,9 +202,42 @@ export class LoggingController {
       userAgent: log.userAgent,
       metadata: log.metadata,
       source: (log.metadata?.source as string | undefined) ?? 'BACKEND',
+      archived: false,
     }));
 
-    return { logs: mapped, total: result.total };
+    if (!archiveResult) {
+      return { logs: dbMapped, total: result.total };
+    }
+
+    // Archivierte Eintraege haben aus DSGVO-Gruenden keinen gespeicherten
+    // Benutzernamen (nur userId) - das ist beabsichtigt (Datensparsamkeit).
+    const archiveMapped = archiveResult.entries.map((entry) => ({
+      id: entry.id as number | undefined,
+      timestamp: (entry.timestamp as string | undefined) ?? null,
+      level: entry.level as LogLevel | undefined,
+      category: entry.category as LogCategory | undefined,
+      action: entry.action as string | undefined,
+      details: entry.details as string | undefined,
+      userId: (entry.userId as string | undefined) ?? undefined,
+      username: undefined as string | undefined,
+      ipAddress: undefined as string | undefined,
+      userAgent: undefined as string | undefined,
+      metadata: entry.metadata as Record<string, unknown> | undefined,
+      source: 'BACKEND',
+      archived: true,
+    }));
+
+    const combined = [...dbMapped, ...archiveMapped].sort(
+      (a, b) => new Date(b.timestamp ?? 0).getTime() - new Date(a.timestamp ?? 0).getTime(),
+    );
+    const page = combined.slice(offsetNum, offsetNum + limitNum);
+
+    return {
+      logs: page,
+      total: result.total + archiveResult.entries.length,
+      archiveScannedDays: archiveResult.scannedDays,
+      archiveTruncated: archiveResult.truncated,
+    };
   }
 
   /**
@@ -652,8 +701,13 @@ export class LoggingController {
   async setArchiveRetention(@Body() body: { retentionDays: number }, @Req() req: RequestWithUser) {
     this.requireSuperAdmin(req);
     const days = body.retentionDays;
-    if (!days || isNaN(days) || days < 1 || days > 36500) {
-      throw new BadRequestException('Archiv-Aufbewahrungsdauer muss zwischen 1 und 36500 Tagen liegen');
+    // GoBD §147 AO: 10 Jahre Mindest-Aufbewahrung wird ohnehin serverseitig
+    // in LogArchiveService.cleanupOldArchives() erzwungen - ein hier
+    // akzeptierter kleinerer Wert haette also nie sichtbare Wirkung
+    // (Vorfall 18.09.2026). Deshalb bereits hier ablehnen.
+    const MIN_RETENTION_DAYS = 3650;
+    if (!days || isNaN(days) || days < MIN_RETENTION_DAYS || days > 36500) {
+      throw new BadRequestException(`Archiv-Aufbewahrungsdauer muss zwischen ${MIN_RETENTION_DAYS} (10 Jahre, GoBD-Minimum) und 36500 Tagen liegen`);
     }
     await this.archiveService.setArchiveRetention(days);
     return { success: true, retentionDays: days };
