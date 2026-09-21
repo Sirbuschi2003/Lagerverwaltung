@@ -40,6 +40,7 @@ import {
 } from "../../utils/api";
 import useAuthStore from "../../store/useAuthStore";
 import useBarcodeScanner from "../../hooks/useBarcodeScanner";
+import { compressImageFile } from "../../utils/imageCompression";
 
 // ─── Hilfsfunktionen (identisch zu ItemsPage) ────────────────────────────────
 
@@ -444,11 +445,13 @@ const ItemEditDialog: React.FC<ItemEditDialogProps> = ({ itemId, open, onClose, 
                             if (!file || !itemId) return;
                             setImageUploading(true);
                             try {
-                              const updated = await uploadItemImage(itemId, file);
+                              const compressed = await compressImageFile(file);
+                              const updated = await uploadItemImage(itemId, compressed);
                               setOriginalItem(updated);
                               setImageKey((k) => k + 1);
-                            } catch {
-                              setError("Bild konnte nicht hochgeladen werden.");
+                            } catch (err: any) {
+                              console.error(err);
+                              setError(`Bild konnte nicht hochgeladen werden: ${err?.response?.data?.message || err?.message || "Unbekannt"}`);
                             } finally {
                               setImageUploading(false);
                               e.target.value = "";
@@ -475,11 +478,13 @@ const ItemEditDialog: React.FC<ItemEditDialogProps> = ({ itemId, open, onClose, 
                             if (!file || !itemId) return;
                             setImageUploading(true);
                             try {
-                              const updated = await uploadItemImage(itemId, file);
+                              const compressed = await compressImageFile(file);
+                              const updated = await uploadItemImage(itemId, compressed);
                               setOriginalItem(updated);
                               setImageKey((k) => k + 1);
-                            } catch {
-                              setError("Bild konnte nicht hochgeladen werden.");
+                            } catch (err: any) {
+                              console.error(err);
+                              setError(`Bild konnte nicht hochgeladen werden: ${err?.response?.data?.message || err?.message || "Unbekannt"}`);
                             } finally {
                               setImageUploading(false);
                               e.target.value = "";

@@ -5,6 +5,17 @@ Format orientiert sich an [Keep a Changelog](https://keepachangelog.com/de/1.0.0
 
 ---
 
+## [4.7.1] – 2026-09-21 · Artikelbilder: Verkleinerung vor dem Upload
+
+> **Hintergrund:** Artikelbilder liessen sich weder vom Handy noch vom PC hochladen. Backend-Logs zeigten teils Erfolg, teils nichts – Verdacht fiel auf grosse Rohfotos direkt von der Handykamera (z.B. 10MB+), die bei schlechter Verbindung im Lager/Feld den Upload schon vor der serverseitigen Verkleinerung (bestehende sharp-Kompression auf 800x800) scheitern liessen.
+
+### Neue Funktion
+- Artikelbilder werden jetzt **vor dem Hochladen im Browser verkleinert** (`frontend/src/utils/imageCompression.ts`, Canvas-basiert, max. 1600px Kantenlänge, JPEG-Qualität 85%) – betrifft beide Upload-Wege (Artikel-Bearbeiten-Dialog inkl. direkter Kamera-Aufnahme auf Mobilgeräten).
+- Fehlermeldungen beim Bild-Upload zeigen jetzt den konkreten Grund an (z.B. Berechtigung, Dateiformat) statt nur "Bild konnte nicht hochgeladen werden."
+- Live verifiziert: 12,5MB-Testfoto wurde im Browser auf 0,74MB verkleinert und erfolgreich hochgeladen.
+
+---
+
 ## [4.7.0] – 2026-09-18 · Log-Suche über Archiv hinweg
 
 > **Hintergrund:** Nach der automatischen Log-Archivierung (4.6.1) landen ältere Protokolle nicht mehr in der Live-Tabelle. Damit eine Suche danach nicht "leer" wirkt, sucht die bestehende Systemprotokolle-Suche jetzt transparent auch im Archiv mit.

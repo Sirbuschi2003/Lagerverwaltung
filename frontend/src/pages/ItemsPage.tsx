@@ -65,6 +65,7 @@ import {
 } from "../utils/api";
 import useBarcodeScanner from "../hooks/useBarcodeScanner";
 import ItemEditDialog from "../components/items/ItemEditDialog";
+import { compressImageFile } from "../utils/imageCompression";
 
 type ItemFormState = CreateItemRequest & { alternateCodesText: string; currentQuantity?: number };
 type CsvImportItem = CreateItemRequest & {
@@ -3057,13 +3058,20 @@ TB-FC330,Toner Schwarz,Toshiba,Toner,5,89.90,Regal 3 / Fach 1`}
                             if (!file || !editingId) return;
                             setImageUploading(true);
                             try {
-                              const updated = await uploadItemImage(editingId, file);
+                              // Vor dem Hochladen im Browser verkleinern - ein
+                              // 10MB+ Rohfoto direkt von der Handykamera laesst
+                              // den Upload bei schlechter Verbindung im Lager/
+                              // Feld sonst schon vor der serverseitigen
+                              // Kompression scheitern.
+                              const compressed = await compressImageFile(file);
+                              const updated = await uploadItemImage(editingId, compressed);
                               useItemsStore.setState((s: any) => ({
                                 items: s.items.map((it: any) => it.id === editingId ? { ...it, imagePath: updated.imagePath } : it),
                               }));
                               setImageKey((k) => k + 1);
-                            } catch {
-                              setError("Bild konnte nicht hochgeladen werden.");
+                            } catch (err: any) {
+                              console.error(err);
+                              setError(`Bild konnte nicht hochgeladen werden: ${err?.response?.data?.message || err?.message || "Unbekannt"}`);
                             } finally {
                               setImageUploading(false);
                               e.target.value = "";
