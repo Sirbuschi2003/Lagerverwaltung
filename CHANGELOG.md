@@ -5,6 +5,16 @@ Format orientiert sich an [Keep a Changelog](https://keepachangelog.com/de/1.0.0
 
 ---
 
+## [4.7.2] – 2026-09-21 · Log-Suche findet jetzt Artikelnummern
+
+> **Hintergrund:** Nutzer erwarteten, dass sich die Systemprotokolle-Suche z.B. nach einer Artikelnummer durchsuchen lässt (die Nummer wird in der Detailansicht schließlich prominent angezeigt). Tatsächlich durchsuchte das Suchfeld bislang nur die interne Aktions-Kennung (z.B. "STOCK_MOVEMENT"), nicht den Beschreibungstext oder die Artikeldaten.
+
+### Bugfix
+- Freitextsuche in den Systemprotokollen durchsucht jetzt zusätzlich den Beschreibungstext (`details`) sowie Artikelcode/-bezeichnung aus den Metadaten – sowohl in der Live-Tabelle als auch im Archiv (konsistent, damit beim Übergang eines Eintrags von aktiv zu archiviert keine Treffer verschwinden).
+- Nebenbei gefunden: Ein alleiniges "Von"-Datum ohne "Bis" wurde bislang beim Live-Log-Filter komplett ignoriert (nur bei beiden gesetzten Werten wirksam) – jetzt funktioniert auch ein offenes Zeitfenster.
+
+---
+
 ## [4.7.1] – 2026-09-21 · Artikelbilder: Verkleinerung vor dem Upload
 
 > **Hintergrund:** Artikelbilder liessen sich weder vom Handy noch vom PC hochladen. Backend-Logs zeigten teils Erfolg, teils nichts – Verdacht fiel auf grosse Rohfotos direkt von der Handykamera (z.B. 10MB+), die bei schlechter Verbindung im Lager/Feld den Upload schon vor der serverseitigen Verkleinerung (bestehende sharp-Kompression auf 800x800) scheitern liessen.

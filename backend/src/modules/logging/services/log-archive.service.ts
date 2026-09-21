@@ -305,7 +305,7 @@ export class LogArchiveService {
         for (const entry of entries) {
           if (filters.level && entry.level !== filters.level) continue;
           if (filters.userId && entry.userId !== filters.userId) continue;
-          if (filters.action && !String(entry.action ?? '').toLowerCase().includes(filters.action.toLowerCase())) continue;
+          if (filters.action && !this.matchesFreeText(entry, filters.action)) continue;
           results.push(entry);
         }
       }
@@ -313,6 +313,24 @@ export class LogArchiveService {
 
     results.sort((a, b) => new Date(String(b.timestamp ?? 0)).getTime() - new Date(String(a.timestamp ?? 0)).getTime());
     return { entries: results, scannedDays: dateDirs.length, truncated };
+  }
+
+  /**
+   * Freitextsuche wie in LoggingService.getLogs(): nicht nur die interne
+   * Aktions-Kennung, sondern auch Details-Text und Artikelcode/-bezeichnung
+   * aus den Metadaten - muss mit der Live-Suche konsistent bleiben, sonst
+   * verschwinden Treffer beim Uebergang von aktiv zu archiviert.
+   */
+  private matchesFreeText(entry: Record<string, unknown>, term: string): boolean {
+    const needle = term.toLowerCase();
+    const metadata = (entry.metadata ?? {}) as Record<string, unknown>;
+    const haystacks = [
+      entry.action,
+      entry.details,
+      metadata.itemCode,
+      metadata.itemDescription,
+    ];
+    return haystacks.some((v) => typeof v === 'string' && v.toLowerCase().includes(needle));
   }
 
   /** Delete the archive directory for a given date */

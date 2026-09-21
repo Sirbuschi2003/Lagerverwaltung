@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Brackets, Repository } from 'typeorm';
 
 import { User } from '../../users/entities/user.entity';
 import { BranchConfig } from '../entities/branch-config.entity';
@@ -150,11 +150,18 @@ export class LoggingService {
       .offset(offset);
 
     // Filter anwenden
+    // Bugfix: vorher wurde der Datumsfilter nur angewendet, wenn BEIDE Werte
+    // gesetzt waren - ein alleiniges "Von"-Datum (offenes Ende) wurde still
+    // ignoriert (Vorfall 21.09.2026, im Zuge der Archiv-Suche entdeckt).
     if (filters.startDate && filters.endDate) {
       queryBuilder.andWhere('log.createdAt BETWEEN :startDate AND :endDate', {
         startDate: filters.startDate,
         endDate: filters.endDate,
       });
+    } else if (filters.startDate) {
+      queryBuilder.andWhere('log.createdAt >= :startDate', { startDate: filters.startDate });
+    } else if (filters.endDate) {
+      queryBuilder.andWhere('log.createdAt <= :endDate', { endDate: filters.endDate });
     }
 
     if (filters.userId) {
@@ -170,7 +177,20 @@ export class LoggingService {
     }
 
     if (filters.action) {
-      queryBuilder.andWhere('log.action LIKE :action', { action: `%${filters.action}%` });
+      // Freitextsuche: nicht nur die interne Aktions-Kennung (z.B.
+      // "STOCK_MOVEMENT"), sondern auch den Beschreibungstext und
+      // Artikelcode/-bezeichnung aus den Metadaten - Nutzer erwarten
+      // erwartungsgemaess, dass z.B. eine Artikelnummer hier auffindbar ist
+      // (Vorfall 21.09.2026: Suche fand Artikelnummern bislang nicht).
+      const term = `%${filters.action}%`;
+      queryBuilder.andWhere(
+        new Brackets((qb) => {
+          qb.where('log.action LIKE :term', { term })
+            .orWhere('log.details LIKE :term', { term })
+            .orWhere("JSON_UNQUOTE(JSON_EXTRACT(log.metadata, '$.itemCode')) LIKE :term", { term })
+            .orWhere("JSON_UNQUOTE(JSON_EXTRACT(log.metadata, '$.itemDescription')) LIKE :term", { term });
+        }),
+      );
     }
 
     // Niederlassungs-Filter: nur Logs von Usern dieser Niederlassung (branchId null = Super-Admin, sieht alles)
