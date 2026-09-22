@@ -299,10 +299,17 @@ export class StockService {
 
     const location = await this.locationsService.ensureVehicleLocation(vehicle);
 
+    // Der eindeutige Index auf stock_levels ist (item, location) - nicht
+    // (item, vehicle) - siehe @Unique(["item", "location"]) auf dem Entity.
+    // Eine Suche nach item+vehicle konnte bei inkonsistenten Altdaten (z.B.
+    // ein Datensatz mit fehlender/abweichender vehicle-Relation) einen
+    // bereits existierenden Datensatz fuer dieselbe item+location-Kombi
+    // uebersehen und lief dann beim INSERT in den Unique-Index-Fehler
+    // (ER_DUP_ENTRY) statt ihn zu aktualisieren.
     let stockLevel = await this.stockLevelsRepository.findOne({
       where: {
         item: { id: item.id },
-        vehicle: { id: vehicle.id },
+        location: { id: location.id },
       },
     });
 
@@ -318,9 +325,8 @@ export class StockService {
       });
     } else {
       stockLevel.targetQuantity = dto.targetQuantity;
-      if (!stockLevel.location) {
-        stockLevel.location = location;
-      }
+      stockLevel.vehicle = vehicle;
+      stockLevel.location = location;
     }
 
     const saved = await this.stockLevelsRepository.save(stockLevel);

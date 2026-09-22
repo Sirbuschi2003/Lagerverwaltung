@@ -13,6 +13,9 @@ Format orientiert sich an [Keep a Changelog](https://keepachangelog.com/de/1.0.0
 - Fehlmengen-Übersicht im Teilelager-Dashboard reagiert jetzt per WebSocket sofort (statt bis zu 15s zu warten), sobald ein Techniker Teile ausbucht und dadurch eine neue Fehlmenge entsteht – nutzt das bereits bestehende `restock:updated`-Live-Signal des Backends. Das bisherige Polling bleibt als Fallback aktiv, falls die Socket-Verbindung kurzzeitig getrennt ist.
 - Doppelte, fast zeitgleiche `GET /api/items`-Anfragen (mehrere Seiten/Effekte luden beim Start unabhängig voneinander den kompletten Artikelkatalog) werden jetzt gebündelt – ein bereits laufender Abruf wird geteilt statt dupliziert.
 
+### Bugfix
+- `PATCH /stock/vehicle/:id/target` (Zielmenge setzen) konnte mit einem 500er abbrechen, wenn für Fahrzeug+Artikel bereits ein Bestandseintrag existierte – Ursache war eine Suche nach Artikel+Fahrzeug, obwohl der eindeutige Datenbank-Index auf Artikel+Lagerort liegt; bei inkonsistenten Altdaten fand die Suche den vorhandenen Eintrag nicht und versuchte einen doppelten Insert. Suche jetzt konsistent zum tatsächlichen Index.
+
 ---
 
 ## [4.7.3] – 2026-09-22 · Veraltete Daten auf Büro-PCs behoben
