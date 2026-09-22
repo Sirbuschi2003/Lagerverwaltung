@@ -714,15 +714,7 @@ export const deleteUser = async (id: string): Promise<void> => {
 export const fetchVehicleStock = async (
   vehicleId: string,
 ): Promise<StockLevelDto[]> => {
-  // Cache-Control: no-cache verhindert, dass der Service Worker (stale-while-
-  // revalidate fuer /stock/vehicle/*) hier sofort eine veraltete Antwort
-  // zurueckgibt - relevant, weil dieser Endpunkt oft direkt NACH einer
-  // eigenen Buchung (z.B. "Erhalten"/"vom Lager einbuchen") erneut geladen
-  // wird und die Seite dann den frischen Bestand zeigen muss, nicht den
-  // Stand von vor der Buchung.
-  const response = await api.get<StockLevelDto[]>(`/stock/vehicle/${vehicleId}`, {
-    headers: { "Cache-Control": "no-cache" },
-  });
+  const response = await api.get<StockLevelDto[]>(`/stock/vehicle/${vehicleId}`);
   return response.data;
 };
 
@@ -742,20 +734,12 @@ export const updateVehicleTarget = async (
 export const fetchVehicleShortages = async (
   vehicleId: string,
 ): Promise<RestockRequestDto[]> => {
-  // Siehe Kommentar in fetchVehicleStock: nach einem "Erhalten"-Klick muss
-  // die Liste sofort den aktuellen Stand zeigen, nicht die Service-Worker-
-  // Cache-Antwort von vor der Buchung.
-  const response = await api.get<RestockRequestDto[]>(`/stock/vehicle/${vehicleId}/shortages`, {
-    headers: { "Cache-Control": "no-cache" },
-  });
+  const response = await api.get<RestockRequestDto[]>(`/stock/vehicle/${vehicleId}/shortages`);
   return response.data;
 };
 
 export const fetchRestockOverview = async (params?: { status?: RestockRequestStatus | "OPEN" }): Promise<RestockRequestDto[]> => {
-  const response = await api.get<RestockRequestDto[]>("/stock/shortages", {
-    params,
-    headers: { "Cache-Control": "no-cache" },
-  });
+  const response = await api.get<RestockRequestDto[]>("/stock/shortages", { params });
   return response.data;
 };
 

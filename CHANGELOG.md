@@ -5,6 +5,18 @@ Format orientiert sich an [Keep a Changelog](https://keepachangelog.com/de/1.0.0
 
 ---
 
+## [4.7.3] – 2026-09-22 · Veraltete Daten auf Büro-PCs behoben
+
+> **Hintergrund:** Auf PCs mit stabiler Büro-Netzwerkverbindung zeigte praktisch jede Seite veraltete Daten, bis man F5 oder Strg+F5 drückte. Morgens nach dem Einschalten erschien die App außerdem oft fälschlich als "offline", bis man sich nach einem Reload neu anmeldete.
+
+### Bugfix
+- **Ursache:** Der Service Worker nutzte für mehrere zentrale Endpunkte (`/api/items`, `/api/stock/*`, `/api/vehicles`, `/api/auth/profile`, `/api/inventory/sessions`) "stale-while-revalidate" – sofort die alte gecachte Antwort anzeigen, im Hintergrund neu laden. Das wurde ursprünglich für Techniker mit schlechter/keiner Mobilfunkverbindung eingeführt (verhindert wiederholtes Warten auf einen ohnehin aussichtslosen Netzwerkversuch), sorgte auf Büro-PCs mit funktionierender Verbindung aber dafür, dass jede Seite konstant den Stand von "vorletztem Aufruf" zeigte – ein spürbares Update gab es erst beim übernächsten Laden.
+- Betraf auch `/api/auth/profile`: ein über Nacht abgelaufener Login-Token lieferte trotzdem noch den (damals gültigen) gecachten Profil-Stand zurück, was den morgendlichen "sieht angemeldet aus, aber offline"-Effekt erklärt.
+- **Fix:** Auf "network-first" umgestellt – Netzwerk wird zuerst versucht (max. 3s), erst bei echtem Fehlschlag greift der Cache als Fallback. Ein Techniker ohne Route zum Server bekommt einen Verbindungsfehler i.d.R. deutlich schneller als die 3s-Grenze, der Offline-Fallback bleibt also praktisch gleich schnell wie zuvor – PCs mit funktionierender Verbindung sehen jetzt aber immer den echten aktuellen Stand ohne manuellen Reload.
+- Damit gegenstandslos gewordene `Cache-Control: no-cache`-Sonderbehandlung an drei Stellen entfernt (war ein früherer Workaround für genau dieses Problem, betraf aber nur einzelne Endpunkte statt der Ursache).
+
+---
+
 ## [4.7.2] – 2026-09-21 · Log-Suche findet jetzt Artikelnummern
 
 > **Hintergrund:** Nutzer erwarteten, dass sich die Systemprotokolle-Suche z.B. nach einer Artikelnummer durchsuchen lässt (die Nummer wird in der Detailansicht schließlich prominent angezeigt). Tatsächlich durchsuchte das Suchfeld bislang nur die interne Aktions-Kennung (z.B. "STOCK_MOVEMENT"), nicht den Beschreibungstext oder die Artikeldaten.

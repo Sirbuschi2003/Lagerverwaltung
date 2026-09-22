@@ -132,6 +132,21 @@ self.addEventListener('fetch', (event) => {
       event.respondWith(
         caches.open(OFFLINE_DATA_CACHE).then((cache) =>
           cache.match(request).then((cached) => {
+            // Network-first statt stale-while-revalidate (Vorfall 22.09.2026):
+            // Buero-PCs mit stabiler LAN-Verbindung zeigten dadurch praktisch
+            // immer den Stand von "vorletztem Aufruf" an, weil die sofort
+            // zurueckgegebene Cache-Antwort erst beim NAECHSTEN Laden aktuell
+            // wurde - Nutzer mussten staendig F5/Strg+F5 druecken, damit
+            // Daten stimmten. Betraf auch /api/auth/profile: ein morgens
+            // laengst abgelaufener Token lieferte trotzdem noch den alten
+            // (damals gueltigen) gecachten Profil-Stand zurueck, was den
+            // "sieht angemeldet aus, aber offline"-Effekt erklaert.
+            //
+            // Ein echter Techniker ohne Route zum Server bekommt einen
+            // DNS-/Verbindungsfehler i.d.R. sehr schnell (deutlich unter der
+            // 3s-Grenze) - der Cache-Fallback greift dann fast genauso
+            // schnell wie zuvor, aber PCs mit funktionierender Verbindung
+            // sehen jetzt immer den echten aktuellen Stand.
             const networkFetch = fetchWithTimeout(request, { timeout: 3000 }).then((response) => {
               if (response.ok) {
                 const responseWithUtf8 = ensureUtf8Headers(response);
@@ -141,33 +156,6 @@ self.addEventListener('fetch', (event) => {
               return ensureUtf8Headers(response);
             });
 
-            // Aufrufer kann mit "Cache-Control: no-cache" verlangen, dass NICHT
-            // die (moeglicherweise veraltete) Cache-Antwort sofort zurueckgegeben
-            // wird - wichtig direkt nach einer eigenen Buchung/Statusaenderung,
-            // wenn die Seite garantiert den frischen Stand sehen soll (z.B.
-            // Anforderung nach "Erhalten"-Klick verschwindet sonst nicht sofort,
-            // weil stale-while-revalidate erstmal den alten Bestand zurueckgibt).
-            const forceFresh = request.headers.get('Cache-Control') === 'no-cache';
-
-            if (cached && !forceFresh) {
-              // Stale-while-revalidate: sofort aus dem Cache antworten statt
-              // JEDES Mal zuerst bis zu 3s auf einen Netzwerk-Versuch zu
-              // warten, der bei einem Techniker ohne Route zum Server sowieso
-              // fehlschlaegt. Der Netzwerk-Fetch laeuft im Hintergrund weiter
-              // und aktualisiert den Cache fuer den naechsten Aufruf. Bei
-              // mehreren gleichzeitigen Anfragen pro Seite (Dashboard,
-              // Fahrzeug, Artikel) summierte sich die alte 3s-Wartezeit pro
-              // Request zu spuerbarem "Haengen" bei jeder Navigation.
-              event.waitUntil(networkFetch.catch(() => {}));
-              return ensureUtf8Headers(cached);
-            }
-
-            // Kein Cache-Eintrag ODER erzwungene Frische: auf das Netzwerk
-            // warten. Schlaegt das fehl (z.B. tatsaechlich offline), lieber
-            // auf einen vorhandenen (dann eben doch veralteten) Cache-Eintrag
-            // zurueckfallen statt einer Fehlerantwort - "no-cache" soll nur
-            // eine veraltete ERFOLGREICHE Antwort verhindern, nicht die
-            // Offline-Faehigkeit aufheben.
             return networkFetch.catch(() => {
               if (cached) return ensureUtf8Headers(cached);
               if (url.pathname.includes('/auth/profile')) {
