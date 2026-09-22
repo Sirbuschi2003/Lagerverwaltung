@@ -40,6 +40,15 @@ function precacheItemImages(items: Item[]): void {
 }
 
 const isOfflineMode = (): boolean => isEffectivelyOffline();
+
+// Mehrere Seiten/Effekte (App.tsx beim Online-Wechsel, einzelne Seiten beim
+// Mount) riefen bislang unabhängig voneinander loadItems()/forceLoadItems()
+// auf - ohne Guard feuerten dadurch teils zwei identische
+// GET /api/items?limit=200000-Anfragen fast zeitgleich. Ein laufender Aufruf
+// wird hier geteilt statt dupliziert.
+let inFlightLoadItems: Promise<void> | null = null;
+let inFlightForceLoadItems: Promise<void> | null = null;
+
 const useItemsStore = create<ItemsStoreState>((set: any, get: any) => ({
   items: [],
   total: 0,
@@ -49,6 +58,10 @@ const useItemsStore = create<ItemsStoreState>((set: any, get: any) => ({
   lastLoaded: null,
   cacheTimeout: 2 * 60 * 60 * 1000, // 2 Stunden Cache (war 5 min, zu kurz!)
   loadItems: async (params?: { page?: number; limit?: number; search?: string; manufacturer?: string; productGroup?: string; force?: boolean }) => {
+    if (inFlightLoadItems) {
+      return inFlightLoadItems;
+    }
+    const run = async () => {
     const { lastLoaded, cacheTimeout, page, limit, items } = get();
     const now = Date.now();
     const offlineMode = isOfflineMode();
@@ -163,8 +176,17 @@ const useItemsStore = create<ItemsStoreState>((set: any, get: any) => ({
         set({ isLoading: false });
       }
     }
+    };
+    inFlightLoadItems = run().finally(() => {
+      inFlightLoadItems = null;
+    });
+    return inFlightLoadItems;
   },
   forceLoadItems: async (params?: { page?: number; limit?: number; search?: string; manufacturer?: string; productGroup?: string }) => {
+    if (inFlightForceLoadItems) {
+      return inFlightForceLoadItems;
+    }
+    const run = async () => {
     set({ isLoading: true });
     if (isOfflineMode()) {
       try {
@@ -221,6 +243,11 @@ const useItemsStore = create<ItemsStoreState>((set: any, get: any) => ({
     } catch (error) {
       set({ isLoading: false });
     }
+    };
+    inFlightForceLoadItems = run().finally(() => {
+      inFlightForceLoadItems = null;
+    });
+    return inFlightForceLoadItems;
   },
   addItem: async (payload: CreateItemRequest) => {
     const queueOfflineCreation = async () => {

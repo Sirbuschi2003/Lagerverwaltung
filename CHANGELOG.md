@@ -5,6 +5,16 @@ Format orientiert sich an [Keep a Changelog](https://keepachangelog.com/de/1.0.0
 
 ---
 
+## [4.7.4] – 2026-09-22 · Fehlmengen erscheinen jetzt sofort im Teilelager
+
+> **Hintergrund:** Bei 30-50 gleichzeitigen Nutzern wäre das bisherige 15-Sekunden-Polling für Flotten-/Fehlmengenübersicht spürbar Dauerlast geworden, ohne dass Fehlmengen dadurch wirklich schneller sichtbar wurden – im ungünstigsten Fall lagen bis zu 15s zwischen einer Ausbuchung durch einen Außendiensttechniker und der Anzeige beim Teilelager.
+
+### Verbesserung
+- Fehlmengen-Übersicht im Teilelager-Dashboard reagiert jetzt per WebSocket sofort (statt bis zu 15s zu warten), sobald ein Techniker Teile ausbucht und dadurch eine neue Fehlmenge entsteht – nutzt das bereits bestehende `restock:updated`-Live-Signal des Backends. Das bisherige Polling bleibt als Fallback aktiv, falls die Socket-Verbindung kurzzeitig getrennt ist.
+- Doppelte, fast zeitgleiche `GET /api/items`-Anfragen (mehrere Seiten/Effekte luden beim Start unabhängig voneinander den kompletten Artikelkatalog) werden jetzt gebündelt – ein bereits laufender Abruf wird geteilt statt dupliziert.
+
+---
+
 ## [4.7.3] – 2026-09-22 · Veraltete Daten auf Büro-PCs behoben
 
 > **Hintergrund:** Auf PCs mit stabiler Büro-Netzwerkverbindung zeigte praktisch jede Seite veraltete Daten, bis man F5 oder Strg+F5 drückte. Morgens nach dem Einschalten erschien die App außerdem oft fälschlich als "offline", bis man sich nach einem Reload neu anmeldete.

@@ -1,7 +1,10 @@
 
 import { useEffect, useRef } from "react";
+import { io, Socket } from "socket.io-client";
 import { fetchFleetStock, FleetVehicleStockDto } from "../utils/api";
 import { isEffectivelyOffline } from "../store/useNetworkStore";
+import useAuthStore from "../store/useAuthStore";
+import { useNetworkStatus } from "./useNetworkStatus";
 
 export function useLiveFleetStock({
   vehicleId,
@@ -18,6 +21,9 @@ export function useLiveFleetStock({
   const vehicleIdRef = useRef(vehicleId);
   const searchRef = useRef(search);
   const onUpdateRef = useRef(onUpdate);
+  const loadDataRef = useRef<(() => Promise<void>) | null>(null);
+  const token = useAuthStore((state: any) => state.token);
+  const { isOnline } = useNetworkStatus();
 
   useEffect(() => {
     vehicleIdRef.current = vehicleId;
@@ -43,7 +49,8 @@ export function useLiveFleetStock({
         // Bei Fehlern nicht das UI zerstören
       }
     }
-    
+    loadDataRef.current = loadData;
+
     // Initiales Laden nur wenn interval > 0
     if (interval > 0) {
       loadData();
@@ -58,4 +65,36 @@ export function useLiveFleetStock({
       }
     };
   }, [interval]); // Nur bei Intervall-Änderung neu starten
+
+  // Push-Update: sobald sich Bestand/Fehlmengen aendern (z.B. ein
+  // Aussendiensttechniker bucht Teile aus und es entsteht eine neue
+  // Fehlmenge), sendet der Server "restock:updated". Ohne diesen Listener
+  // sah das Teilelager eine neue Fehlmenge erst nach bis zu `interval`ms
+  // Polling-Verzoegerung - jetzt erscheint sie quasi sofort, das Intervall
+  // bleibt nur als Fallback falls der Socket kurz getrennt ist.
+  useEffect(() => {
+    if (!token || !isOnline || isEffectivelyOffline()) return;
+
+    const socket: Socket = io("/stock", {
+      path: "/socket.io",
+      transports: ["websocket"],
+      auth: { token },
+      extraHeaders: { Authorization: `Bearer ${token}` },
+      reconnectionDelay: 2000,
+      reconnectionDelayMax: 30000,
+    });
+
+    let debounceTimer: ReturnType<typeof setTimeout> | null = null;
+    socket.on("restock:updated", () => {
+      if (debounceTimer) clearTimeout(debounceTimer);
+      debounceTimer = setTimeout(() => {
+        void loadDataRef.current?.();
+      }, 400);
+    });
+
+    return () => {
+      if (debounceTimer) clearTimeout(debounceTimer);
+      socket.disconnect();
+    };
+  }, [token, isOnline]);
 }
