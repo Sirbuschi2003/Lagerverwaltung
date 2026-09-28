@@ -201,8 +201,11 @@ export class UpdateService {
     // NIS2-002: Kein direkter Socket-Mount – DOCKER_HOST via Socket-Proxy weitergeben.
     const safePath = this.shellEscapePath(hostProjectPath);
     const dockerHost = process.env.DOCKER_HOST ?? "unix:///var/run/docker.sock";
+    // Kein --rm mehr: monitorHelperContainer() braucht den Container nach Ende
+    // noch fuer "docker wait"/"docker logs" (Exit-Code + Ausgabe) und raeumt ihn
+    // danach selbst per "docker rm -f" auf.
     const helperCmd = [
-      "docker run --rm -d",
+      "docker run -d",
       `--network ${projectName}_lagerverwaltung`,
       `-e DOCKER_HOST=${dockerHost}`,
       `-v ${safePath}:${safePath}:ro`,
@@ -216,6 +219,13 @@ export class UpdateService {
 
     if (helperCode === 0) {
       this.addLog("Helper-Container gestartet. Container werden neu gestartet…");
+      // Der Helper lief bislang komplett "fire-and-forget" (docker run -d) - seine
+      // eigene Ausgabe (z.B. "Compose-Datei nicht gefunden" oder ein Permission-Fehler
+      // beim Lesen des gemounteten Pfads) landete NIE im Update-Log, sondern verschwand
+      // spurlos. Im Erfolgsfall wird dieser Prozess ohnehin gleich durch den
+      // Backend-Neustart beendet, aber falls der Helper VOR dem eigentlichen Neustart
+      // scheitert, macht das den echten Fehler jetzt sichtbar statt "kurz was, dann nichts".
+      void this.monitorHelperContainer();
     } else {
       this.addLog(`Helper-Start fehlgeschlagen (Code ${helperCode}): ${helperErr.trim()}`);
       this.addLog("Fallback: Direkter detached Neustart…");
@@ -224,6 +234,66 @@ export class UpdateService {
       ], { detached: true, stdio: "ignore" });
       fallback.unref();
     }
+  }
+
+  /**
+   * Sammelt die Ausgabe des detached Helper-Containers ein und traegt sie ins
+   * Update-Log ein. Laeuft normalerweise ins Leere, weil der erfolgreiche
+   * Helper genau diesen Prozess (Backend-Neustart) beendet - schlaegt der
+   * Helper aber VOR dem Neustart fehl (z.B. Compose-Datei nicht lesbar,
+   * fehlende Rechte auf den gemounteten Pfad), bleibt dieser Prozess am
+   * Leben und kann den Fehler jetzt sauber melden statt ihn verschwinden
+   * zu lassen.
+   */
+  private monitorHelperContainer(): Promise<void> {
+    return new Promise((resolve) => {
+      const logProcess = spawn("sh", ["-c", "docker logs -f lager-update-helper 2>&1"], {
+        stdio: ["ignore", "pipe", "pipe"],
+      });
+      logProcess.stdout?.on("data", (d: Buffer) => {
+        d.toString().split("\n").filter((l) => l.trim()).forEach((l) => this.addLog(`[helper] ${l}`));
+      });
+      logProcess.stderr?.on("data", (d: Buffer) => {
+        d.toString().split("\n").filter((l) => l.trim()).forEach((l) => this.addLog(`[helper] ${l}`));
+      });
+
+      let settled = false;
+      const finish = () => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timeout);
+        logProcess.kill();
+        resolve();
+      };
+
+      const timeout = setTimeout(finish, 90_000);
+
+      // "docker wait" blockiert bis der Container beendet ist und gibt dessen
+      // Exit-Code auf STDOUT aus (nicht ueber den eigenen Prozess-Exit-Code!).
+      const waitProcess = spawn("sh", ["-c", "docker wait lager-update-helper"], {
+        stdio: ["ignore", "pipe", "ignore"],
+      });
+      let waitOutput = "";
+      waitProcess.stdout?.on("data", (d: Buffer) => (waitOutput += d.toString()));
+      waitProcess.on("close", () => {
+        const exitCode = parseInt(waitOutput.trim(), 10);
+        // Nur relevant, falls dieser Prozess ueberhaupt noch laeuft (= Neustart nie
+        // erfolgt). Im Erfolgsfall ist dieser Node-Prozess laengst beendet worden,
+        // bevor "docker wait" hier ueberhaupt zurueckkehren konnte.
+        if (this.cachedStatus.updateRunning && Number.isFinite(exitCode) && exitCode !== 0) {
+          this.addLog(`Helper-Container beendet mit Exit-Code ${exitCode} - Update fehlgeschlagen.`);
+          this.cachedStatus = {
+            ...this.cachedStatus,
+            updateRunning: false,
+            updatePhase: "error",
+            error: `Helper-Container fehlgeschlagen (Exit-Code ${exitCode}). Siehe Update-Log für Details.`,
+          };
+        }
+        void this.execShell("docker rm -f lager-update-helper 2>/dev/null || true");
+        finish();
+      });
+      waitProcess.on("error", finish);
+    });
   }
 
   /**

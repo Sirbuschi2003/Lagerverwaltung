@@ -5,6 +5,16 @@ Format orientiert sich an [Keep a Changelog](https://keepachangelog.com/de/1.0.0
 
 ---
 
+## [4.7.6] – 2026-09-28 · In-App-Update: echter Fehlergrund sichtbar statt "kurz was, dann nichts"
+
+> **Hintergrund:** Beim In-App-Update schlug der Neustart-Schritt fehl, aber im Update-Log war davon nichts zu sehen – nur ganz kurz blitzte etwas auf, dann blieb das Log leer. Ursache: Der Neustart-Helfer-Container lief komplett "fire-and-forget" (`docker run -d`), seine eigene Ausgabe (die tatsächliche Fehlermeldung) wurde nie eingesammelt.
+
+### Bugfix
+- Der Helfer-Container wird jetzt nach dem Start überwacht: seine Log-Ausgabe läuft live ins Update-Log, und sein tatsächlicher Exit-Code wird ausgewertet. Schlägt er fehl (z.B. Compose-Datei nicht lesbar, Rechteproblem beim gemounteten Projektpfad), erscheint jetzt die echte Fehlermeldung statt eines leeren Logs, und der Update-Status wird korrekt auf "fehlgeschlagen" gesetzt statt optimistisch auf "läuft" zu bleiben.
+- Mechanismus lokal gegen einen absichtlich fehlschlagenden Helfer-Container verifiziert (über einen Nachbau des Produktions-Socket-Proxy mit identischen Rechten) – Exit-Code und Fehlertext kommen jetzt zuverlässig im Log an.
+
+---
+
 ## [4.7.5] – 2026-09-28 · Grund für Ist-Bestand-Änderung abfragbar
 
 > **Hintergrund:** Wenn der Ist-Bestand eines Artikels manuell korrigiert wurde, war im Bewegungs-Log nur "Ist-Bestand angepasst" vermerkt – ohne nachvollziehbaren Grund (Inventur, Schaden, Fehlbuchung, ...).
