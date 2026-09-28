@@ -65,6 +65,7 @@ import {
 } from "../utils/api";
 import useBarcodeScanner from "../hooks/useBarcodeScanner";
 import ItemEditDialog from "../components/items/ItemEditDialog";
+import StockAdjustmentReasonDialog from "../components/items/StockAdjustmentReasonDialog";
 import { compressImageFile } from "../utils/imageCompression";
 
 type ItemFormState = CreateItemRequest & { alternateCodesText: string; currentQuantity?: number };
@@ -1717,6 +1718,7 @@ Import erfolgreich! Die Artikel sind jetzt verfügbar.`;
   const [imageUploading, setImageUploading] = useState(false);
   const [imageKey, setImageKey] = useState(0);
   const [lastOrder, setLastOrder] = useState<LastOrderForItemDto | null | undefined>(undefined);
+  const [pendingAdjustment, setPendingAdjustment] = useState<{ locationId: string; delta: number } | null>(null);
   // Basis fuer die Differenz-Buchung beim Speichern - MUSS exakt der Wert
   // sein, mit dem das Ist-Bestand-Feld befuellt wurde (nicht der ggf.
   // veraltete Tabellenwert aus dem items-Store). Sonst bucht "Speichern"
@@ -2101,6 +2103,37 @@ Import erfolgreich! Die Artikel sind jetzt verfügbar.`;
       orderQuantity: form.orderQuantity !== undefined && form.orderQuantity > 0 ? form.orderQuantity : undefined,
       alternateCodes,
     };
+  };
+
+  const performItemSave = async (adjustment?: { locationId: string; delta: number }, note?: string) => {
+    setSubmitting(true);
+    try {
+      const payload = createPayload();
+      const savedItem = editingId
+        ? await updateItem(editingId, payload)
+        : await addItem(payload);
+
+      if (adjustment) {
+        await recordMovement({
+          itemId: savedItem.id,
+          locationId: adjustment.locationId,
+          userId: user?.id ?? undefined,
+          type: adjustment.delta > 0 ? "CHECKIN" : "CHECKOUT",
+          quantity: Math.abs(adjustment.delta),
+          occurredAt: new Date().toISOString(),
+          note: note || "Ist-Bestand angepasst",
+          source: "items-adjustment",
+        });
+      }
+
+      await loadItems({ force: true });
+      setOpen(false);
+    } catch (err: any) {
+      console.error(err);
+      setError(editingId ? "Fehler beim Aktualisieren." : "Fehler beim Anlegen.");
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   const handleScanDetected = (code: string) => {
@@ -2975,11 +3008,9 @@ TB-FC330,Toner Schwarz,Toshiba,Toner,5,89.90,Regal 3 / Fach 1`}
         <form
           onSubmit={async (e) => {
             e.preventDefault();
-            setSubmitting(true);
             const validationError = validate();
             if (validationError) {
               setError(validationError);
-              setSubmitting(false);
               return;
             }
             const desiredQuantity = form.currentQuantity;
@@ -2987,36 +3018,16 @@ TB-FC330,Toner Schwarz,Toshiba,Toner,5,89.90,Regal 3 / Fach 1`}
               ? form.storageLocationId.trim()
               : editingItem?.storageLocation?.id;
             const currentQuantity = baselineQuantityRef.current ?? 0;
-            try {
-              const payload = createPayload();
-              const savedItem = editingId
-                ? await updateItem(editingId, payload)
-                : await addItem(payload);
-
-              if (desiredQuantity !== undefined && locationId) {
-                const delta = desiredQuantity - currentQuantity;
-                if (delta !== 0) {
-                  await recordMovement({
-                    itemId: savedItem.id,
-                    locationId,
-                    userId: user?.id ?? undefined,
-                    type: delta > 0 ? "CHECKIN" : "CHECKOUT",
-                    quantity: Math.abs(delta),
-                    occurredAt: new Date().toISOString(),
-                    note: "Ist-Bestand angepasst",
-                    source: "items-adjustment",
-                  });
-                }
+            // Grund-Abfrage nur beim Bearbeiten eines bestehenden Artikels -
+            // beim Neuanlegen ist die Menge der Erstbestand, keine "Aenderung".
+            if (editingId && desiredQuantity !== undefined && locationId) {
+              const delta = desiredQuantity - currentQuantity;
+              if (delta !== 0) {
+                setPendingAdjustment({ locationId, delta });
+                return;
               }
-
-              await loadItems({ force: true });
-              setOpen(false);
-            } catch (err: any) {
-              console.error(err);
-              setError(editingId ? "Fehler beim Aktualisieren." : "Fehler beim Anlegen.");
-            } finally {
-              setSubmitting(false);
             }
+            await performItemSave();
           }}
         >
           <DialogTitle>
@@ -3487,6 +3498,16 @@ TB-FC330,Toner Schwarz,Toshiba,Toner,5,89.90,Regal 3 / Fach 1`}
         onClose={() => setTechEditItemId(null)}
         onSaved={() => loadItems({ force: true })}
         fallbackItem={techEditItemId ? items.find((it: any) => it.id === techEditItemId) : undefined}
+      />
+      <StockAdjustmentReasonDialog
+        open={pendingAdjustment !== null}
+        delta={pendingAdjustment?.delta ?? 0}
+        onCancel={() => setPendingAdjustment(null)}
+        onConfirm={(note) => {
+          const adjustment = pendingAdjustment;
+          setPendingAdjustment(null);
+          if (adjustment) void performItemSave(adjustment, note);
+        }}
       />
     </Box>
   );

@@ -5,6 +5,16 @@ Format orientiert sich an [Keep a Changelog](https://keepachangelog.com/de/1.0.0
 
 ---
 
+## [4.7.5] – 2026-09-28 · Grund für Ist-Bestand-Änderung abfragbar
+
+> **Hintergrund:** Wenn der Ist-Bestand eines Artikels manuell korrigiert wurde, war im Bewegungs-Log nur "Ist-Bestand angepasst" vermerkt – ohne nachvollziehbaren Grund (Inventur, Schaden, Fehlbuchung, ...).
+
+### Neue Funktion
+- Beim Speichern einer Ist-Bestand-Änderung in den Artikeldaten erscheint jetzt ein Popup, das nach dem Grund fragt: Auswahl aus vorgegebenen Gründen (Inventur/Nachzählung, Fehlbuchung korrigiert, Beschädigt/Ausschuss, Verlust/Diebstahl, Sonstiger Grund) plus freies Anmerkungsfeld. Beides ist optional – Speichern funktioniert auch ohne Angabe. Betrifft beide Bearbeiten-Dialoge (Artikelstammdaten-Seite und die vereinfachte Techniker-Ansicht).
+- Live verifiziert: Buchung landet mit der eingegebenen Begründung statt der bisherigen Standardnotiz im Bewegungs-Log.
+
+---
+
 ## [4.7.4] – 2026-09-22 · Fehlmengen erscheinen jetzt sofort im Teilelager
 
 > **Hintergrund:** Bei 30-50 gleichzeitigen Nutzern wäre das bisherige 15-Sekunden-Polling für Flotten-/Fehlmengenübersicht spürbar Dauerlast geworden, ohne dass Fehlmengen dadurch wirklich schneller sichtbar wurden – im ungünstigsten Fall lagen bis zu 15s zwischen einer Ausbuchung durch einen Außendiensttechniker und der Anzeige beim Teilelager.
